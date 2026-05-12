@@ -1,0 +1,44 @@
+name: 📚 ドキュメントの問題
+description: ドキュメントの誤り・不足・分かりにくさを報告する
+title: "[Docs]: "
+labels: ["documentation", "triage"]
+body:
+  - type: input
+    id: target
+    attributes:
+      label: 対象ドキュメント
+      description: ファイルパスまたは URL
+      placeholder: 例) docs/xxx.md の xxx のセクション
+    validations:
+      required: true
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 問題の種類
+      options:
+        - 内容が間違っている (実装と齟齬)
+        - 情報が古い
+        - 説明が不足している
+        - 表現が分かりにくい
+        - リンク切れ
+        - typo / 表記ゆれ
+        - その他
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: 詳細
+      description: |
+        どこが、どう問題か
+        できれば「こう直したらよさそう」という案も
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 補足
+      description: 参照したコード / 関連 Issue / 自分の理解の前提など

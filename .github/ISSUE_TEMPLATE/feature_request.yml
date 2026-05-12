@@ -1,0 +1,73 @@
+name: ✨ 機能提案
+description: 新機能や改善のアイデアを提案する
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: 事前確認
+      options:
+        - label: 既存の Issue を検索し、類似提案がないことを確認した
+          required: true
+        - label: 関連するドキュメントを確認した
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解決したい課題 (なぜ必要か)
+      description: |
+        どのユーザーのどんな課題を、どんな状況で解くのかを書いてください
+        「あったら便利」ではなく「無いと何が困るか」が明確だとなお良し
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案する解決策
+      description: |
+        UI / フロー / API などのアイデアを書いてください。スケッチや mock の画像も歓迎
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 検討した代替案
+      description: なぜこの提案が他の案より優れているか
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影響範囲
+      multiple: true
+      options:
+        - backend API
+        - database / domain model
+        - インフラ / Docker
+        - 開発体験 (DX)
+        - ドキュメント
+        - その他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: スコープ感
+      options:
+        - 小 (1-2 日で実装可能)
+        - 中 (1-2 週間 / 単独 PR で済む)
+        - 大 (新ドメイン概念 / 複数 PR )
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 補足
+      description: 関連 Issue / 参考リンクなど。

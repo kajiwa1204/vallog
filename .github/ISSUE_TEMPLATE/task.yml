@@ -1,0 +1,79 @@
+name: 🛠️ 実装タスク
+description: 機能実装・技術タスクを起票する
+title: "[Task]: "
+labels: ["task", "triage"]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景
+      description: なぜこのタスクが必要か
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: 実施内容
+      description: 実装する内容をチェックボックス形式で記入
+      placeholder: |
+        - [ ] 実施項目1
+        - [ ] 実施項目2
+        - [ ] 実施項目3
+    validations:
+      required: true
+
+  - type: textarea
+    id: done
+    attributes:
+      label: 完了条件
+      description: このタスクが完了したと言える条件をチェックボックス形式で記入
+      placeholder: |
+        - [ ] 条件1
+        - [ ] 条件2
+        - [ ] 条件3
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影響範囲
+      multiple: true
+      options:
+        - backend API
+        - database / domain model
+        - インフラ / Docker
+        - 開発体験 (DX)
+        - ドキュメント
+        - その他
+    validations:
+      required: true
+
+  # - type: dropdown
+  #   id: phase
+  #   attributes:
+  #     label: 開発フェーズ
+  #     options:
+  #       - Phase 1 - xxx
+  #       - Phase 2 - xxx
+  #       - Phase 3 - xxx
+  #   validations:
+  #     required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: 参考資料
+      description: 関連するドキュメント・Issue など。
+      placeholder: |
+        - `docs/xxx.md`
+
+  - type: textarea
+    id: estimation
+    attributes:
+      label: 見積もり工数
+      placeholder: |
+        実装: 4〜6時間
+        テスト: 2〜3時間
+        合計目安: 6〜9時間

@@ -1,0 +1,92 @@
+name: 🐛 バグ報告
+description: 動作不良や予期しない挙動を報告する
+title: "[Bug]: "
+labels: ["bug", "triage"]
+body:
+  - type: checkboxes
+    id: prerequisites
+    attributes:
+      label: 事前確認
+      options:
+        - label: 既存の Issue を検索し、重複がないことを確認した
+          required: true
+        - label: 最新の `main` ブランチで再現することを確認した、または再現環境のバージョンを下に明記する
+          required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      placeholder: 何が起きたか 1-2 文で
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 第三者が再現できる粒度で、番号付きで記述
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待される挙動
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の挙動
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 影響範囲
+      multiple: true
+      options:
+        - backend API
+        - database / domain model
+        - インフラ / Docker
+        - 開発体験 (DX)
+        - ドキュメント
+        - その他
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: 環境
+      description: |
+        分かる範囲で記入
+      value: |
+        - OS:
+        - アプリバージョン / コミット SHA:
+        - Node / Python バージョン:
+        - Docker Desktop バージョン:
+        - その他:
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: ログ / スクリーンショット
+      description: |
+        関連するログ、スタックトレース、スクリーンショット、動画などがあれば
+        長文ログは ``` でコードブロック化、または gist リンクを推奨
+      render: shell
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: 追加情報
+      description: その他、原因の心当たりや回避策など
