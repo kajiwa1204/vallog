@@ -28,10 +28,22 @@ dev-down:
 
 # ---------- DB ----------
 migrate:
-	docker compose exec backend alembic upgrade head
+	@if [ -f alembic.ini ] && [ -d migrations ]; then \
+		docker compose exec backend alembic upgrade head; \
+	else \
+		echo "Error: Alembic is not configured for this repository (missing alembic.ini and/or migrations directory)."; \
+		echo "Add the Alembic configuration/migration scaffolding before running 'make migrate'."; \
+		exit 1; \
+	fi
 
 migrate-create:
-	docker compose exec backend alembic revision --autogenerate -m "$(msg)"
+	@if [ -f alembic.ini ] && [ -d migrations ]; then \
+		docker compose exec backend alembic revision --autogenerate -m "$(msg)"; \
+	else \
+		echo "Error: Alembic is not configured for this repository (missing alembic.ini and/or migrations directory)."; \
+		echo "Add the Alembic configuration/migration scaffolding before running 'make migrate-create msg=\"...\"'."; \
+		exit 1; \
+	fi
 
 # ---------- シェル ----------
 shell-backend:
