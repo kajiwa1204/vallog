@@ -1,1 +1,25 @@
+# 環境変数（絶対にコミットしない）
+.env
+.env.local
+.env.*.local
+
+# Next.js
+frontend/.next/
+frontend/out/
+frontend/node_modules/
+
+# Python
+backend/__pycache__/
+backend/.venv/
+backend/*.egg-info/
+backend/.pytest_cache/
+**/__pycache__/
+*.pyc
+
+# Docker
+postgres_data/
+
+# IDE
 .vscode/
+.idea/
+*.swp
