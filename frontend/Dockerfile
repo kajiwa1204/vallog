@@ -2,8 +2,13 @@ FROM node:22-alpine AS base
 
 FROM base AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
+COPY . .
+RUN if [ -f package-lock.json ]; then npm ci; \
+    elif [ -f package.json ]; then npm install; \
+    elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
+    elif [ -f pnpm-lock.yaml ]; then corepack enable pnpm && pnpm install --frozen-lockfile; \
+    else echo "No supported package manifest/lockfile found in frontend build context." >&2; exit 1; \
+    fi
 
 FROM base AS builder
 WORKDIR /app
