@@ -1,4 +1,4 @@
-.PHONY: up down dev build logs ps clean migrate shell-backend shell-db
+.PHONY: up down dev dev-build dev-down build logs ps clean migrate migrate-create shell-backend shell-db
 
 # ---------- 本番 ----------
 up:
