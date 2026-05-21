@@ -2,7 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
 
-app = FastAPI(title="vallog API", root_path="/api")
+app = FastAPI(
+    title="vallog API",
+    root_path=os.getenv("FASTAPI_ROOT_PATH", ""),
+)
 
 app.add_middleware(
     CORSMiddleware,
