@@ -5,6 +5,8 @@
 | レイヤー | 技術 | 選定理由 |
 |---|---|---|
 | フロントエンド | Next.js | Cloudflare Tunnel前提で同一オリジン構成が活きる・SSRをダッシュボード初期取得に活用できる |
+| スタイリング | CSS Modules | 可読性とスコープ分離を両立。Tailwindは不採用 |
+| UIコンポーネント | 自前実装 | MVPで必要なコンポーネントはモーダル・ドロップダウン程度。AIを活用して自前実装で十分 |
 | バックエンド | FastAPI | Venduce実績あり |
 | DB | PostgreSQL | Venduce実績あり |
 | 認証 | GitHub OAuthのみ | ログイン手段はGitHub一本 |
