@@ -15,7 +15,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     environment:
-      - NEXT_PUBLIC_API_BASE=/api
+      - NEXT_PUBLIC_API_BASE_URL=
     depends_on:
       - backend
     restart: unless-stopped
@@ -58,6 +58,8 @@ services:
     depends_on:
       - nginx
     restart: unless-stopped
+    profiles:
+      - production
 
 volumes:
   postgres_data:
