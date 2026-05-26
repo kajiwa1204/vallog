@@ -10,11 +10,11 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
 FROM base AS runner
 WORKDIR /app
-COPY --from=builder /install /usr/local
-COPY . .
-
 RUN addgroup --system --gid 1001 appgroup && \
     adduser --system --uid 1001 --ingroup appgroup appuser
+COPY --from=builder /install /usr/local
+COPY --chown=appuser:appgroup . .
+
 USER appuser
 
 EXPOSE 8000
