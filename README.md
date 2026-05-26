@@ -16,7 +16,7 @@
 | フロントエンド | Next.js (App Router) |
 | スタイリング | CSS Modules |
 | バックエンド | FastAPI |
-| ORM / マイグレーション | SQLAlchemy (asyncio) + Alembic |
+| ORM / マイグレーション | SQLAlchemy + Alembic |
 | DB | PostgreSQL |
 | 認証 | GitHub OAuth |
 | インフラ | Docker Compose + Cloudflare Tunnel + nginx |
