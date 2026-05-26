@@ -2,7 +2,7 @@ FROM node:22-alpine AS base
 
 FROM base AS deps
 WORKDIR /app
-COPY . .
+COPY package.json package-lock.json* yarn.lock* pnpm-lock.yaml* ./
 RUN if [ -f package-lock.json ]; then npm ci; \
     elif [ -f package.json ]; then npm install; \
     elif [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
