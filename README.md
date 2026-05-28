@@ -159,7 +159,17 @@ Issueテンプレートは `.github/ISSUE_TEMPLATE/` に用意されている。
 | `refactor` | リファクタリング |
 | `test` | テスト追加・修正 |
 
-例: `feat/dashboard-score-chart`、`fix/auth-redirect`、`docs/update-data-model`
+Issue と関連する場合は Issue 番号をプレフィックスに付ける。
+
+```
+<type>/<issue-number>-<kebab-case-description>
+```
+
+例: `feat/42-dashboard-score-chart`、`fix/57-auth-redirect`
+
+Issue と無関係な作業（依頼されていない修正など）はそのまま。
+
+例: `docs/update-data-model`、`chore/update-dependencies`
 
 ### 3. コミット
 
