@@ -28,19 +28,19 @@ dev-down:
 
 # ---------- DB ----------
 migrate:
-	@if [ -f alembic.ini ] && [ -d migrations ]; then \
+	@if [ -f backend/alembic.ini ] && [ -d backend/alembic ]; then \
 		docker compose exec backend alembic upgrade head; \
 	else \
-		echo "Error: Alembic is not configured for this repository (missing alembic.ini and/or migrations directory)."; \
+		echo "Error: Alembic is not configured for this repository (missing backend/alembic.ini and/or backend/alembic directory)."; \
 		echo "Add the Alembic configuration/migration scaffolding before running 'make migrate'."; \
 		exit 1; \
 	fi
 
 migrate-create:
-	@if [ -f alembic.ini ] && [ -d migrations ]; then \
+	@if [ -f backend/alembic.ini ] && [ -d backend/alembic ]; then \
 		docker compose exec backend alembic revision --autogenerate -m "$(msg)"; \
 	else \
-		echo "Error: Alembic is not configured for this repository (missing alembic.ini and/or migrations directory)."; \
+		echo "Error: Alembic is not configured for this repository (missing backend/alembic.ini and/or backend/alembic directory)."; \
 		echo "Add the Alembic configuration/migration scaffolding before running 'make migrate-create msg=\"...\"'."; \
 		exit 1; \
 	fi
