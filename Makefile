@@ -18,13 +18,13 @@ ps:
 
 # ---------- 開発 ----------
 dev:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.example up
 
 dev-build:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml build --no-cache
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.example build --no-cache
 
 dev-down:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.example down
 
 # ---------- DB ----------
 migrate:

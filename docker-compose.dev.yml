@@ -13,8 +13,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_BASE_URL=
-      - WATCHPACK_POLLING=true
+      BACKEND_INTERNAL_URL: http://backend:8000
+      WATCHPACK_POLLING: "true"
 
   backend:
     build:
@@ -24,6 +24,8 @@ services:
       - ./backend:/app
     ports:
       - "8000:8000"
+    environment:
+      FRONTEND_URL: http://localhost:3000
 
   db:
     ports:
