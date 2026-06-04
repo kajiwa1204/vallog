@@ -25,4 +25,4 @@ postgres_data/
 *.swp
 
 # mac
-.DS_STORE
+.DS_Store
