@@ -54,16 +54,18 @@ migrate-create:
 	$(DC) exec backend alembic revision --autogenerate -m "$(msg)"
 else
 migrate:
+	@if [ ! -f .env ]; then echo "Error: .env が見つかりません。まず make setup を実行してください。"; exit 1; fi
 	set -a && . .env && set +a && cd backend && alembic upgrade head
 
 migrate-create:
+	@if [ ! -f .env ]; then echo "Error: .env が見つかりません。まず make setup を実行してください。"; exit 1; fi
 	@if [ -z "$(msg)" ]; then echo "Usage: make migrate-create msg=\"migration name\""; exit 1; fi
 	set -a && . .env && set +a && cd backend && alembic revision --autogenerate -m "$(msg)"
 endif
 
 # ---------- シェル ----------
 shell-db:
-	$(DC) exec db psql -U vallog -d vallog_db
+	$(DC) exec db sh -c 'psql -U $$POSTGRES_USER -d $$POSTGRES_DB'
 
 shell-backend:
 	$(DC) exec backend bash
