@@ -22,4 +22,8 @@ postgres_data/
 # IDE
 .vscode/
 .idea/
+
 *.swp
+
+# macosX
+.DS_Store
