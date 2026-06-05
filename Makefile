@@ -48,7 +48,7 @@ dev:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 dev-build:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.example build --no-cache
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml build --no-cache
 
 dev-down:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.example down
