@@ -51,7 +51,7 @@ dev-build:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml build --no-cache
 
 dev-down:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.example down
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env down
 	$(DC) ps
 
 clean:
