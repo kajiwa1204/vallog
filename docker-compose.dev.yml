@@ -25,7 +25,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      FRONTEND_URL: http://localhost:3000
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
 
   db:
     ports:
