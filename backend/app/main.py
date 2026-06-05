@@ -19,4 +19,4 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    return {"status": "ng"}
+    return {"status": "ok"}
