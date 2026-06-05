@@ -45,7 +45,7 @@ ps:
 
 # ---------- 開発 ----------
 dev:
-	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.example up
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 
 dev-build:
 	docker compose -f docker-compose.yml -f docker-compose.dev.yml --env-file .env.example build --no-cache
