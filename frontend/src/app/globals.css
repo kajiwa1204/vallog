@@ -1,10 +1,60 @@
+:root {
+  --bg: #0e1117;
+  --bg-elev: #161b22;
+  --bg-elev-2: #1c2230;
+  --border: #2a3140;
+  --text: #e6edf3;
+  --text-muted: #8b94a7;
+  --accent: #5ee0a0;
+  --accent-soft: rgba(94, 224, 160, 0.15);
+  --warn: #f0c674;
+  --danger: #ff7b72;
+  --chart-1: #5ee0a0;
+  --chart-2: #58a6ff;
+  --chart-3: #d2a8ff;
+  --chart-4: #f0c674;
+  --chart-5: #ff7b72;
+  --radius: 10px;
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 8px 24px rgba(0, 0, 0, 0.3);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans",
+    "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+}
+
 *,
 *::before,
 *::after {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--chart-2);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
 }

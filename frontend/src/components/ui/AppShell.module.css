@@ -1,0 +1,147 @@
+.shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  background-color: var(--bg-elev);
+  border-right: 1px solid var(--border);
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.brand:hover {
+  text-decoration: none;
+}
+
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: var(--accent);
+  color: #0e1117;
+  font-weight: 800;
+  border-radius: 8px;
+}
+
+.brandText {
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.projectSwitcher {
+  background-color: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.projectLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.projectName {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.projectName:hover {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+.projectChange {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.navItem:hover {
+  background-color: var(--bg-elev-2);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.navItemActive {
+  background-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.navItemActive:hover {
+  background-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.navEmoji {
+  font-size: 14px;
+}
+
+.sidebarFooter {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.repoLabel {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 0 8px;
+}
+
+.repoLink {
+  font-size: 12px;
+  color: var(--text);
+  padding: 0 8px;
+  word-break: break-all;
+}
+
+.main {
+  padding: 28px 36px 60px;
+  max-width: 1180px;
+  width: 100%;
+}

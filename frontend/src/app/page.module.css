@@ -1,0 +1,119 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  gap: 32px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(94, 224, 160, 0.08), transparent 40%),
+    radial-gradient(circle at 80% 80%, rgba(88, 166, 255, 0.06), transparent 40%);
+}
+
+.card {
+  width: 100%;
+  max-width: 460px;
+  background-color: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 32px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.brandMark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  background-color: var(--accent);
+  color: #0e1117;
+  border-radius: 8px;
+  font-weight: 800;
+}
+
+.title {
+  font-size: 22px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.lead {
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background-color: #24292e;
+  border: 1px solid #3a4047;
+  border-radius: 10px;
+  color: white;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.cta:hover {
+  text-decoration: none;
+  background-color: #2c3338;
+}
+
+.ctaIcon {
+  font-size: 16px;
+}
+
+.footnote {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  max-width: 720px;
+}
+
+.features li {
+  background-color: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.features strong {
+  display: block;
+  color: var(--text);
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .features {
+    grid-template-columns: 1fr;
+  }
+}

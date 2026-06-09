@@ -1,0 +1,222 @@
+.table {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.6fr) 160px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.head {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.overridden {
+  background-color: rgba(240, 198, 116, 0.05);
+}
+
+.member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+}
+
+.login {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.amountCell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.amount {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.diff {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.diffUp {
+  color: var(--accent);
+}
+
+.diffDown {
+  color: var(--warn);
+}
+
+.ratioCell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ratioBar {
+  flex: 1;
+  height: 6px;
+  background-color: var(--bg-elev-2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ratioFill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--chart-2), var(--accent));
+}
+
+.ratioText {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: var(--text-muted);
+  min-width: 50px;
+  text-align: right;
+}
+
+.actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* edit mode */
+.editor {
+  margin: 0 0 8px;
+  padding: 14px 14px 12px;
+  background-color: rgba(240, 198, 116, 0.06);
+  border: 1px solid rgba(240, 198, 116, 0.3);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editorRow {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 14px;
+}
+
+.editorField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.editorLabel {
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.required {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  background-color: rgba(255, 123, 114, 0.15);
+  color: var(--danger);
+  font-size: 9px;
+  border-radius: 999px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  border: 1px solid rgba(255, 123, 114, 0.3);
+}
+
+.amountInputBox {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background-color: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.yenMark {
+  color: var(--text-muted);
+}
+
+.amountInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  min-width: 0;
+}
+
+.reasonInput {
+  background-color: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+  outline: none;
+}
+
+.reasonInput:focus {
+  border-color: var(--accent);
+}
+
+.reasonError {
+  border-color: var(--danger);
+}
+
+.errorMsg {
+  color: var(--danger);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.editorFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editorHint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.editorButtons {
+  display: flex;
+  gap: 6px;
+}

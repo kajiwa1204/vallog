@@ -1,0 +1,145 @@
+.empty {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px;
+  background-color: var(--bg-elev-2);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+.emptyIcon {
+  font-size: 28px;
+}
+
+.emptyTitle {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.emptyHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background-color: var(--border);
+}
+
+.item {
+  position: relative;
+  padding: 10px 0 10px 22px;
+  display: flex;
+  gap: 10px;
+}
+
+.dot {
+  position: absolute;
+  left: 2px;
+  top: 14px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background-color: var(--accent);
+  border: 2px solid var(--bg-elev);
+}
+
+.body {
+  flex: 1;
+  background-color: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.editor {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.verb {
+  color: var(--text-muted);
+}
+
+.target {
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.time {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.change {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fromAmount {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.arrow {
+  color: var(--text-muted);
+}
+
+.toAmount {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.diff {
+  font-size: 12px;
+}
+
+.diffUp {
+  color: var(--accent);
+}
+
+.diffDown {
+  color: var(--warn);
+}
+
+.reason {
+  margin: 0;
+  padding: 8px 10px;
+  background-color: var(--bg-elev);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+}
