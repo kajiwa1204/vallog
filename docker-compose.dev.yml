@@ -13,8 +13,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - BACKEND_INTERNAL_URL: http://backend:8000
-      - WATCHPACK_POLLING: "true"
+      BACKEND_INTERNAL_URL: http://backend:8000
+      WATCHPACK_POLLING: "true"
 
   backend:
     build:
