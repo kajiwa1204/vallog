@@ -1,0 +1,12 @@
+from fastapi import APIRouter
+
+from app.routers.deps import DB, CurrentUser, MemberProject
+from app.schemas.project import MemberResponse
+from app.services import projects as project_service
+
+router = APIRouter(tags=["members"])
+
+
+@router.get("/projects/{project_id}/members", response_model=list[MemberResponse])
+async def list_members(project: MemberProject, user: CurrentUser, db: DB):
+    return await project_service.list_members(db, project, user)
