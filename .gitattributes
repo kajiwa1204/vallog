@@ -1,0 +1,6 @@
+# Normalize line endings to LF in repo, CRLF on Windows checkout
+* text=auto
+
+# Always LF — these files are interpreted by Unix-compatible tools
+Makefile text eol=lf
+*.sh text eol=lf
