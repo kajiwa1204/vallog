@@ -1,4 +1,16 @@
-SHELL := sh
+# Windows: BusyBox sh (Scoop) は CP932 でスクリプトを読むため UTF-8 の日本語が文字化けする。
+# git --exec-path を起点に Git for Windows の sh.exe (UTF-8 対応) を検出して使う。
+ifeq ($(OS),Windows_NT)
+  _git_exec := $(shell git --exec-path 2>nul)
+  ifneq ($(_git_exec),)
+    _git_root := $(shell echo $(_git_exec) | sed 's|/[^/]*/[^/]*/[^/]*$$||')
+    SHELL := $(_git_root)/usr/bin/sh.exe
+  else
+    SHELL := sh
+  endif
+else
+  SHELL := /bin/sh
+endif
 
 .PHONY: setup install up down build logs ps clean migrate migrate-create shell-db shell-backend
 
@@ -13,7 +25,7 @@ endif
 
 # ---------- 初回セットアップ ----------
 setup:
-	@sh scripts/setup.sh $(ENV_EXAMPLE)
+	@"$(SHELL)" scripts/setup.sh $(ENV_EXAMPLE)
 	$(MAKE) install
 	$(MAKE) build
 
@@ -59,16 +71,16 @@ migrate:
 	$(DC) exec backend alembic upgrade head
 
 migrate-create:
-	@if [ -z "$(msg)" ]; then echo "Usage: make migrate-create msg=\"migration name\""; exit 1; fi
+	@if [ -z "$(msg)" ]; then echo "使い方: make migrate-create msg=\"マイグレーション名\""; exit 1; fi
 	$(DC) exec backend alembic revision --autogenerate -m "$(msg)"
 else
 migrate:
-	@if [ ! -f .env ]; then echo "Error: .env not found. Run 'make setup' first."; exit 1; fi
+	@if [ ! -f .env ]; then echo "エラー: .env が見つかりません。先に make setup を実行してください。"; exit 1; fi
 	set -a && . .env && set +a && cd backend && alembic upgrade head
 
 migrate-create:
-	@if [ ! -f .env ]; then echo "Error: .env not found. Run 'make setup' first."; exit 1; fi
-	@if [ -z "$(msg)" ]; then echo "Usage: make migrate-create msg=\"migration name\""; exit 1; fi
+	@if [ ! -f .env ]; then echo "エラー: .env が見つかりません。先に make setup を実行してください。"; exit 1; fi
+	@if [ -z "$(msg)" ]; then echo "使い方: make migrate-create msg=\"マイグレーション名\""; exit 1; fi
 	set -a && . .env && set +a && cd backend && alembic revision --autogenerate -m "$(msg)"
 endif
 
