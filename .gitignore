@@ -30,3 +30,7 @@ postgres_data/
 
 # macosX
 .DS_Store
+
+# Playwright MCP（動作確認用の成果物）
+.playwright-mcp/
+/*.png
