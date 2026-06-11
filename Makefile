@@ -25,7 +25,7 @@ setup:
 # ローカルの Node バージョンに依存せず、IDE の型補完が正しく動く状態を作るのが目的。
 # アプリの実行はコンテナで行うため、ネイティブアドオン（sharp 等）のバイナリ差異は問題にならない。
 install:
-	docker run --rm -v $(PWD)/frontend:/app -w /app node:22-alpine sh -c "corepack enable pnpm && pnpm install"
+	docker run --rm -v $(PWD)/frontend:/app -w /app node:22-alpine sh -c "corepack enable pnpm && pnpm install --frozen-lockfile"
 
 # ---------- 起動 / 停止 ----------
 up:
