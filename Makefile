@@ -13,16 +13,7 @@ endif
 
 # ---------- 初回セットアップ ----------
 setup:
-	@if [ ! -f .env ]; then \
-		if [ ! -f $(ENV_EXAMPLE) ]; then \
-			echo "Error: $(ENV_EXAMPLE) が見つかりません."; exit 1; \
-		fi; \
-		KEY=$$(docker run --rm python:3.11-slim sh -c "pip install -q cryptography 2>/dev/null && python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"); \
-		awk -v key="$$KEY" '/^ENCRYPTION_KEY=/{print "ENCRYPTION_KEY=" key; next}1' $(ENV_EXAMPLE) > .env; \
-		echo ".env を $(ENV_EXAMPLE) から作成しました. GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET / JWT_SECRET を設定してください."; \
-	else \
-		echo ".env はすでに存在します. スキップします."; \
-	fi
+	@sh scripts/setup.sh $(ENV_EXAMPLE)
 	$(MAKE) install
 	$(MAKE) build
 
@@ -72,11 +63,11 @@ migrate-create:
 	$(DC) exec backend alembic revision --autogenerate -m "$(msg)"
 else
 migrate:
-	@if [ ! -f .env ]; then echo "Error: .env が見つかりません. まず make setup を実行してください."; exit 1; fi
+	@if [ ! -f .env ]; then echo "Error: .env not found. Run 'make setup' first."; exit 1; fi
 	set -a && . .env && set +a && cd backend && alembic upgrade head
 
 migrate-create:
-	@if [ ! -f .env ]; then echo "Error: .env が見つかりません. まず make setup を実行してください."; exit 1; fi
+	@if [ ! -f .env ]; then echo "Error: .env not found. Run 'make setup' first."; exit 1; fi
 	@if [ -z "$(msg)" ]; then echo "Usage: make migrate-create msg=\"migration name\""; exit 1; fi
 	set -a && . .env && set +a && cd backend && alembic revision --autogenerate -m "$(msg)"
 endif
