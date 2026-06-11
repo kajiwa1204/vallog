@@ -21,11 +21,11 @@ setup:
 	$(MAKE) install
 	$(MAKE) build
 
-# コンテナと同じ Node バージョンで npm install を実行し、node_modules をローカルに生成する。
+# コンテナと同じ Node バージョンで pnpm install を実行し、node_modules をローカルに生成する。
 # ローカルの Node バージョンに依存せず、IDE の型補完が正しく動く状態を作るのが目的。
 # アプリの実行はコンテナで行うため、ネイティブアドオン（sharp 等）のバイナリ差異は問題にならない。
 install:
-	docker run --rm -v $(PWD)/frontend:/app -w /app node:22-alpine npm install
+	docker run --rm -v $(PWD)/frontend:/app -w /app node:22-alpine sh -c "corepack enable pnpm && pnpm install --frozen-lockfile"
 
 # ---------- 起動 / 停止 ----------
 up:

@@ -8,6 +8,9 @@ frontend/.next/
 frontend/out/
 frontend/node_modules/
 
+# pnpm
+frontend/.pnpm-store/
+
 # Python
 backend/__pycache__/
 backend/.venv/
