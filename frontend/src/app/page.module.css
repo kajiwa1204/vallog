@@ -1,0 +1,196 @@
+.loadingWrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: var(--paper);
+}
+
+.root {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Left brand panel ── */
+.brand {
+  flex: 0 0 55%;
+  background: var(--shell-bg);
+  color: var(--shell-ink);
+  display: flex;
+  flex-direction: column;
+  padding: 40px 56px;
+  min-height: 100vh;
+}
+
+.brandTop {
+  flex-shrink: 0;
+}
+
+.brandCenter {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 32px;
+}
+
+.copy {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--shell-ink);
+  letter-spacing: -0.01em;
+}
+
+.desc {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--shell-ink-dim);
+  max-width: 480px;
+}
+
+/* Contribution bars */
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.bar {
+  height: 8px;
+  border-radius: var(--radius-s);
+  transform-origin: left center;
+  animation: barGrow 0.8s ease-out forwards;
+  transform: scaleX(0);
+}
+
+.barActivity {
+  background: #3ddc84;
+  width: 72%;
+  animation-delay: 0.1s;
+}
+
+.barSpeed {
+  background: #e0a04a;
+  width: 55%;
+  animation-delay: 0.25s;
+}
+
+.barQuality {
+  background: #7da3d8;
+  width: 44%;
+  animation-delay: 0.4s;
+}
+
+@keyframes barGrow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.brandBottom {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 40px;
+}
+
+.value {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--shell-ink-dim);
+  text-transform: lowercase;
+}
+
+.valueSep {
+  color: var(--shell-line);
+  font-size: 11px;
+}
+
+/* ── Right login panel ── */
+.login {
+  flex: 0 0 45%;
+  background: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 48px;
+}
+
+.loginCard {
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.loginTitle {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.githubButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 20px;
+  background: #24292f;
+  color: #ffffff;
+  border-radius: var(--radius-m);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+
+.githubButton:hover {
+  background: #3a4148;
+}
+
+.octicon {
+  flex-shrink: 0;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--ink-3);
+  line-height: 1.65;
+  text-align: center;
+}
+
+/* ── Responsive ── */
+@media (max-width: 760px) {
+  .root {
+    flex-direction: column;
+  }
+
+  .brand {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 32px 24px;
+  }
+
+  .brandCenter {
+    gap: 24px;
+  }
+
+  .copy {
+    font-size: 28px;
+  }
+
+  .login {
+    flex: 1;
+    padding: 40px 24px;
+  }
+}

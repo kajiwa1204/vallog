@@ -1,0 +1,79 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.donut {
+  position: relative;
+  width: 168px;
+  height: 168px;
+}
+
+.donut svg {
+  width: 100%;
+  height: 100%;
+}
+
+.center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.score {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.scoreLabel {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.breakdown {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 2px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.label {
+  flex: 1;
+  color: var(--ink-2);
+}
+
+.value {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.weight {
+  color: var(--ink-3);
+  font-size: 11.5px;
+  width: 44px;
+  text-align: right;
+}

@@ -1,0 +1,14 @@
+.note {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--green-tint);
+  border-radius: var(--radius-s);
+}
+
+.error {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--red);
+}

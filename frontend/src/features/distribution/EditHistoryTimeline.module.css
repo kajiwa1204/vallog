@@ -1,0 +1,102 @@
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  position: relative;
+}
+
+/* git log の縦線 */
+.timeline::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: var(--line);
+}
+
+.entry {
+  position: relative;
+  padding: 0 0 18px 26px;
+}
+
+.entry:last-child {
+  padding-bottom: 0;
+}
+
+.dot {
+  position: absolute;
+  left: 0;
+  top: 5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 3px solid var(--green);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editor {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.date {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.reason {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.changes {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: var(--surface-dim);
+  border-radius: var(--radius-s);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.change {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.changeLogin {
+  width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.before {
+  color: var(--red);
+}
+
+.arrow {
+  color: var(--ink-3);
+}
+
+.after {
+  color: var(--green-strong);
+  font-weight: 600;
+}

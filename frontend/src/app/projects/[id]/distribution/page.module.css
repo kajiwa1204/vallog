@@ -1,0 +1,165 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  max-width: 560px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.tab:hover {
+  border-color: var(--ink-3);
+}
+
+.tabActive {
+  border-color: var(--green);
+  background: var(--green-tint);
+}
+
+.tabTitle {
+  font-weight: 600;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.twoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.allocActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.amountView {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.amountEdit {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.amountInput {
+  width: 130px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  text-align: right;
+}
+
+.amountInput:focus {
+  outline: none;
+  border-color: var(--green);
+}
+
+.agreeBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  flex-wrap: wrap;
+}
+
+.agreeNote {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.agreedNote {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--green-strong);
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.modalNote {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.error {
+  color: var(--red);
+  font-size: 13px;
+}
+
+.empty {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--ink-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.emptyHint {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+@media (max-width: 980px) {
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+}
