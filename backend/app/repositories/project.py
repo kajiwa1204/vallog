@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from app.models import InvitationLink, Project, ProjectMember, User
 
@@ -26,10 +26,13 @@ class ProjectRepository:
 
     async def list_for_user(self, user_id: uuid.UUID) -> list[tuple[Project, int]]:
         """ユーザーが参加中のプロジェクトと、各メンバー数を返す。"""
+        # 外側のJOINと同じテーブルを数えるため、自動相関を避けるエイリアスを使う
+        pm = aliased(ProjectMember)
         member_count = (
             select(func.count())
-            .select_from(ProjectMember)
-            .where(ProjectMember.project_id == Project.id)
+            .select_from(pm)
+            .where(pm.project_id == Project.id)
+            .correlate(Project)
             .scalar_subquery()
         )
         rows = await self.db.execute(

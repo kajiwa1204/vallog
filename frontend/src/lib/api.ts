@@ -38,7 +38,7 @@ async function rawRequest(path: string, options: RequestOptions): Promise<Respon
   });
 }
 
-export async function refreshSession(): Promise<TokenResponse | null> {
+async function doRefresh(): Promise<TokenResponse | null> {
   const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
     method: "POST",
     credentials: "include",
@@ -49,11 +49,23 @@ export async function refreshSession(): Promise<TokenResponse | null> {
   return data;
 }
 
+// 複数のリクエストが同時に401になっても、リフレッシュは1回に束ねる
+let refreshPromise: Promise<TokenResponse | null> | null = null;
+
+export function refreshSession(): Promise<TokenResponse | null> {
+  if (!refreshPromise) {
+    refreshPromise = doRefresh().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  return refreshPromise;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   let res = await rawRequest(path, options);
 
-  // アクセストークン失効時はリフレッシュして一度だけ再試行する
-  if (res.status === 401 && accessToken) {
+  // アクセストークン未取得・失効時はリフレッシュして一度だけ再試行する
+  if (res.status === 401) {
     const session = await refreshSession();
     if (session) {
       res = await rawRequest(path, options);
