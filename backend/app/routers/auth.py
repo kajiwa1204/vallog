@@ -1,3 +1,6 @@
+import secrets
+from urllib.parse import urlencode
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,9 +14,9 @@ from app.services.auth import fetch_github_access_token, fetch_github_user
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _REFRESH_COOKIE = "refresh_token"
+_OAUTH_STATE_COOKIE = "github_oauth_state"
 _GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
-_GITHUB_SCOPES = "read:user,repo"
-
+_GITHUB_SCOPES = "read:user"
 
 def _set_refresh_cookie(response: Response, token: str) -> None:
     # localhost（開発環境）では secure=False にしないと Cookie が送信されない
