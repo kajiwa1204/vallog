@@ -65,7 +65,10 @@ def _decode_token(token: str, expected_type: str) -> uuid.UUID:
     sub = payload.get("sub")
     if sub is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    return uuid.UUID(sub)
+    try:
+        return uuid.UUID(sub)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
 def decode_access_token(token: str) -> uuid.UUID:
