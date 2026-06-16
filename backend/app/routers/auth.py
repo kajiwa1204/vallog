@@ -34,12 +34,20 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
 @router.get("/github")
 async def login_github():
     """GitHub OAuth 認証画面へリダイレクト"""
-    url = (
-        f"{_GITHUB_AUTHORIZE_URL}"
-        f"?client_id={settings.github_client_id}"
-        f"&scope={_GITHUB_SCOPES}"
+    state = secrets.token_urlsafe(32)
+    url = f"{_GITHUB_AUTHORIZE_URL}?{urlencode({'client_id': settings.github_client_id, 'scope': _GITHUB_SCOPES, 'state': state})}"
+
+    redirect = RedirectResponse(url)
+    secure = settings.frontend_url.startswith("https://")
+    redirect.set_cookie(
+        key=_OAUTH_STATE_COOKIE,
+        value=state,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        max_age=60 * 10,
     )
-    return RedirectResponse(url)
+    return redirect
 
 
 @router.get("/github/callback")
