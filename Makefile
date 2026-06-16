@@ -18,7 +18,7 @@ endif
 ifdef MSYSTEM
 DOCKER_NO_PATHCONV = MSYS_NO_PATHCONV=1
 else
-DOCKER_NO_PATHCONV = 1
+DOCKER_NO_PATHCONV =
 endif
 
 # ---------- 初回セットアップ ----------
