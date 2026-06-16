@@ -75,6 +75,7 @@ async def github_callback(
 
     refresh_token = create_refresh_token(user.id)
     redirect = RedirectResponse(url=f"{frontend_origin}/auth/callback")
+    redirect.delete_cookie(key=_OAUTH_STATE_COOKIE)
     _set_refresh_cookie(redirect, refresh_token)
     return redirect
 
