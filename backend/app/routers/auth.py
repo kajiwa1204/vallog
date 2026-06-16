@@ -6,7 +6,6 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
 from app.repositories.user import UserRepository
-from app.schemas.user import UserResponse
 from app.services.auth import fetch_github_access_token, fetch_github_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
