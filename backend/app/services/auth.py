@@ -8,21 +8,35 @@ _GITHUB_USER_URL = "https://api.github.com/user"
 
 
 async def fetch_github_access_token(code: str) -> str:
-    async with httpx.AsyncClient() as client:
-        res = await client.post(
-            _GITHUB_TOKEN_URL,
-            json={
-                "client_id": settings.github_client_id,
-                "client_secret": settings.github_client_secret,
-                "code": code,
-            },
-            headers={"Accept": "application/json"},
-        )
-    token = res.json().get("access_token")
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            res = await client.post(
+                _GITHUB_TOKEN_URL,
+                data={
+                    "client_id": settings.github_client_id,
+                    "client_secret": settings.github_client_secret,
+                    "code": code,
+                },
+                headers={"Accept": "application/json"},
+            )
+        data = res.json()
+    except httpx.TimeoutException as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub への接続がタイムアウトしました",
+        ) from e
+    except (httpx.HTTPError, ValueError) as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="GitHub への接続に失敗しました",
+        ) from e
+
+    token = data.get("access_token")
     if not token:
+        error = data.get("error") or "unknown_error"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="GitHub access token の取得に失敗しました",
+            detail=f"GitHub access token の取得に失敗しました: {error}",
         )
     return token
 
