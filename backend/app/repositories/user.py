@@ -36,6 +36,17 @@ class UserRepository:
             user.github_access_token = github_access_token
             user.avatar_url = avatar_url
 
-        await self._session.commit()
+        try:
+            await self._session.commit()
+        except IntegrityError:
+            await self._session.rollback()
+            user = await self.get_by_github_id(github_id)
+            if user is None:
+                raise
+            user.github_login = github_login
+            user.github_access_token = github_access_token
+            user.avatar_url = avatar_url
+            await self._session.commit()
+
         await self._session.refresh(user)
         return user
