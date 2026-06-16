@@ -46,16 +46,16 @@ def create_access_token(user_id: uuid.UUID) -> str:
     )
 
 
-def create_refresh_token(user_id: uuid.UUID) -> str:
+def create_refresh_token(user_id: uuid.UUID, jti: uuid.UUID) -> str:
     expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     return jwt.encode(
-        {"sub": str(user_id), "type": "refresh", "exp": expire},
+        {"sub": str(user_id), "type": "refresh", "jti": str(jti), "exp": expire},
         settings.jwt_secret,
         algorithm=ALGORITHM,
     )
 
 
-def _decode_token(token: str, expected_type: str) -> uuid.UUID:
+def _decode_token(token: str, expected_type: str) -> tuple[uuid.UUID, dict]:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
     except JWTError:
@@ -66,17 +66,26 @@ def _decode_token(token: str, expected_type: str) -> uuid.UUID:
     if sub is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     try:
-        return uuid.UUID(sub)
+        return (uuid.UUID(sub), payload)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
 def decode_access_token(token: str) -> uuid.UUID:
-    return _decode_token(token, "access")
+    user_id, _ = _decode_token(token, "access")
+    return user_id
 
 
-def decode_refresh_token(token: str) -> uuid.UUID:
-    return _decode_token(token, "refresh")
+def decode_refresh_token(token: str) -> tuple[uuid.UUID, uuid.UUID]:
+    """Returns (user_id, jti)"""
+    user_id, payload = _decode_token(token, "refresh")
+    jti_str = payload.get("jti")
+    if jti_str is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    try:
+        return user_id, uuid.UUID(jti_str)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
 
 async def get_current_user_id(
