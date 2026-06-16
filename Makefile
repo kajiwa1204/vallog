@@ -4,23 +4,26 @@ ENV ?= dev
 ENV_EXAMPLE = .env.$(ENV).example
 
 ifeq ($(ENV), prod)
-  DC = docker compose --env-file .env
+	DC = docker compose --env-file .env
 else
-  DC = docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml
+	DC = docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml
+endif
+
+ifeq ($(OS),Windows_NT)
+	PYTHON ?= py
+else
+	PYTHON ?= python3
+endif
+
+ifdef MSYSTEM
+DOCKER_NO_PATHCONV = MSYS_NO_PATHCONV=1
+else
+DOCKER_NO_PATHCONV = 1
 endif
 
 # ---------- 初回セットアップ ----------
 setup:
-	@if [ ! -f .env ]; then \
-		if [ ! -f $(ENV_EXAMPLE) ]; then \
-			echo "Error: $(ENV_EXAMPLE) が見つかりません。"; exit 1; \
-		fi; \
-		KEY=$$(docker run --rm python:3.11-slim sh -c "pip install -q cryptography 2>/dev/null && python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"); \
-		awk -v key="$$KEY" '/^ENCRYPTION_KEY=/{print "ENCRYPTION_KEY=" key; next}1' $(ENV_EXAMPLE) > .env; \
-		echo ".env を $(ENV_EXAMPLE) から作成しました。GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET / JWT_SECRET を設定してください。"; \
-	else \
-		echo ".env はすでに存在します。スキップします。"; \
-	fi
+	$(PYTHON) scripts/setup_env.py $(ENV)
 	$(MAKE) install
 	$(MAKE) build
 
@@ -28,7 +31,7 @@ setup:
 # ローカルの Node バージョンに依存せず、IDE の型補完が正しく動く状態を作るのが目的。
 # アプリの実行はコンテナで行うため、ネイティブアドオン（sharp 等）のバイナリ差異は問題にならない。
 install:
-	docker run --rm -v $(PWD)/frontend:/app -w /app node:22-alpine sh -c "corepack enable pnpm && pnpm install --frozen-lockfile"
+	$(DOCKER_NO_PATHCONV) docker run --rm -v $(PWD)/frontend:/app -w /app node:22-alpine sh -c "corepack enable pnpm && pnpm install --frozen-lockfile"
 
 # ---------- 起動 / 停止 ----------
 up:
