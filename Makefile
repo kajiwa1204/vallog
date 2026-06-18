@@ -40,6 +40,7 @@ up:
 down:
 	$(DC) down
 
+
 build:
 	$(DC) build --no-cache
 
