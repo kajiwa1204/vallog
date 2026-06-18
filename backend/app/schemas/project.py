@@ -58,7 +58,7 @@ class RepoOption(BaseModel):
 class MemberResponse(BaseModel):
     github_login: str
     avatar_url: str | None
-    is_registered: bool
+    is_member: bool
 
 
 class InvitationCreateResponse(BaseModel):

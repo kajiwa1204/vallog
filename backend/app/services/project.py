@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.project import InvitationLink, Project
 from app.models.user import User
 from app.repositories.project import ProjectRepository
-from app.schemas.project import InvitationCreateResponse, ProjectCreate
+from app.schemas.project import InvitationCreateResponse, ProjectCreate, ProjectUpdate
 from app.core.config import settings
 from app.services.github import GitHubClient
 
@@ -34,6 +34,18 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
     )
     await repo.create(project)
     await repo.add_member(project.id, user.id)
+    await db.commit()
+    return project
+
+
+async def update_project(db: AsyncSession, project: Project, payload: ProjectUpdate) -> Project:
+    if payload.name is not None:
+        project.name = payload.name
+    if payload.weights is not None:
+        w = payload.weights
+        project.weight_activity = w.activity
+        project.weight_speed = w.speed
+        project.weight_quality = w.quality
     await db.commit()
     return project
 

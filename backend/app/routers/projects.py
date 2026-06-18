@@ -62,14 +62,7 @@ async def get_project(project: MemberProject, db: DB):
 
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)
 async def update_project(payload: ProjectUpdate, project: MemberProject, db: DB):
-    if payload.name is not None:
-        project.name = payload.name
-    if payload.weights is not None:
-        w = payload.weights
-        project.weight_activity = w.activity
-        project.weight_speed = w.speed
-        project.weight_quality = w.quality
-    await db.commit()
+    project = await project_service.update_project(db, project, payload)
     count = await ProjectRepository(db).count_members(project.id)
     return _to_response(project, count)
 

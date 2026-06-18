@@ -19,8 +19,9 @@ async def list_members(project: MemberProject, user: CurrentUser, db: DB):
     return [
         MemberResponse(
             github_login=c["login"],
-            avatar_url=c.get("avatar_url"),
-            is_registered=c["login"] in registered,
+            avatar_url=c.get("avatar_url") or f"https://github.com/{c['login']}.png",
+            is_member=c["login"] in registered,
         )
         for c in contributors
+        if not c["login"].endswith("[bot]")
     ]
