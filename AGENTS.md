@@ -65,3 +65,4 @@
 | `docs/tech_stack.md` | 技術スタック・インフラ |
 | `docs/data_model.md` | エンティティ設計・設計の意図 |
 | `docs/directory_structure.md` | ディレクトリ構成 |
+| `docs/roadmap.md` | 開発ロードマップ・フェーズ計画（GitHub Projectsと連動） |
