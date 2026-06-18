@@ -1,3 +1,4 @@
+from app.models.app_credential import AppCredential
 from app.models.distribution import (
     DistributionEditLog,
     DistributionItem,
@@ -10,10 +11,11 @@ from app.models.github_cache import (
     GitHubReview,
 )
 from app.models.project import InvitationLink, Project, ProjectMember
-from app.models.summary import ContributionSummary
+from app.models.summary import ContributionSummary, PRSummary, SummaryJob
 from app.models.user import User
 
 __all__ = [
+    "AppCredential",
     "User",
     "Project",
     "ProjectMember",
@@ -26,4 +28,6 @@ __all__ = [
     "DistributionItem",
     "DistributionEditLog",
     "ContributionSummary",
+    "PRSummary",
+    "SummaryJob",
 ]

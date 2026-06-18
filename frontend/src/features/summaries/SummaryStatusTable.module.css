@@ -1,0 +1,160 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: 8px 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.row {
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: none;
+}
+
+.row td {
+  padding: 12px;
+  vertical-align: middle;
+}
+
+.thMember {
+  min-width: 160px;
+}
+
+.thStatus {
+  min-width: 88px;
+}
+
+.thProgress {
+  min-width: 180px;
+}
+
+.thSummary {
+  width: 100%;
+}
+
+.thAction {
+  min-width: 80px;
+}
+
+.memberCell {
+  white-space: nowrap;
+}
+
+.memberIdent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.login {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.statusCell {
+  white-space: nowrap;
+}
+
+.progressCell {
+  min-width: 180px;
+}
+
+.progressWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.progressBar {
+  height: 6px;
+  background: var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  background: var(--slate);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.progressLabel {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.summaryCell {
+  max-width: 360px;
+}
+
+.errorText {
+  font-size: 12.5px;
+  color: var(--red);
+}
+
+.finishedAt {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+
+.excerpt {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.6;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.actionCell {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.actionGroup {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.prDetailLink {
+  font-size: 12px;
+  color: var(--ink-3);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.prDetailLink:hover {
+  color: var(--ink-2);
+  text-decoration: underline;
+}

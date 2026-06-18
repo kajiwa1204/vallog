@@ -7,14 +7,34 @@ import styles from "./ContributionSummary.module.css";
 type Props = {
   summary: Summary | null;
   generating: boolean;
+  jobProgress: { done: number; total: number } | null;
   error: string | null;
   onGenerate: () => void;
 };
+
+function GeneratingLabel({
+  jobProgress,
+}: {
+  jobProgress: { done: number; total: number } | null;
+}) {
+  if (jobProgress && jobProgress.total > 0) {
+    return (
+      <span>
+        生成中… PR要約{" "}
+        <span className="num">
+          {jobProgress.done}/{jobProgress.total}
+        </span>
+      </span>
+    );
+  }
+  return <span>生成中…</span>;
+}
 
 // Feature D: Claude APIによる貢献サマリー。AIの唯一の用途（スコアには使わない）
 export function ContributionSummary({
   summary,
   generating,
+  jobProgress,
   error,
   onGenerate,
 }: Props) {
@@ -42,7 +62,11 @@ export function ContributionSummary({
               onClick={onGenerate}
               loading={generating}
             >
-              再生成
+              {generating ? (
+                <GeneratingLabel jobProgress={jobProgress} />
+              ) : (
+                "再生成"
+              )}
             </Button>
           </footer>
         </>
@@ -53,7 +77,11 @@ export function ContributionSummary({
             スコアの根拠の補完や、実績の証明に使えます。
           </p>
           <Button onClick={onGenerate} loading={generating}>
-            サマリーを生成する
+            {generating ? (
+              <GeneratingLabel jobProgress={jobProgress} />
+            ) : (
+              "サマリーを生成する"
+            )}
           </Button>
         </div>
       )}

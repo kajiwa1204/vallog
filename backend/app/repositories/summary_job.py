@@ -1,0 +1,91 @@
+import uuid
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.summary import SummaryJob
+
+
+class SummaryJobRepository:
+    def __init__(self, db: AsyncSession):
+        self.db = db
+
+    async def create(
+        self,
+        project_id: uuid.UUID,
+        github_login: str,
+        pr_number: int | None = None,
+    ) -> SummaryJob:
+        job = SummaryJob(
+            project_id=project_id,
+            github_login=github_login,
+            pr_number=pr_number,
+            status="pending",
+        )
+        self.db.add(job)
+        await self.db.flush()
+        return job
+
+    async def get(self, job_id: uuid.UUID) -> SummaryJob | None:
+        return await self.db.scalar(
+            select(SummaryJob).where(SummaryJob.id == job_id)
+        )
+
+    async def get_active(
+        self,
+        project_id: uuid.UUID,
+        github_login: str,
+        pr_number: int | None = None,
+    ) -> SummaryJob | None:
+        """pending または running のジョブを返す。
+
+        pr_number=None の場合はメンバー一括ジョブ(pr_number IS NULL)、
+        指定時はそのPR単独のアクティブジョブを返す。
+        """
+        filters = [
+            SummaryJob.project_id == project_id,
+            SummaryJob.github_login == github_login,
+            SummaryJob.status.in_(["pending", "running"]),
+        ]
+        if pr_number is None:
+            filters.append(SummaryJob.pr_number.is_(None))
+        else:
+            filters.append(SummaryJob.pr_number == pr_number)
+
+        return await self.db.scalar(select(SummaryJob).where(*filters))
+
+    async def list_latest_per_member(
+        self, project_id: uuid.UUID
+    ) -> list[SummaryJob]:
+        """メンバーごとの最新ジョブ1件ずつを返す(メンバー一括ジョブのみ)。
+
+        PostgreSQL の DISTINCT ON を利用して github_login 単位で
+        created_at 降順の最新1件に絞る。PR単独ジョブはメンバー一括の
+        進捗と混在させないよう除外する。
+        """
+        rows = await self.db.scalars(
+            select(SummaryJob)
+            .where(
+                SummaryJob.project_id == project_id,
+                SummaryJob.pr_number.is_(None),
+            )
+            .distinct(SummaryJob.github_login)
+            .order_by(SummaryJob.github_login, SummaryJob.created_at.desc())
+        )
+        return list(rows.all())
+
+    async def list_latest_per_pr(
+        self, project_id: uuid.UUID, github_login: str
+    ) -> dict[int, SummaryJob]:
+        """そのメンバーのPR単独ジョブをpr_numberごとに最新1件返す。"""
+        rows = await self.db.scalars(
+            select(SummaryJob)
+            .where(
+                SummaryJob.project_id == project_id,
+                SummaryJob.github_login == github_login,
+                SummaryJob.pr_number.is_not(None),
+            )
+            .distinct(SummaryJob.pr_number)
+            .order_by(SummaryJob.pr_number, SummaryJob.created_at.desc())
+        )
+        return {job.pr_number: job for job in rows.all()}

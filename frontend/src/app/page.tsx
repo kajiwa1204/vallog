@@ -1,12 +1,15 @@
 "use client";
 
 import { Suspense } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { Wordmark } from "@/components/ui/AppShell";
 import { Spinner } from "@/components/ui/Spinner";
+import { SetupWizard } from "@/features/setup/SetupWizard";
+import { API_BASE_URL } from "@/constants";
+import type { SetupStatus } from "@/features/setup/types";
 import styles from "./page.module.css";
 
 function LoginContent() {
@@ -14,6 +17,36 @@ function LoginContent() {
   const searchParams = useSearchParams();
   const invite = searchParams.get("invite");
   const { status } = useAuth({ required: false });
+
+  const [setupPhase, setSetupPhase] = useState<"loading" | "configured" | "wizard">("loading");
+  const [callbackUrl, setCallbackUrl] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/setup/status`);
+        if (!res.ok) {
+          // バックエンドが応答しない場合は設定済みとみなしてログイン画面を表示
+          if (!cancelled) setSetupPhase("configured");
+          return;
+        }
+        const data: SetupStatus = await res.json();
+        if (cancelled) return;
+        if (data.configured) {
+          setSetupPhase("configured");
+        } else {
+          setCallbackUrl(data.callback_url);
+          setSetupPhase("wizard");
+        }
+      } catch {
+        if (!cancelled) setSetupPhase("configured");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (status === "authenticated") {
@@ -25,10 +58,50 @@ function LoginContent() {
     }
   }, [status, invite, router]);
 
-  if (status === "loading") {
+  if (status === "loading" || setupPhase === "loading") {
     return (
       <div className={styles.loadingWrap}>
         <Spinner />
+      </div>
+    );
+  }
+
+  // ウィザードモード: OAuth未設定の場合は右パネルにウィザードを表示
+  if (setupPhase === "wizard") {
+    return (
+      <div className={styles.root}>
+        {/* Left brand panel */}
+        <div className={styles.brand}>
+          <div className={styles.brandTop}>
+            <Wordmark inverse />
+          </div>
+          <div className={styles.brandCenter}>
+            <h1 className={styles.copy}>貢献を、記録する。</h1>
+            <p className={styles.desc}>
+              チーム開発の貢献を客観データで可視化し、正しく報いるためのインフラ。スコアの根拠はすべてGitHubの実データに直リンクします。
+            </p>
+            <div className={styles.bars} aria-hidden>
+              <div className={`${styles.bar} ${styles.barActivity}`} />
+              <div className={`${styles.bar} ${styles.barSpeed}`} />
+              <div className={`${styles.bar} ${styles.barQuality}`} />
+            </div>
+          </div>
+          <div className={styles.brandBottom}>
+            <span className={`${styles.value} num`}>透明性</span>
+            <span className={styles.valueSep}>/</span>
+            <span className={`${styles.value} num`}>客観性</span>
+            <span className={styles.valueSep}>/</span>
+            <span className={`${styles.value} num`}>チームの自律</span>
+          </div>
+        </div>
+
+        {/* Right setup panel */}
+        <div className={styles.login}>
+          <SetupWizard
+            callbackUrl={callbackUrl}
+            onComplete={() => setSetupPhase("configured")}
+          />
+        </div>
       </div>
     );
   }

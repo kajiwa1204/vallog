@@ -12,14 +12,22 @@ import { useMemberDetail } from "@/features/members/useMemberDetail";
 import { ScoreBreakdown } from "@/features/members/ScoreBreakdown";
 import { ActivityTimeline } from "@/features/members/ActivityTimeline";
 import { ContributionSummary } from "@/features/members/ContributionSummary";
+import { PRSummarySection } from "@/features/members/PRSummarySection";
 import { RecentItems } from "@/features/members/RecentItems";
 import styles from "./page.module.css";
 
 export default function MemberDetailPage() {
   const { id, login } = useParams<{ id: string; login: string }>();
   const { project } = useProject(id);
-  const { detail, loading, error, generating, summaryError, generateSummary } =
-    useMemberDetail(id, login);
+  const {
+    detail,
+    loading,
+    error,
+    generating,
+    jobProgress,
+    summaryError,
+    generateSummary,
+  } = useMemberDetail(id, login);
 
   return (
     <AppShell projectId={id} projectName={project?.name}>
@@ -78,10 +86,13 @@ export default function MemberDetailPage() {
               <ContributionSummary
                 summary={detail.summary}
                 generating={generating}
+                jobProgress={jobProgress}
                 error={summaryError}
                 onGenerate={generateSummary}
               />
             </Card>
+
+            <PRSummarySection projectId={id} login={login} />
 
             <section>
               <h2 className={styles.sectionTitle}>カテゴリ別スコア内訳</h2>

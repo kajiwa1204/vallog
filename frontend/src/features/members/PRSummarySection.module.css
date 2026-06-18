@@ -1,0 +1,147 @@
+.details {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  overflow: hidden;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface);
+  list-style: none;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary::before {
+  content: "+";
+  font-size: 16px;
+  color: var(--ink-3);
+  margin-right: 4px;
+  font-weight: 400;
+}
+
+details[open] .summary::before {
+  content: "−";
+}
+
+.summary:hover {
+  background: var(--surface-dim);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--line);
+}
+
+.item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.prHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.prNumber {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--green);
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.prNumber:hover {
+  text-decoration: underline;
+}
+
+.prTitle {
+  font-size: 13px;
+  color: var(--ink-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 400px;
+}
+
+.prActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.generatedAt {
+  font-size: 11px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.jobError {
+  font-size: 12.5px;
+  color: var(--red);
+  margin-top: 6px;
+}
+
+.contentDetails {
+  margin-top: 8px;
+}
+
+.contentSummary {
+  font-size: 12px;
+  color: var(--ink-3);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+}
+
+.contentSummary::-webkit-details-marker {
+  display: none;
+}
+
+.contentSummary::before {
+  content: "+ ";
+}
+
+details[open] .contentSummary::before {
+  content: "− ";
+}
+
+.content {
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--ink-2);
+  margin-top: 6px;
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--red);
+}

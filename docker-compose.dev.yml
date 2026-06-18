@@ -26,6 +26,11 @@ services:
       - "8000:8000"
     environment:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      SUMMARY_PROVIDER: ${SUMMARY_PROVIDER:-claude}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-http://ollama:11434/v1}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_PR_SUMMARY_MODEL: ${OPENAI_PR_SUMMARY_MODEL:-qwen3:8b}
+      OPENAI_MEMBER_SUMMARY_MODEL: ${OPENAI_MEMBER_SUMMARY_MODEL:-qwen3:8b}
 
   db:
     ports:

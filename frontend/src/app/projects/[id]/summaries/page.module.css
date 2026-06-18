@@ -1,0 +1,25 @@
+.header {
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.error {
+  font-size: 13px;
+  color: var(--red);
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--ink-2);
+}

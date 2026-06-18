@@ -33,8 +33,9 @@ def _set_refresh_cookie(response: Response, token: str) -> None:
 
 
 @router.get("/github/login")
-async def github_login(invite: str | None = None):
-    return RedirectResponse(auth_service.build_authorize_url(invite))
+async def github_login(db: DB, invite: str | None = None):
+    url = await auth_service.build_authorize_url(db, invite)
+    return RedirectResponse(url)
 
 
 @router.get("/github/callback")

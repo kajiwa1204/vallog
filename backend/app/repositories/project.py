@@ -109,3 +109,4 @@ class ProjectRepository:
             .order_by(InvitationLink.created_at.desc())
             .limit(1)
         )
+

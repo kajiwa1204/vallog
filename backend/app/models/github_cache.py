@@ -44,8 +44,11 @@ class GitHubPullRequest(Base):
     closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
     # GitHubのissueイベントから集計するPR再オープン回数（手戻り率の指標）
     reopened_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # PRの最新コミットSHA。diff取得の要否をキャッシュ判定に使う
+    head_sha: Mapped[str | None] = mapped_column(String, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

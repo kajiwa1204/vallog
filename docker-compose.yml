@@ -14,6 +14,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_BASE_URL=
     depends_on:
@@ -33,6 +35,13 @@ services:
       - FRONTEND_URL=${FRONTEND_URL}
       - FASTAPI_ROOT_PATH=/api
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - SUMMARY_PROVIDER=${SUMMARY_PROVIDER:-claude}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://ollama:11434/v1}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_PR_SUMMARY_MODEL=${OPENAI_PR_SUMMARY_MODEL:-qwen3:4b-instruct}
+      - OPENAI_MEMBER_SUMMARY_MODEL=${OPENAI_MEMBER_SUMMARY_MODEL:-qwen3:4b-instruct}
+      - LLM_REQUEST_TIMEOUT_SECONDS=${LLM_REQUEST_TIMEOUT_SECONDS:-900}
+      - PR_DIFF_CHAR_LIMIT=${PR_DIFF_CHAR_LIMIT:-30000}
     depends_on:
       db:
         condition: service_healthy
@@ -64,5 +73,17 @@ services:
     profiles:
       - production
 
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      # 既定の4096ではPR diffが静かに切り捨てられるため、コンテキスト長を明示する
+      - OLLAMA_CONTEXT_LENGTH=16384
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles:
+      - ollama
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  ollama_data:

@@ -19,7 +19,6 @@ from app.repositories.github_cache import GitHubCacheRepository
 from app.repositories.project import ProjectRepository
 
 GITHUB_API = "https://api.github.com"
-GITHUB_OAUTH_TOKEN_URL = "https://github.com/login/oauth/access_token"
 
 # 1回の同期で取得する上限。レート制限（5,000 req/h）の予算内に収める
 MAX_LIST_PAGES = 5
@@ -91,6 +90,22 @@ class GitHubClient:
             res.raise_for_status()
             return res.json()
 
+    async def fetch_pr_diff(self, owner: str, name: str, number: int) -> str:
+        """PRのコード差分をdiff形式で取得する。"""
+        headers = {**self._headers, "Accept": "application/vnd.github.diff"}
+        async with httpx.AsyncClient(timeout=60) as client:
+            res = await client.get(
+                f"{GITHUB_API}/repos/{owner}/{name}/pulls/{number}",
+                headers=headers,
+            )
+            if res.status_code in (401, 403):
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail="GitHub APIの認証に失敗しました。再ログインしてください。",
+                )
+            res.raise_for_status()
+            return res.text
+
     async def fetch_repo_data(
         self, owner: str, name: str
     ) -> tuple[list[dict], list[dict], dict[int, list[dict]], list[dict]]:
@@ -138,28 +153,6 @@ class GitHubClient:
         return pulls, issues, reviews_by_pr, events
 
 
-async def exchange_oauth_code(code: str) -> str:
-    async with httpx.AsyncClient(timeout=30) as client:
-        res = await client.post(
-            GITHUB_OAUTH_TOKEN_URL,
-            data={
-                "client_id": settings.github_client_id,
-                "client_secret": settings.github_client_secret,
-                "code": code,
-            },
-            headers={"Accept": "application/json"},
-        )
-        res.raise_for_status()
-        payload = res.json()
-    token = payload.get("access_token")
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"GitHub OAuthに失敗しました: {payload.get('error_description', 'unknown error')}",
-        )
-    return token
-
-
 def _parse_dt(value: str | None) -> datetime | None:
     if value is None:
         return None
@@ -198,10 +191,12 @@ def _build_cache_rows(
             state=p["state"],
             draft=bool(p.get("draft")),
             html_url=p["html_url"],
+            body=p.get("body"),
             gh_created_at=_parse_dt(p["created_at"]),
             merged_at=_parse_dt(p.get("merged_at")),
             closed_at=_parse_dt(p.get("closed_at")),
             reopened_count=reopen_counts.get(p["number"], 0),
+            head_sha=(p.get("head") or {}).get("sha"),
         )
         for p in pulls
     ]

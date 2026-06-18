@@ -174,3 +174,25 @@ export type EditLog = {
   after_items: { items: { github_login: string; ratio: string }[] };
   created_at: string;
 };
+
+export type SummaryJob = {
+  id: string;
+  github_login: string;
+  status: "pending" | "running" | "succeeded" | "failed";
+  total_prs: number;
+  done_prs: number;
+  pr_number: number | null;
+  error: string | null;
+  created_at: string;
+  finished_at: string | null;
+};
+
+export type PRSummaryItem = {
+  pr_number: number;
+  title: string;
+  html_url: string;
+  state: "merged" | "draft" | "open" | "closed";
+  content: string | null;
+  generated_at: string | null;
+  job: SummaryJob | null;
+};
