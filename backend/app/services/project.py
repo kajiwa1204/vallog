@@ -38,6 +38,10 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
     return project
 
 
+async def count_members(db: AsyncSession, project_id) -> int:
+    return await ProjectRepository(db).count_members(project_id)
+
+
 async def update_project(db: AsyncSession, project: Project, payload: ProjectUpdate) -> Project:
     if payload.name is not None:
         project.name = payload.name

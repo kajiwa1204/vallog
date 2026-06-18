@@ -56,14 +56,14 @@ async def create_project(payload: ProjectCreate, user: CurrentUser, db: DB):
 
 @router.get("/projects/{project_id}", response_model=ProjectResponse)
 async def get_project(project: MemberProject, db: DB):
-    count = await ProjectRepository(db).count_members(project.id)
+    count = await project_service.count_members(db, project.id)
     return _to_response(project, count)
 
 
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)
 async def update_project(payload: ProjectUpdate, project: MemberProject, db: DB):
     project = await project_service.update_project(db, project, payload)
-    count = await ProjectRepository(db).count_members(project.id)
+    count = await project_service.count_members(db, project.id)
     return _to_response(project, count)
 
 
