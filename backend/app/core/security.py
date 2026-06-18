@@ -1,8 +1,20 @@
+import uuid
+from datetime import datetime, timedelta, timezone
+
 from cryptography.fernet import Fernet
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
 from sqlalchemy import String
 from sqlalchemy.types import TypeDecorator
 
 from app.core.config import settings
+
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 15
+REFRESH_TOKEN_EXPIRE_DAYS = 30
+
+_bearer = HTTPBearer()
 
 
 class EncryptedString(TypeDecorator):
@@ -23,3 +35,60 @@ class EncryptedString(TypeDecorator):
         if value is None:
             return None
         return self._fernet().decrypt(value.encode()).decode()
+
+
+def create_access_token(user_id: uuid.UUID) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    return jwt.encode(
+        {"sub": str(user_id), "type": "access", "exp": expire},
+        settings.jwt_secret,
+        algorithm=ALGORITHM,
+    )
+
+
+def create_refresh_token(user_id: uuid.UUID, jti: uuid.UUID) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    return jwt.encode(
+        {"sub": str(user_id), "type": "refresh", "jti": str(jti), "exp": expire},
+        settings.jwt_secret,
+        algorithm=ALGORITHM,
+    )
+
+
+def _decode_token(token: str, expected_type: str) -> tuple[uuid.UUID, dict]:
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    if payload.get("type") != expected_type:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    sub = payload.get("sub")
+    if sub is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    try:
+        return (uuid.UUID(sub), payload)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+def decode_access_token(token: str) -> uuid.UUID:
+    user_id, _ = _decode_token(token, "access")
+    return user_id
+
+
+def decode_refresh_token(token: str) -> tuple[uuid.UUID, uuid.UUID]:
+    """Returns (user_id, jti)"""
+    user_id, payload = _decode_token(token, "refresh")
+    jti_str = payload.get("jti")
+    if jti_str is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    try:
+        return user_id, uuid.UUID(jti_str)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+
+async def get_current_user_id(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+) -> uuid.UUID:
+    return decode_access_token(credentials.credentials)

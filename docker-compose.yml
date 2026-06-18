@@ -31,6 +31,7 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - FRONTEND_URL=${FRONTEND_URL}
+      - FASTAPI_ROOT_PATH=/api
     depends_on:
       db:
         condition: service_healthy
