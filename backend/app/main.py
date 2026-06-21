@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import auth
+from app.routers import auth, invitations, members, projects
 
 app = FastAPI(
     title="vallog API",
@@ -18,6 +18,9 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(projects.router)
+app.include_router(members.router)
+app.include_router(invitations.router)
 
 
 @app.get("/health")

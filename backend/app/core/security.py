@@ -1,20 +1,23 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from typing import Annotated
 
 from cryptography.fernet import Fernet
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy import String
+from sqlalchemy import String, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.types import TypeDecorator
 
 from app.core.config import settings
+from app.core.database import get_db
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
-_bearer = HTTPBearer()
+_bearer = HTTPBearer(auto_error=False)
 
 
 class EncryptedString(TypeDecorator):
@@ -89,6 +92,23 @@ def decode_refresh_token(token: str) -> tuple[uuid.UUID, uuid.UUID]:
 
 
 async def get_current_user_id(
-    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> uuid.UUID:
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return decode_access_token(credentials.credentials)
+
+
+async def get_current_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    from app.models.user import User
+
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+    user_id = decode_access_token(credentials.credentials)
+    user = await db.scalar(select(User).where(User.id == user_id))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return user
