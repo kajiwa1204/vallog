@@ -276,5 +276,8 @@ def get_llm_client() -> _BaseClient:
             case "ollama":
                 _client = _OllamaClient()
             case _:
-                raise ValueError(f"Unknown SUMMARY_PROVIDER: {settings.summary_provider!r}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Unknown SUMMARY_PROVIDER: {settings.summary_provider!r}",
+                )
     return _client

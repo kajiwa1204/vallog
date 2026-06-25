@@ -132,9 +132,12 @@ def test_get_llm_client_singleton(monkeypatch):
 
 def test_get_llm_client_unknown_provider_raises(monkeypatch):
     # pydantic が通常は弾くが、直接代入した場合の case _ を確認
+    from fastapi import HTTPException
     monkeypatch.setattr("app.services.llm.settings.summary_provider", "unknown")
-    with pytest.raises(ValueError, match="Unknown SUMMARY_PROVIDER"):
+    with pytest.raises(HTTPException) as exc_info:
         get_llm_client()
+    assert exc_info.value.status_code == 500
+    assert "Unknown SUMMARY_PROVIDER" in exc_info.value.detail
 
 
 # ---------------------------------------------------------------------------
