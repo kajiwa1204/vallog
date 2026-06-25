@@ -1,0 +1,35 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.neutral {
+  background: var(--surface-dim);
+  color: var(--ink-2);
+}
+
+.green {
+  background: var(--green-tint);
+  color: var(--green-strong);
+}
+
+.ochre {
+  background: var(--ochre-tint);
+  color: #965d14;
+}
+
+.slate {
+  background: var(--slate-tint);
+  color: #38547d;
+}
+
+.red {
+  background: var(--red-tint);
+  color: var(--red);
+}
