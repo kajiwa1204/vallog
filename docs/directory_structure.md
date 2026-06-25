@@ -11,6 +11,7 @@ backend/
 │   ├── core/
 │   │   ├── config.py                # 環境変数・設定（Pydantic Settings）
 │   │   ├── database.py              # async engine・session
+│   │   ├── errors.py               # AppError・ErrorCode・例外ハンドラ
 │   │   └── security.py             # JWTトークン検証
 │   ├── routers/                     # モデルごとにエンドポイントを配置
 │   │   ├── auth.py                  # POST /auth/github, POST /auth/refresh

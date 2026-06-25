@@ -5,7 +5,33 @@ import { ApiError } from "@/lib/api";
 // （ログ・開発者向けに留める）。ロケールが増えたらこのモジュールを i18n
 // ライブラリ実装に差し替える。
 
+// バックエンドの機械可読なエラーコード。backend/app/core/errors.py の
+// ErrorCode と同期させる（値は契約なので変更しない）。
+export type ApiErrorCode =
+  | "AUTH_NOT_AUTHENTICATED"
+  | "AUTH_INVALID_TOKEN"
+  | "AUTH_USER_NOT_FOUND"
+  | "AUTH_REFRESH_TOKEN_MISSING"
+  | "AUTH_TOKEN_REUSE_DETECTED"
+  | "PROJECT_NOT_FOUND"
+  | "PROJECT_FORBIDDEN"
+  | "REPO_ALREADY_REGISTERED"
+  | "REPO_NOT_FOUND"
+  | "REPO_ACCESS_DENIED"
+  | "INVITATION_NOT_FOUND"
+  | "INVITATION_EXPIRED"
+  | "GITHUB_TIMEOUT"
+  | "GITHUB_UNAVAILABLE"
+  | "GITHUB_AUTH_FAILED"
+  | "GITHUB_FORBIDDEN"
+  | "GITHUB_TOKEN_EXCHANGE_FAILED"
+  | "GITHUB_USER_FETCH_FAILED"
+  | "GITHUB_INVALID_RESPONSE";
+
 type ErrorMessageOverrides = {
+  // エラーコードごとの上書き文言。同じステータスで意味が分かれる場合に使う
+  // （例: 404 の INVITATION_NOT_FOUND と REPO_NOT_FOUND）。status より優先。
+  codes?: Partial<Record<ApiErrorCode, string>>;
   // ステータスコードごとの上書き文言（ドメイン依存の 404/409/410 などに使う）
   [status: number]: string;
   // 上記に該当しないときの既定文言
@@ -34,7 +60,16 @@ export function messageForError(
 ): string {
   const fallback = overrides.fallback ?? GENERIC_MESSAGE;
   if (error instanceof ApiError) {
-    return overrides[error.status] ?? DEFAULT_MESSAGES[error.status] ?? fallback;
+    // 優先順位: code指定 > status指定 > statusの既定訳 > fallback
+    const byCode = error.code
+      ? overrides.codes?.[error.code as ApiErrorCode]
+      : undefined;
+    return (
+      byCode ??
+      overrides[error.status] ??
+      DEFAULT_MESSAGES[error.status] ??
+      fallback
+    );
   }
   // fetch はネットワーク到達不能時に TypeError を投げる
   if (error instanceof TypeError) return NETWORK_MESSAGE;

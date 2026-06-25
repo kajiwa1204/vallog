@@ -45,7 +45,8 @@
 - **APIエラーメッセージ（`HTTPException` の `detail`）は英語で書く**。これは開発者向け・ログ向けの識別情報であり、契約として安定させる
 - **ユーザー向け文言への翻訳はフロントエンドが担う**。`lib/errorMessages.ts` の `messageForError()` がHTTPステータス基準で日本語化する。バックエンドの英語 `detail` をそのままユーザーに表示しない
 - ステータスだけで区別できないドメインエラーは、呼び出し側で `messageForError(e, { 409: "...", fallback: "..." })` のように上書きする
-- 将来さらに細かい出し分けが要る場合は、バックエンドがレスポンスに機械可読な `code` を含め、フロントは `ApiError.code` で引く（ステータス=ざっくり分類、`code`=細粒度、文言=フロントが翻訳）
+- エラーレスポンスは機械可読な `code` を含む（`{"detail"(英語), "code"}`）。バックエンドは `core/errors.py` の `AppError` / `ErrorCode` で投げ（`HTTPException` は使わない）、フロントは `messageForError(e, { codes: { INVITATION_EXPIRED: "..." } })` で `code` 基準に出し分ける。優先順位は code > status > 既定 > fallback
+- `code` は契約。`backend/app/core/errors.py` の `ErrorCode` と `frontend/src/lib/errorMessages.ts` の `ApiErrorCode` を同期させる（値は変更しない）
 
 ### フロントエンド
 - `features/` は機能（画面）ごとにサブディレクトリを作る（例: `features/dashboard/`）
