@@ -162,6 +162,22 @@ def test_get_llm_client_unknown_provider_raises(monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
+async def test_claude_empty_api_key_raises_503(monkeypatch):
+    """APIキー未設定は不要なラウンドトリップを避けて即座に503を返す。"""
+    monkeypatch.setattr("app.services.llm.settings.claude_api_key", "")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_model", "claude-haiku-4-5-20251001")
+    monkeypatch.setattr("app.services.llm.settings.claude_member_model", "claude-haiku-4-5-20251001")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_thinking_budget_tokens", 0)
+
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc_info:
+        await _ClaudeClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 503
+
+
+@pytest.mark.asyncio
 async def test_claude_thinking_enabled_for_non_haiku(monkeypatch):
     """Haiku 以外のモデルで budget > 0 のとき thinking パラメータが付与される。"""
     monkeypatch.setattr("app.services.llm.settings.claude_api_key", "sk-test")

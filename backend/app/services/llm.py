@@ -93,6 +93,11 @@ class _ClaudeClient(_BaseClient):
         return settings.claude_member_model
 
     async def _call(self, system: str, user: str, model: str) -> str:
+        if not settings.claude_api_key:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="CLAUDE_API_KEYが未設定のため生成できません",
+            )
         budget = settings.claude_thinking_budget_tokens
         use_thinking = _supports_thinking(model) and budget > 0
         body: dict = {
