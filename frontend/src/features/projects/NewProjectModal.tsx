@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
-import { api, messageForError } from "@/lib/api";
+import { api } from "@/lib/api";
+import { messageForError } from "@/lib/errorMessages";
 import type { RepoOption, Project } from "@/types";
 import styles from "./NewProjectModal.module.css";
 

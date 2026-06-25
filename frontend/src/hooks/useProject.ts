@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, messageForError } from "@/lib/api";
+import { api } from "@/lib/api";
+import { messageForError } from "@/lib/errorMessages";
 import type { Project } from "@/types";
 
 // プロジェクト共通情報（名前・重み・リポジトリ）。各画面のAppShell表示に使う

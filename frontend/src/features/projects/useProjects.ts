@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { api, messageForError } from "@/lib/api";
+import { api } from "@/lib/api";
+import { messageForError } from "@/lib/errorMessages";
 import type { ProjectListItem } from "@/types";
 
 type State = {
