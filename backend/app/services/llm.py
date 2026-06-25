@@ -61,7 +61,11 @@ class _BaseClient(ABC):
         return self._pr_sem if use_case == SummaryUseCase.PR else self._member_sem
 
     def cache_key_prefix(self, use_case: SummaryUseCase) -> str:
-        """キャッシュキーの先頭部分を返す（例: "claude:claude-haiku-4-5-20251001"）。"""
+        """キャッシュキーの先頭部分を返す（例: "claude:claude-haiku-4-5-20251001"）。
+
+        後続PRで context_hash と組み合わせてDBキャッシュキー（"{prefix}:{hash}"）を構成する想定。
+        プロバイダ/モデルをキーに含めることで、切替時に旧プロバイダのサマリーが混在するのを防ぐ。
+        """
         return f"{self._provider_name()}:{self._model(use_case)}"
 
     async def complete(self, system: str, user: str, use_case: SummaryUseCase) -> LLMResult:
