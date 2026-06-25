@@ -1,5 +1,7 @@
 import httpx
-from fastapi import HTTPException, status
+from fastapi import status
+
+from app.core.errors import AppError, ErrorCode
 
 GITHUB_API = "https://api.github.com"
 _TIMEOUT = 30.0
@@ -18,24 +20,28 @@ class GitHubClient:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
                 res = await client.get(f"{GITHUB_API}{path}", params=params, headers=self._headers)
         except httpx.TimeoutException as e:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Connection to GitHub timed out",
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_TIMEOUT,
+                "Connection to GitHub timed out",
             ) from e
         except httpx.HTTPError as e:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Failed to connect to GitHub",
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_UNAVAILABLE,
+                "Failed to connect to GitHub",
             ) from e
         if res.status_code == 401:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub API authentication failed",
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_AUTH_FAILED,
+                "GitHub API authentication failed",
             )
         if res.status_code == 403:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub API access denied (possibly rate limited)",
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_FORBIDDEN,
+                "GitHub API access denied (possibly rate limited)",
             )
         return res
 
