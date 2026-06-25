@@ -130,6 +130,23 @@ def test_get_llm_client_singleton(monkeypatch):
     assert get_llm_client() is get_llm_client()
 
 
+def test_get_llm_client_caches_settings_at_construction(monkeypatch):
+    """シングルトンは初回構築時の settings をキャプチャする。
+    構築後に summary_provider を変更しても返るインスタンスの型は変わらない。
+    このためテストではクライアントを直接インスタンス化すること。
+    """
+    monkeypatch.setattr("app.services.llm.settings.summary_provider", "claude")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
+    c1 = get_llm_client()
+    assert isinstance(c1, _ClaudeClient)
+
+    monkeypatch.setattr("app.services.llm.settings.summary_provider", "ollama")
+    c2 = get_llm_client()
+    assert c1 is c2            # キャッシュされたまま
+    assert isinstance(c2, _ClaudeClient)  # ollama に変わっていない
+
+
 def test_get_llm_client_unknown_provider_raises(monkeypatch):
     # pydantic が通常は弾くが、直接代入した場合の case _ を確認
     from fastapi import HTTPException

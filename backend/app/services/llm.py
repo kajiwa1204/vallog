@@ -36,17 +36,29 @@ def _supports_thinking(model: str) -> bool:
 
 
 class _BaseClient(ABC):
+    # サブクラスの __init__ で設定する
+    _pr_sem: asyncio.Semaphore
+    _member_sem: asyncio.Semaphore
+
     @abstractmethod
     def _provider_name(self) -> str: ...
 
+    @property
     @abstractmethod
-    def _model(self, use_case: SummaryUseCase) -> str: ...
+    def _pr_model_name(self) -> str: ...
 
+    @property
     @abstractmethod
-    def _semaphore(self, use_case: SummaryUseCase) -> asyncio.Semaphore: ...
+    def _member_model_name(self) -> str: ...
 
     @abstractmethod
     async def _call(self, system: str, user: str, model: str) -> str: ...
+
+    def _model(self, use_case: SummaryUseCase) -> str:
+        return self._pr_model_name if use_case == SummaryUseCase.PR else self._member_model_name
+
+    def _semaphore(self, use_case: SummaryUseCase) -> asyncio.Semaphore:
+        return self._pr_sem if use_case == SummaryUseCase.PR else self._member_sem
 
     def cache_key_prefix(self, use_case: SummaryUseCase) -> str:
         """キャッシュキーの先頭部分を返す（例: "claude:claude-haiku-4-5-20251001"）。"""
@@ -72,11 +84,13 @@ class _ClaudeClient(_BaseClient):
     def _provider_name(self) -> str:
         return "claude"
 
-    def _model(self, use_case: SummaryUseCase) -> str:
-        return settings.claude_pr_model if use_case == SummaryUseCase.PR else settings.claude_member_model
+    @property
+    def _pr_model_name(self) -> str:
+        return settings.claude_pr_model
 
-    def _semaphore(self, use_case: SummaryUseCase) -> asyncio.Semaphore:
-        return self._pr_sem if use_case == SummaryUseCase.PR else self._member_sem
+    @property
+    def _member_model_name(self) -> str:
+        return settings.claude_member_model
 
     async def _call(self, system: str, user: str, model: str) -> str:
         budget = settings.claude_thinking_budget_tokens
@@ -147,11 +161,13 @@ class _OpenAIClient(_BaseClient):
     def _provider_name(self) -> str:
         return "openai"
 
-    def _model(self, use_case: SummaryUseCase) -> str:
-        return settings.openai_pr_model if use_case == SummaryUseCase.PR else settings.openai_member_model
+    @property
+    def _pr_model_name(self) -> str:
+        return settings.openai_pr_model
 
-    def _semaphore(self, use_case: SummaryUseCase) -> asyncio.Semaphore:
-        return self._pr_sem if use_case == SummaryUseCase.PR else self._member_sem
+    @property
+    def _member_model_name(self) -> str:
+        return settings.openai_member_model
 
     async def _call(self, system: str, user: str, model: str) -> str:
         body = {
@@ -224,11 +240,13 @@ class _OllamaClient(_BaseClient):
     def _provider_name(self) -> str:
         return "ollama"
 
-    def _model(self, use_case: SummaryUseCase) -> str:
-        return settings.ollama_pr_model if use_case == SummaryUseCase.PR else settings.ollama_member_model
+    @property
+    def _pr_model_name(self) -> str:
+        return settings.ollama_pr_model
 
-    def _semaphore(self, use_case: SummaryUseCase) -> asyncio.Semaphore:
-        return self._pr_sem if use_case == SummaryUseCase.PR else self._member_sem
+    @property
+    def _member_model_name(self) -> str:
+        return settings.ollama_member_model
 
     async def _call(self, system: str, user: str, model: str) -> str:
         body = {
@@ -283,7 +301,11 @@ _client: _BaseClient | None = None
 
 
 def get_llm_client() -> _BaseClient:
-    """設定済みのLLMクライアントを返す。プロセス内でシングルトン。"""
+    """設定済みのLLMクライアントを返す。プロセス内でシングルトン。
+
+    初回呼び出し時に settings をキャプチャしてクライアントを構築する。
+    構築後に settings を変更しても反映されないため、テストではクライアントを直接インスタンス化すること。
+    """
     global _client
     if _client is None:
         match settings.summary_provider:
