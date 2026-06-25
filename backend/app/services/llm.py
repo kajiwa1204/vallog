@@ -56,6 +56,11 @@ class _BaseClient(ABC):
         model = self._model(use_case)
         async with self._semaphore(use_case):
             content = await self._call(system, user, model)
+        if not content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="貢献サマリーの生成に失敗しました。",
+            )
         return LLMResult(content=content, provider=self._provider_name(), model=model)
 
 

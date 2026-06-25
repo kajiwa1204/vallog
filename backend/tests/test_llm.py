@@ -325,6 +325,30 @@ async def test_ollama_complete_success(monkeypatch):
 # セマフォによる並列度制限
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# 空・blank レスポンスのガード
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("empty_content", ["", "   ", "\n", "\t\n  "])
+@pytest.mark.asyncio
+async def test_empty_content_raises_502(monkeypatch, empty_content):
+    """空文字・空白のみのレスポンスは 502 を返す（Ollama の thinking 漏れ等の対策）。"""
+    monkeypatch.setattr("app.services.llm.settings.ollama_base_url", "http://ollama:11434")
+    monkeypatch.setattr("app.services.llm.settings.ollama_context_length", 8192)
+    monkeypatch.setattr("app.services.llm.settings.ollama_pr_model", "qwen3:4b-instruct")
+    monkeypatch.setattr("app.services.llm.settings.ollama_member_model", "qwen3:4b-instruct")
+    monkeypatch.setattr("app.services.llm.settings.ollama_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.ollama_member_concurrency", 1)
+
+    mock_res = _mock_response(200, {"message": {"content": empty_content}})
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OllamaClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+    assert "貢献サマリーの生成に失敗しました" in exc_info.value.detail
+
+
 @pytest.mark.asyncio
 async def test_semaphore_limits_concurrency(monkeypatch):
     """並列度 1 のセマフォが同時実行を 1 件に制限することを確認する。"""
