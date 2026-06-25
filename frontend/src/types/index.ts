@@ -49,7 +49,7 @@ export type RepoOption = {
 export type Member = {
   github_login: string;
   avatar_url: string | null;
-  is_registered: boolean;
+  is_member: boolean;
 };
 
 export type Invitation = {

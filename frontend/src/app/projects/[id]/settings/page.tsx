@@ -27,6 +27,7 @@ export default function SettingsPage() {
 
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [issuing, setIssuing] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -66,8 +67,13 @@ export default function SettingsPage() {
   const issueInvitation = async () => {
     setIssuing(true);
     setCopied(false);
+    setInviteError(null);
     try {
       setInvitation(await api.post<Invitation>(`/projects/${id}/invitations`));
+    } catch (e) {
+      setInviteError(
+        e instanceof ApiError ? e.message : "招待リンクの発行に失敗しました",
+      );
     } finally {
       setIssuing(false);
     }
@@ -75,9 +81,15 @@ export default function SettingsPage() {
 
   const copyInvitation = async () => {
     if (!invitation) return;
-    await navigator.clipboard.writeText(invitation.url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(invitation.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setInviteError(
+        "コピーに失敗しました。リンクを選択して手動でコピーしてください。",
+      );
+    }
   };
 
   return (
@@ -137,7 +149,7 @@ export default function SettingsPage() {
                     <span className={`num ${styles.memberLogin}`}>
                       {m.github_login}
                     </span>
-                    {m.is_registered ? (
+                    {m.is_member ? (
                       <Badge tone="green">Vallog登録済み</Badge>
                     ) : (
                       <Badge>未登録</Badge>
@@ -182,6 +194,7 @@ export default function SettingsPage() {
                   {new Date(invitation.expires_at).toLocaleString("ja-JP")}
                 </p>
               )}
+              {inviteError && <p className={styles.error}>{inviteError}</p>}
             </div>
           </Card>
 
