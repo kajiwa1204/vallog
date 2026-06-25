@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
-import { api, ApiError } from "@/lib/api";
+import { api, messageForError } from "@/lib/api";
 import type { RepoOption, Project } from "@/types";
 import styles from "./NewProjectModal.module.css";
 
@@ -44,8 +44,9 @@ export function NewProjectModal({ open, onClose }: Props) {
         setReposLoading(false);
       })
       .catch((e) => {
-        const msg = e instanceof Error ? e.message : "取得に失敗しました";
-        setReposError(msg);
+        setReposError(
+          messageForError(e, { fallback: "リポジトリの取得に失敗しました" }),
+        );
         setReposLoading(false);
       });
   }, [open]);
@@ -68,9 +69,13 @@ export function NewProjectModal({ open, onClose }: Props) {
       });
       router.push(`/projects/${project.id}/settings`);
     } catch (e) {
-      const msg =
-        e instanceof ApiError ? e.message : "登録に失敗しました";
-      setSubmitError(msg);
+      setSubmitError(
+        messageForError(e, {
+          404: "リポジトリが見つからないか、アクセス権がありません",
+          409: "このリポジトリはすでに登録されています",
+          fallback: "登録に失敗しました",
+        }),
+      );
       setSubmitting(false);
     }
   }

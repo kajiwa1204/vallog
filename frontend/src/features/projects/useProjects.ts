@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { api } from "@/lib/api";
+import { api, messageForError } from "@/lib/api";
 import type { ProjectListItem } from "@/types";
 
 type State = {
@@ -23,7 +23,9 @@ export function useProjects() {
       const projects = await api.get<ProjectListItem[]>("/projects");
       setState({ projects, loading: false, error: null });
     } catch (e) {
-      const message = e instanceof Error ? e.message : "取得に失敗しました";
+      const message = messageForError(e, {
+        fallback: "プロジェクトの取得に失敗しました",
+      });
       setState({ projects: [], loading: false, error: message });
     }
   }, []);

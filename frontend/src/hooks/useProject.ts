@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { api, messageForError } from "@/lib/api";
 import type { Project } from "@/types";
 
 // プロジェクト共通情報（名前・重み・リポジトリ）。各画面のAppShell表示に使う
@@ -13,7 +13,12 @@ export function useProject(projectId: string) {
     try {
       setProject(await api.get<Project>(`/projects/${projectId}`));
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "読み込みに失敗しました");
+      setError(
+        messageForError(e, {
+          404: "プロジェクトが見つかりません",
+          fallback: "プロジェクトの読み込みに失敗しました",
+        }),
+      );
     }
   }, [projectId]);
 

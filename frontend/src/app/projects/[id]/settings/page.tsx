@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { useProject } from "@/hooks/useProject";
-import { api, ApiError } from "@/lib/api";
+import { api, messageForError } from "@/lib/api";
 import { WeightEditor } from "@/features/projects/WeightEditor";
 import { SpLabelGuide } from "@/features/projects/SpLabelGuide";
 import type { CategoryWeights, Invitation, Member, Project } from "@/types";
@@ -40,7 +40,7 @@ export default function SettingsPage() {
       .catch((e) => {
         if (!cancelled)
           setMembersError(
-            e instanceof ApiError ? e.message : "メンバーの取得に失敗しました",
+            messageForError(e, { fallback: "メンバーの取得に失敗しました" }),
           );
       });
     return () => {
@@ -56,9 +56,7 @@ export default function SettingsPage() {
       setProject(updated);
       setWeightsMessage("保存しました");
     } catch (e) {
-      setWeightsMessage(
-        e instanceof ApiError ? e.message : "保存に失敗しました",
-      );
+      setWeightsMessage(messageForError(e, { fallback: "保存に失敗しました" }));
     } finally {
       setSavingWeights(false);
     }
@@ -72,7 +70,7 @@ export default function SettingsPage() {
       setInvitation(await api.post<Invitation>(`/projects/${id}/invitations`));
     } catch (e) {
       setInviteError(
-        e instanceof ApiError ? e.message : "招待リンクの発行に失敗しました",
+        messageForError(e, { fallback: "招待リンクの発行に失敗しました" }),
       );
     } finally {
       setIssuing(false);
