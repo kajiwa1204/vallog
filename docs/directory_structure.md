@@ -101,7 +101,8 @@ frontend/
 │   ├── hooks/
 │   │   └── useAuth.ts                            # 認証状態管理（features横断）
 │   ├── lib/
-│   │   └── api.ts                                # APIクライアント（fetch wrapper）
+│   │   ├── api.ts                                # トランスポート専任（fetch・認証・ApiError正規化）
+│   │   └── errorMessages.ts                      # APIエラーのユーザー向け日本語化（i18n）
 │   ├── types/
 │   │   └── index.ts                              # features横断の共通型定義
 │   └── constants/
