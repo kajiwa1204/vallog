@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     claude_member_model: str = "claude-haiku-4-5-20251001"
     claude_pr_concurrency: int = 5
     claude_member_concurrency: int = 3
+    # Haiku非対応。0で無効化。有効時は max_tokens = この値 + 2048 で送信する
+    claude_thinking_budget_tokens: int = 1024
 
     # OpenAI-compatible (Ollama /v1, Gemini free tier, etc.)
     openai_base_url: str = "https://api.openai.com/v1"

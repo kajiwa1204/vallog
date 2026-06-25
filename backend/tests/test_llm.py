@@ -142,6 +142,100 @@ def test_get_llm_client_unknown_provider_raises(monkeypatch):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
+async def test_claude_thinking_enabled_for_non_haiku(monkeypatch):
+    """Haiku 以外のモデルで budget > 0 のとき thinking パラメータが付与される。"""
+    monkeypatch.setattr("app.services.llm.settings.claude_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_model", "claude-sonnet-4-6")
+    monkeypatch.setattr("app.services.llm.settings.claude_member_model", "claude-sonnet-4-6")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_thinking_budget_tokens", 1024)
+
+    captured: dict = {}
+
+    async def spy(self, url, **kwargs):
+        captured["body"] = kwargs.get("json", {})
+        raise httpx.ConnectError("spy")
+
+    with patch("httpx.AsyncClient.post", spy):
+        with pytest.raises(Exception):
+            await _ClaudeClient()._call("sys", "user", "claude-sonnet-4-6")
+
+    assert captured["body"].get("thinking") == {"type": "enabled", "budget_tokens": 1024}
+    assert captured["body"]["max_tokens"] == 1024 + 2048
+
+
+@pytest.mark.asyncio
+async def test_claude_thinking_disabled_for_haiku(monkeypatch):
+    """Haiku モデルは budget > 0 でも thinking パラメータを送らない。"""
+    monkeypatch.setattr("app.services.llm.settings.claude_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_model", "claude-haiku-4-5-20251001")
+    monkeypatch.setattr("app.services.llm.settings.claude_member_model", "claude-haiku-4-5-20251001")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_thinking_budget_tokens", 1024)
+
+    captured: dict = {}
+
+    async def spy(self, url, **kwargs):
+        captured["body"] = kwargs.get("json", {})
+        raise httpx.ConnectError("spy")
+
+    with patch("httpx.AsyncClient.post", spy):
+        with pytest.raises(Exception):
+            await _ClaudeClient()._call("sys", "user", "claude-haiku-4-5-20251001")
+
+    assert "thinking" not in captured["body"]
+    assert captured["body"]["max_tokens"] == 2048
+
+
+@pytest.mark.asyncio
+async def test_claude_thinking_disabled_when_budget_zero(monkeypatch):
+    """budget_tokens=0 のとき thinking パラメータを送らない（明示的無効化）。"""
+    monkeypatch.setattr("app.services.llm.settings.claude_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_model", "claude-sonnet-4-6")
+    monkeypatch.setattr("app.services.llm.settings.claude_member_model", "claude-sonnet-4-6")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_thinking_budget_tokens", 0)
+
+    captured: dict = {}
+
+    async def spy(self, url, **kwargs):
+        captured["body"] = kwargs.get("json", {})
+        raise httpx.ConnectError("spy")
+
+    with patch("httpx.AsyncClient.post", spy):
+        with pytest.raises(Exception):
+            await _ClaudeClient()._call("sys", "user", "claude-sonnet-4-6")
+
+    assert "thinking" not in captured["body"]
+    assert captured["body"]["max_tokens"] == 2048
+
+
+@pytest.mark.asyncio
+async def test_claude_response_parsing_filters_thinking_blocks(monkeypatch):
+    """thinking ブロックが混在するレスポンスから text ブロックのみを結合する。"""
+    monkeypatch.setattr("app.services.llm.settings.claude_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_model", "claude-sonnet-4-6")
+    monkeypatch.setattr("app.services.llm.settings.claude_member_model", "claude-sonnet-4-6")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_thinking_budget_tokens", 1024)
+
+    mock_res = _mock_response(200, {
+        "content": [
+            {"type": "thinking", "thinking": "内部の思考プロセス..."},
+            {"type": "text", "text": "貢献サマリー本文"},
+        ]
+    })
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        result = await _ClaudeClient().complete("sys", "user", SummaryUseCase.PR)
+
+    assert result.content == "貢献サマリー本文"
+
+
+@pytest.mark.asyncio
 async def test_claude_complete_success(monkeypatch):
     monkeypatch.setattr("app.services.llm.settings.claude_api_key", "sk-test")
     monkeypatch.setattr("app.services.llm.settings.claude_pr_model", "claude-haiku-4-5-20251001")
@@ -149,7 +243,7 @@ async def test_claude_complete_success(monkeypatch):
     monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
     monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
 
-    mock_res = _mock_response(200, {"content": [{"text": "summary text"}]})
+    mock_res = _mock_response(200, {"content": [{"type": "text", "text": "summary text"}]})
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
         result = await _ClaudeClient().complete("sys", "user", SummaryUseCase.PR)
 

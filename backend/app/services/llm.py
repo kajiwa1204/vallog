@@ -79,13 +79,17 @@ class _ClaudeClient(_BaseClient):
         return self._pr_sem if use_case == SummaryUseCase.PR else self._member_sem
 
     async def _call(self, system: str, user: str, model: str) -> str:
+        budget = settings.claude_thinking_budget_tokens
+        use_thinking = _supports_thinking(model) and budget > 0
         body: dict = {
             "model": model,
-            "max_tokens": 2048,
+            # thinking 有効時は budget 分のトークンを確保した上で出力領域を 2048 残す
+            "max_tokens": (budget + 2048) if use_thinking else 2048,
             "system": system,
             "messages": [{"role": "user", "content": user}],
         }
-        # thinking を使う場合は _supports_thinking(model) で Haiku を除外すること
+        if use_thinking:
+            body["thinking"] = {"type": "enabled", "budget_tokens": budget}
         try:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
                 res = await client.post(
@@ -123,7 +127,10 @@ class _ClaudeClient(_BaseClient):
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Claude APIがエラーを返しました（{res.status_code}）",
             )
-        return res.json()["content"][0]["text"]
+        # thinking 有効時はレスポンスに thinking ブロックと text ブロックが混在する
+        # content[0] は thinking ブロックになるため type=="text" でフィルタする
+        blocks = res.json()["content"]
+        return "".join(b["text"] for b in blocks if b.get("type") == "text")
 
 
 class _OpenAIClient(_BaseClient):
