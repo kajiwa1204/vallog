@@ -36,8 +36,8 @@ def reset_singleton():
 def _mock_response(status_code: int, json_body: dict) -> MagicMock:
     res = MagicMock()
     res.status_code = status_code
+    res.is_success = 200 <= status_code < 300
     res.json.return_value = json_body
-    res.raise_for_status = MagicMock()
     return res
 
 
@@ -324,6 +324,66 @@ async def test_ollama_complete_success(monkeypatch):
 # ---------------------------------------------------------------------------
 # セマフォによる並列度制限
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# 非401/429エラーステータスの捕捉（raise_for_status の外出し問題）
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("error_status", [500, 503, 404])
+@pytest.mark.asyncio
+async def test_claude_unexpected_error_raises_502(monkeypatch, error_status):
+    monkeypatch.setattr("app.services.llm.settings.claude_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_model", "claude-haiku-4-5-20251001")
+    monkeypatch.setattr("app.services.llm.settings.claude_member_model", "claude-haiku-4-5-20251001")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
+
+    mock_res = _mock_response(error_status, {"error": "unexpected"})
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _ClaudeClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+    assert str(error_status) in exc_info.value.detail
+
+
+@pytest.mark.parametrize("error_status", [500, 503, 404])
+@pytest.mark.asyncio
+async def test_openai_unexpected_error_raises_502(monkeypatch, error_status):
+    monkeypatch.setattr("app.services.llm.settings.openai_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.openai_base_url", "http://localhost:19999/v1")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_member_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.openai_member_concurrency", 1)
+
+    mock_res = _mock_response(error_status, {"error": "unexpected"})
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OpenAIClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+    assert str(error_status) in exc_info.value.detail
+
+
+@pytest.mark.parametrize("error_status", [500, 503, 404])
+@pytest.mark.asyncio
+async def test_ollama_unexpected_error_raises_502(monkeypatch, error_status):
+    monkeypatch.setattr("app.services.llm.settings.ollama_base_url", "http://ollama:11434")
+    monkeypatch.setattr("app.services.llm.settings.ollama_context_length", 8192)
+    monkeypatch.setattr("app.services.llm.settings.ollama_pr_model", "qwen3:4b-instruct")
+    monkeypatch.setattr("app.services.llm.settings.ollama_member_model", "qwen3:4b-instruct")
+    monkeypatch.setattr("app.services.llm.settings.ollama_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.ollama_member_concurrency", 1)
+
+    mock_res = _mock_response(error_status, {"error": "unexpected"})
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OllamaClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+    assert str(error_status) in exc_info.value.detail
+
 
 # ---------------------------------------------------------------------------
 # 空・blank レスポンスのガード

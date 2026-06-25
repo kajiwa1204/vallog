@@ -118,7 +118,11 @@ class _ClaudeClient(_BaseClient):
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="Claude APIのレート制限に達しました。しばらくしてから再度お試しください",
             )
-        res.raise_for_status()
+        if not res.is_success:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Claude APIがエラーを返しました（{res.status_code}）",
+            )
         return res.json()["content"][0]["text"]
 
 
@@ -178,7 +182,11 @@ class _OpenAIClient(_BaseClient):
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail="OpenAI互換APIのレート制限に達しました。しばらくしてから再度お試しください",
             )
-        res.raise_for_status()
+        if not res.is_success:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"OpenAI互換APIがエラーを返しました（{res.status_code}）",
+            )
         return res.json()["choices"][0]["message"]["content"]
 
 
@@ -238,7 +246,11 @@ class _OllamaClient(_BaseClient):
                 detail="Ollamaへの接続に失敗しました",
             ) from e
 
-        res.raise_for_status()
+        if not res.is_success:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Ollamaがエラーを返しました（{res.status_code}）",
+            )
         return res.json()["message"]["content"]
 
 
