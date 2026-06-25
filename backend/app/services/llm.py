@@ -129,8 +129,14 @@ class _ClaudeClient(_BaseClient):
             )
         # thinking 有効時はレスポンスに thinking ブロックと text ブロックが混在する
         # content[0] は thinking ブロックになるため type=="text" でフィルタする
-        blocks = res.json()["content"]
-        return "".join(b["text"] for b in blocks if b.get("type") == "text")
+        try:
+            blocks = res.json()["content"]
+            return "".join(b["text"] for b in blocks if b.get("type") == "text")
+        except (KeyError, IndexError, ValueError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Claude APIのレスポンス形式が不正です",
+            ) from e
 
 
 class _OpenAIClient(_BaseClient):
@@ -194,7 +200,13 @@ class _OpenAIClient(_BaseClient):
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"OpenAI互換APIがエラーを返しました（{res.status_code}）",
             )
-        return res.json()["choices"][0]["message"]["content"]
+        try:
+            return res.json()["choices"][0]["message"]["content"]
+        except (KeyError, IndexError, ValueError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="OpenAI互換APIのレスポンス形式が不正です",
+            ) from e
 
 
 class _OllamaClient(_BaseClient):
@@ -258,7 +270,13 @@ class _OllamaClient(_BaseClient):
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=f"Ollamaがエラーを返しました（{res.status_code}）",
             )
-        return res.json()["message"]["content"]
+        try:
+            return res.json()["message"]["content"]
+        except (KeyError, IndexError, ValueError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="Ollamaのレスポンス形式が不正です",
+            ) from e
 
 
 _client: _BaseClient | None = None

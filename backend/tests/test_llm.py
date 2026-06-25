@@ -423,6 +423,151 @@ async def test_ollama_complete_success(monkeypatch):
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
+# _OpenAIClient のエラー処理（Claude と対称になっていることを確認）
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_openai_401_raises_502(monkeypatch):
+    monkeypatch.setattr("app.services.llm.settings.openai_api_key", "bad-key")
+    monkeypatch.setattr("app.services.llm.settings.openai_base_url", "http://localhost:19999/v1")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_member_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.openai_member_concurrency", 1)
+
+    mock_res = _mock_response(401, {"error": "unauthorized"})
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OpenAIClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+    assert "OPENAI_API_KEY" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_openai_429_raises_429(monkeypatch):
+    monkeypatch.setattr("app.services.llm.settings.openai_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.openai_base_url", "http://localhost:19999/v1")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_member_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.openai_member_concurrency", 1)
+
+    mock_res = _mock_response(429, {"error": "rate limited"})
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OpenAIClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 429
+
+
+@pytest.mark.asyncio
+async def test_openai_timeout_raises_502(monkeypatch):
+    monkeypatch.setattr("app.services.llm.settings.openai_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.openai_base_url", "http://localhost:19999/v1")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_member_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.openai_member_concurrency", 1)
+
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.TimeoutException("timeout")):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OpenAIClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+    assert "タイムアウト" in exc_info.value.detail
+
+
+# ---------------------------------------------------------------------------
+# _OllamaClient timeout（ConnectError とは別パス）
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_ollama_timeout_raises_502(monkeypatch):
+    monkeypatch.setattr("app.services.llm.settings.ollama_base_url", "http://ollama:11434")
+    monkeypatch.setattr("app.services.llm.settings.ollama_context_length", 8192)
+    monkeypatch.setattr("app.services.llm.settings.ollama_pr_model", "qwen3:4b-instruct")
+    monkeypatch.setattr("app.services.llm.settings.ollama_member_model", "qwen3:4b-instruct")
+    monkeypatch.setattr("app.services.llm.settings.ollama_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.ollama_member_concurrency", 1)
+
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, side_effect=httpx.TimeoutException("timeout")):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OllamaClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+    assert "タイムアウト" in exc_info.value.detail
+
+
+# ---------------------------------------------------------------------------
+# malformed JSON / 欠損キー保護（KeyError / IndexError → 502）
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("bad_body", [
+    {},                                          # content キー欠損
+    {"content": [{"type": "thinking", "thinking": "..."}]},  # text ブロックなし → 空文字 → 空チェックで502
+])
+@pytest.mark.asyncio
+async def test_claude_malformed_response_raises_502(monkeypatch, bad_body):
+    monkeypatch.setattr("app.services.llm.settings.claude_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_model", "claude-haiku-4-5-20251001")
+    monkeypatch.setattr("app.services.llm.settings.claude_member_model", "claude-haiku-4-5-20251001")
+    monkeypatch.setattr("app.services.llm.settings.claude_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_member_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.claude_thinking_budget_tokens", 0)
+
+    mock_res = _mock_response(200, bad_body)
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _ClaudeClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+
+
+@pytest.mark.parametrize("bad_body", [
+    {},                                               # choices キー欠損
+    {"choices": []},                                  # choices が空（IndexError）
+    {"choices": [{"message": {}}]},                   # content キー欠損
+])
+@pytest.mark.asyncio
+async def test_openai_malformed_response_raises_502(monkeypatch, bad_body):
+    monkeypatch.setattr("app.services.llm.settings.openai_api_key", "sk-test")
+    monkeypatch.setattr("app.services.llm.settings.openai_base_url", "http://localhost:19999/v1")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_member_model", "gpt-4o-mini")
+    monkeypatch.setattr("app.services.llm.settings.openai_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.openai_member_concurrency", 1)
+
+    mock_res = _mock_response(200, bad_body)
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OpenAIClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+
+
+@pytest.mark.parametrize("bad_body", [
+    {},                    # message キー欠損
+    {"message": {}},       # content キー欠損
+])
+@pytest.mark.asyncio
+async def test_ollama_malformed_response_raises_502(monkeypatch, bad_body):
+    monkeypatch.setattr("app.services.llm.settings.ollama_base_url", "http://ollama:11434")
+    monkeypatch.setattr("app.services.llm.settings.ollama_context_length", 8192)
+    monkeypatch.setattr("app.services.llm.settings.ollama_pr_model", "qwen3:4b-instruct")
+    monkeypatch.setattr("app.services.llm.settings.ollama_member_model", "qwen3:4b-instruct")
+    monkeypatch.setattr("app.services.llm.settings.ollama_pr_concurrency", 1)
+    monkeypatch.setattr("app.services.llm.settings.ollama_member_concurrency", 1)
+
+    mock_res = _mock_response(200, bad_body)
+    from fastapi import HTTPException
+    with patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=mock_res):
+        with pytest.raises(HTTPException) as exc_info:
+            await _OllamaClient().complete("sys", "user", SummaryUseCase.PR)
+    assert exc_info.value.status_code == 502
+
+
+# ---------------------------------------------------------------------------
 # 非401/429エラーステータスの捕捉（raise_for_status の外出し問題）
 # ---------------------------------------------------------------------------
 
