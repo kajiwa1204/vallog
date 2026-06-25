@@ -20,22 +20,22 @@ class GitHubClient:
         except httpx.TimeoutException as e:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub への接続がタイムアウトしました",
+                detail="Connection to GitHub timed out",
             ) from e
         except httpx.HTTPError as e:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub への接続に失敗しました",
+                detail="Failed to connect to GitHub",
             ) from e
         if res.status_code == 401:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub APIの認証に失敗しました。再ログインしてください。",
+                detail="GitHub API authentication failed",
             )
         if res.status_code == 403:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub APIへのアクセスが拒否されました。レート制限に達している場合は、しばらくしてから再度お試しください。",
+                detail="GitHub API access denied (possibly rate limited)",
             )
         return res
 

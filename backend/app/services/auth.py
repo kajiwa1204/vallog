@@ -23,12 +23,12 @@ async def fetch_github_access_token(code: str) -> str:
     except httpx.TimeoutException as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="GitHub への接続がタイムアウトしました",
+            detail="Connection to GitHub timed out",
         ) from e
     except (httpx.HTTPError, ValueError) as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="GitHub への接続に失敗しました",
+            detail="Failed to connect to GitHub",
         ) from e
 
     token = data.get("access_token")
@@ -36,7 +36,7 @@ async def fetch_github_access_token(code: str) -> str:
         error = data.get("error") or "unknown_error"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"GitHub access token の取得に失敗しました: {error}",
+            detail=f"Failed to obtain GitHub access token: {error}",
         )
     return token
 
@@ -55,21 +55,21 @@ async def fetch_github_user(access_token: str) -> dict:
         if res.status_code != 200:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="GitHub ユーザー情報の取得に失敗しました",
+                detail="Failed to fetch GitHub user info",
             )
         return res.json()
     except httpx.TimeoutException as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="GitHub への接続がタイムアウトしました",
+            detail="Connection to GitHub timed out",
         ) from e
     except httpx.HTTPError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="GitHub への接続に失敗しました",
+            detail="Failed to connect to GitHub",
         ) from e
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="GitHub から不正なレスポンスが返りました",
+            detail="Received an invalid response from GitHub",
         ) from e

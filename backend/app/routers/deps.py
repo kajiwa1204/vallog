@@ -24,7 +24,7 @@ async def require_project_member(
     if not await repo.is_member(project_id, user.id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="このプロジェクトのメンバーではありません",
+            detail="Not a member of this project",
         )
     return project
 

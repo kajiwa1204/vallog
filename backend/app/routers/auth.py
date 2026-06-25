@@ -109,7 +109,7 @@ async def refresh(
     if refresh_token is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="リフレッシュトークンがありません",
+            detail="Missing refresh token",
         )
 
     user_id, jti = decode_refresh_token(refresh_token)
