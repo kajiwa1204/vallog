@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     github_client_secret: str
     frontend_url: str
     fastapi_root_path: str = ""
+    github_cache_ttl_seconds: int = 300
 
     model_config = SettingsConfigDict(extra="ignore")
 

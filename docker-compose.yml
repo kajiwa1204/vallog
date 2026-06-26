@@ -32,6 +32,7 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - FRONTEND_URL=${FRONTEND_URL}
       - FASTAPI_ROOT_PATH=/api
+      - GITHUB_CACHE_TTL_SECONDS=${GITHUB_CACHE_TTL_SECONDS:-300}
     depends_on:
       db:
         condition: service_healthy

@@ -1,8 +1,18 @@
+from collections.abc import Awaitable, Callable
+from datetime import datetime, timedelta, timezone
+
 import httpx
 from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import settings
+from app.models.project import Project
+from app.repositories.project import ProjectRepository
 
 GITHUB_API = "https://api.github.com"
 _TIMEOUT = 30.0
+
+FetchAndStore = Callable[["GitHubClient", Project, AsyncSession], Awaitable[None]]
 
 
 class GitHubClient:
@@ -67,3 +77,55 @@ class GitHubClient:
             return []
         res.raise_for_status()
         return res.json()
+
+
+def _is_fresh(project: Project, now: datetime, ttl: timedelta) -> bool:
+    return project.github_synced_at is not None and now - project.github_synced_at < ttl
+
+
+async def ensure_synced(
+    db: AsyncSession,
+    project: Project,
+    access_token: str,
+    fetch_and_store: FetchAndStore,
+    force: bool = False,
+) -> Project:
+    """GitHub APIへの実取得は数秒〜十数秒かかりうるため、その間はDBの行ロックを
+    保持しない。同期中の他リクエストはフラグを見て待たずに今のキャッシュを返す
+    （初回同期なら github_synced_at=None のまま）。完了を見せたい場合はフロント側で
+    github_syncing をポーリングする想定（このIssueのスコープ外）。
+    """
+    now = datetime.now(timezone.utc)
+    ttl = timedelta(seconds=settings.github_cache_ttl_seconds)
+
+    if not force and _is_fresh(project, now, ttl):
+        return project
+
+    repo = ProjectRepository(db)
+    locked = await repo.lock_for_sync(project.id)
+    if locked is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    if locked.github_syncing or (not force and _is_fresh(locked, now, ttl)):
+        # ロック待ちの間に他のリクエストが同期を完了させていた場合もここに来る
+        await db.commit()
+        return locked
+
+    locked.github_syncing = True
+    await db.commit()  # 即座にcommitしてロックを解放し、この後の外部API呼び出し中は保持しない
+
+    try:
+        await fetch_and_store(GitHubClient(access_token), locked, db)
+        locked.github_synced_at = datetime.now(timezone.utc)
+        locked.github_syncing = False
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        # github_syncing=True は上で既にcommit済みのためrollbackでは戻らない。明示的に解除する
+        reset = await repo.lock_for_sync(project.id)
+        if reset is not None:
+            reset.github_syncing = False
+            await db.commit()
+        raise
+
+    return locked
