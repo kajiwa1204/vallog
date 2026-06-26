@@ -75,9 +75,15 @@ class ProjectRepository:
             await self.db.flush()
 
     async def lock_for_sync(self, project_id: uuid.UUID) -> Project | None:
-        """スタンピード対策: 行ロックを取って同期フラグを原子的に確認・更新する。"""
+        """同じセッション内で先にProjectをSELECT済みの場合、populate_existing() がないと
+        IDマップにキャッシュされた古い属性（github_synced_at等）が返り、ロック解放後も
+        更新前の値しか見えなくなる。
+        """
         return await self.db.scalar(
-            select(Project).where(Project.id == project_id).with_for_update()
+            select(Project)
+            .where(Project.id == project_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
 
     async def create_invitation(self, invitation: InvitationLink) -> InvitationLink:
