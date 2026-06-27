@@ -118,4 +118,4 @@ frontend/
 | バックエンドAPIのバージョニング | `api/v1/` は不採用。MVPではフロントが唯一のクライアントのため過剰設計 |
 | フロントのコンポーネント設計 | Atomic Design は不採用。featuresベースのフラット構成 |
 | features内の分割 | 基本はフラット。ファイルが増えてきたら hooks/ などのサブディレクトリに分けてよい |
-| routers からのDBアクセス | 原則 `routers → service → repository` の依存順を守る。ただしビジネスルールを持たない単純なデータ取得のみのエンドポイント（例: `GET /projects` のリスト取得）は `routers` から `repository` を直接呼んでよい。ビジネスルールが絡んだ時点で `service` に移す。 |
+| routers からのDBアクセス | 原則 `routers → services → repositories`。例外として、**単一 repository メソッドを1回呼んで結果をそのまま返す参照（GET）のみ** `routers` から `repository` を直接呼んでよい。リクエスト由来の絞り込み（例: `GET /projects` で自分がメンバーのプロジェクトのみ取得）は許容する。所有チェックによる拒否・複数 repository・集約・キャッシュ・書き込みが入ったら `services` を経由する。判定基準は AGENTS.md「バックエンド」を正とする。 |
