@@ -69,7 +69,7 @@ users
   └── distribution_edit_logs（edited_by）
 ```
 
-> GitHub OAuth App の資格情報（client_id / client_secret）はDBに持たず、環境変数で設定する（[Issue #58](https://github.com/kajiwa1204/vallog/issues/58)）。
+> GitHub OAuth App の資格情報（client_id / client_secret）はDBに持たず、環境変数で設定する
 
 ---
 
