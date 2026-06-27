@@ -64,9 +64,12 @@ users
   │                          │         └── distribution_edit_logs
   │                          │
   │                          ├── contribution_summaries
-  │                          └── pr_summaries
+  │                          ├── pr_summaries
+  │                          └── summary_jobs
   │
   └── distribution_edit_logs（edited_by）
+
+app_credentials（アプリ単位・GitHub OAuth設定。usersにもprojectsにも紐づかない独立テーブル）
 ```
 
 ---
