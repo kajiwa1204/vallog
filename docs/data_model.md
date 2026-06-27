@@ -42,7 +42,6 @@
 | contribution_summaries | LLMが生成したメンバー貢献サマリーのキャッシュ（Tier 2） |
 | pr_summaries | LLMが生成したPR単位サマリーのキャッシュ（Tier 1） |
 | summary_jobs | サマリー生成のバックグラウンドジョブ（状態・進捗） |
-| app_credentials | GitHub OAuth資格情報（セットアップウィザード経由・secret暗号化） |
 
 ---
 
@@ -68,9 +67,9 @@ users
   │                          └── summary_jobs
   │
   └── distribution_edit_logs（edited_by）
-
-app_credentials（アプリ単位・GitHub OAuth設定。usersにもprojectsにも紐づかない独立テーブル）
 ```
+
+> GitHub OAuth App の資格情報（client_id / client_secret）はDBに持たず、環境変数で設定する（[Issue #58](https://github.com/kajiwa1204/vallog/issues/58)）。
 
 ---
 
