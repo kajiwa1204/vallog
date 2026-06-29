@@ -11,6 +11,7 @@ backend/
 │   ├── core/
 │   │   ├── config.py                # 環境変数・設定（Pydantic Settings）
 │   │   ├── database.py              # async engine・session
+│   │   ├── errors.py               # AppError・ErrorCode・例外ハンドラ
 │   │   └── security.py             # JWTトークン検証
 │   ├── routers/                     # モデルごとにエンドポイントを配置
 │   │   ├── auth.py                  # POST /auth/github, POST /auth/refresh
@@ -101,7 +102,8 @@ frontend/
 │   ├── hooks/
 │   │   └── useAuth.ts                            # 認証状態管理（features横断）
 │   ├── lib/
-│   │   └── api.ts                                # APIクライアント（fetch wrapper）
+│   │   ├── api.ts                                # トランスポート専任（fetch・認証・ApiError正規化）
+│   │   └── errorMessages.ts                      # APIエラーのユーザー向け日本語化（i18n）
 │   ├── types/
 │   │   └── index.ts                              # features横断の共通型定義
 │   └── constants/

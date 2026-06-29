@@ -41,9 +41,18 @@
 ### 共通
 - コメントは「なぜ」が非自明な場合のみ書く。「何をしているか」はコードで表現する
 
+### エラーメッセージと国際化
+- **APIエラーメッセージ（`HTTPException` の `detail`）は英語で書く**。これは開発者向け・ログ向けの識別情報であり、契約として安定させる
+- **ユーザー向け文言への翻訳はフロントエンドが担う**。`lib/errorMessages.ts` の `messageForError()` がHTTPステータス基準で日本語化する。バックエンドの英語 `detail` をそのままユーザーに表示しない
+- ステータスだけで区別できないドメインエラーは、呼び出し側で `messageForError(e, { 409: "...", fallback: "..." })` のように上書きする
+- エラーレスポンスは機械可読な `code` を含む（`{"detail"(英語), "code"}`）。バックエンドは `core/errors.py` の `AppError` / `ErrorCode` で投げ（`HTTPException` は使わない）、フロントは `messageForError(e, { codes: { INVITATION_EXPIRED: "..." } })` で `code` 基準に出し分ける。優先順位は code > status > 既定 > fallback
+- `code` は契約。`backend/app/core/errors.py` の `ErrorCode` と `frontend/src/lib/errorMessages.ts` の `ApiErrorCode` を同期させる（値は変更しない）
+
 ### フロントエンド
 - `features/` は機能（画面）ごとにサブディレクトリを作る（例: `features/dashboard/`）
 - 各 `features/xxx/` の中はフラットに置く。ファイルが増えてきたら `hooks/` などのサブディレクトリに分けてよい
+- `lib/api.ts` は**トランスポート専任**（fetch・認証ヘッダ付与・トークンリフレッシュ・`ApiError` への正規化）。ユーザー向け文言やi18nなどのプレゼンテーション関心事を持ち込まない
+- ユーザー向けの文言（エラーメッセージ等）は `lib/errorMessages.ts` のような専用モジュールに置く。依存方向は presentation → transport の一方向に保つ
 
 ### バックエンド
 - エンドポイントは `routers/` にモデルごとに配置する

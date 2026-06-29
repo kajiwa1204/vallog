@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, status
 
 from app.repositories.project import ProjectRepository
 from app.routers.deps import DB, CurrentUser, MemberProject
