@@ -2,12 +2,15 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 
 import httpx
+
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.errors import AppError, ErrorCode
 from app.models.project import Project
 from app.repositories.project import ProjectRepository
+
 
 GITHUB_API = "https://api.github.com"
 _TIMEOUT = 30.0
@@ -35,24 +38,28 @@ class GitHubClient:
             async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
                 res = await client.get(f"{GITHUB_API}{path}", params=params, headers=self._headers)
         except httpx.TimeoutException as e:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub への接続がタイムアウトしました",
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_TIMEOUT,
+                "Connection to GitHub timed out",
             ) from e
         except httpx.HTTPError as e:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub への接続に失敗しました",
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_UNAVAILABLE,
+                "Failed to connect to GitHub",
             ) from e
         if res.status_code == 401:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub APIの認証に失敗しました。再ログインしてください。",
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_AUTH_FAILED,
+                "GitHub API authentication failed",
             )
         if res.status_code == 403:
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="GitHub APIへのアクセスが拒否されました。レート制限に達している場合は、しばらくしてから再度お試しください。",
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_FORBIDDEN,
+                "GitHub API access denied (possibly rate limited)",
             )
         return res
 

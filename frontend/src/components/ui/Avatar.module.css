@@ -1,0 +1,6 @@
+.avatar {
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface-dim);
+  flex-shrink: 0;
+}

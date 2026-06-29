@@ -1,14 +1,15 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException, status
+from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
+from app.core.errors import AppError, ErrorCode
 from app.models.project import InvitationLink, Project
 from app.models.user import User
 from app.repositories.project import ProjectRepository
 from app.schemas.project import InvitationCreateResponse, ProjectCreate, ProjectUpdate
-from app.core.config import settings
 from app.services.github import GitHubClient
 
 INVITATION_TTL = timedelta(days=7)
@@ -17,15 +18,17 @@ INVITATION_TTL = timedelta(days=7)
 async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -> Project:
     repo = ProjectRepository(db)
     if await repo.get_by_repo(payload.repo_owner, payload.repo_name) is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="このリポジトリはすでにVallogに登録されています",
+        raise AppError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.REPO_ALREADY_REGISTERED,
+            "Repository is already registered",
         )
     gh_repo = await GitHubClient(user.github_access_token).get_repo(payload.repo_owner, payload.repo_name)
     if gh_repo is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="リポジトリが見つからないか、アクセス権がありません",
+        raise AppError(
+            status.HTTP_404_NOT_FOUND,
+            ErrorCode.REPO_NOT_FOUND,
+            "Repository not found or access denied",
         )
     project = Project(
         name=payload.name or payload.repo_name,
@@ -73,9 +76,17 @@ async def create_invitation(db: AsyncSession, project: Project, user: User) -> I
 async def get_valid_invitation(db: AsyncSession, token: str) -> InvitationLink:
     invitation = await ProjectRepository(db).get_invitation(token)
     if invitation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="招待リンクが見つかりません")
+        raise AppError(
+            status.HTTP_404_NOT_FOUND,
+            ErrorCode.INVITATION_NOT_FOUND,
+            "Invitation link not found",
+        )
     if invitation.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="招待リンクの有効期限が切れています")
+        raise AppError(
+            status.HTTP_410_GONE,
+            ErrorCode.INVITATION_EXPIRED,
+            "Invitation link has expired",
+        )
     return invitation
 
 
@@ -86,9 +97,10 @@ async def join_via_invitation(db: AsyncSession, token: str, user: User) -> Proje
     # privateリポジトリの場合、アクセス権のないGitHubアカウントの参加を拒否する
     gh_repo = await GitHubClient(user.github_access_token).get_repo(project.repo_owner, project.repo_name)
     if gh_repo is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="このリポジトリへのアクセス権がないため参加できません",
+        raise AppError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.REPO_ACCESS_DENIED,
+            "Cannot join: no access to this repository",
         )
 
     await ProjectRepository(db).add_member(project.id, user.id)

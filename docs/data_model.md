@@ -39,7 +39,9 @@
 | distribution_proposals | 分配シミュレーション案 |
 | distribution_items | 分配案のメンバー別配分値 |
 | distribution_edit_logs | 分配案の編集履歴（透明性の担保） |
-| contribution_summaries | Claude APIが生成した貢献サマリーのキャッシュ |
+| contribution_summaries | LLMが生成したメンバー貢献サマリーのキャッシュ（Tier 2） |
+| pr_summaries | LLMが生成したPR単位サマリーのキャッシュ（Tier 1） |
+| summary_jobs | サマリー生成のバックグラウンドジョブ（状態・進捗） |
 
 ---
 
@@ -60,10 +62,14 @@ users
   │                          │         ├── distribution_items
   │                          │         └── distribution_edit_logs
   │                          │
-  │                          └── contribution_summaries
+  │                          ├── contribution_summaries
+  │                          ├── pr_summaries
+  │                          └── summary_jobs
   │
   └── distribution_edit_logs（edited_by）
 ```
+
+> GitHub OAuth App の資格情報（client_id / client_secret）はDBに持たず、環境変数で設定する
 
 ---
 
@@ -101,9 +107,11 @@ OwnerとMemberのロール区別なし。プロジェクトメンバーは全員
 
 ---
 
-### contribution_summaries はキャッシュ
+### contribution_summaries / pr_summaries はキャッシュ
 
-Claude APIの生成コストがかかるため、生成済みのサマリーをDBに保存する。生成に使ったGitHubデータのハッシュ（`context_hash`）を持ち、PRやコミットが増えた場合のみ再生成する。
+LLMの生成コストがかかるため、生成済みのサマリーをDBに保存する。生成に使ったGitHubデータ（title・body・head_sha・レビュー）とプロバイダ/モデル名のハッシュ（`context_hash`）を持ち、変化した場合のみ再生成する。head_shaでdiffの変化を検知するため、キャッシュ判定にGitHub APIを呼ばない。
+
+2層構成でコストを最小化する: `pr_summaries`（Tier 1）はPRごとに1件を生成・キャッシュする。マージ済みPRは内容が不変なので、一度生成したサマリーは再課金されない。`contribution_summaries`（Tier 2）は各Tier 1の要約を入力として生成するため、トークン消費を抑えながら質の高いメンバーサマリーが得られる。生成は `summary_jobs` で管理されるバックグラウンドジョブとして実行し、進捗（done_prs/total_prs）をポーリングで取得する。
 
 ---
 

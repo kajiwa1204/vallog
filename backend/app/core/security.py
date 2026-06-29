@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from cryptography.fernet import Fernet
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from sqlalchemy import String, select
@@ -12,6 +12,7 @@ from sqlalchemy.types import TypeDecorator
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.errors import AppError, ErrorCode
 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 15
@@ -62,16 +63,16 @@ def _decode_token(token: str, expected_type: str) -> tuple[uuid.UUID, dict]:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
     if payload.get("type") != expected_type:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
     sub = payload.get("sub")
     if sub is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
     try:
         return (uuid.UUID(sub), payload)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
 
 
 def decode_access_token(token: str) -> uuid.UUID:
@@ -84,18 +85,18 @@ def decode_refresh_token(token: str) -> tuple[uuid.UUID, uuid.UUID]:
     user_id, payload = _decode_token(token, "refresh")
     jti_str = payload.get("jti")
     if jti_str is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
     try:
         return user_id, uuid.UUID(jti_str)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
 
 
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> uuid.UUID:
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_NOT_AUTHENTICATED, "Not authenticated")
     return decode_access_token(credentials.credentials)
 
 
@@ -106,9 +107,9 @@ async def get_current_user(
     from app.models.user import User
 
     if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_NOT_AUTHENTICATED, "Not authenticated")
     user_id = decode_access_token(credentials.credentials)
     user = await db.scalar(select(User).where(User.id == user_id))
     if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_USER_NOT_FOUND, "User not found")
     return user

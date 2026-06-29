@@ -3,12 +3,13 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.errors import AppError, ErrorCode
 from app.core.security import (
     REFRESH_TOKEN_EXPIRE_DAYS,
     create_access_token,
@@ -107,9 +108,10 @@ async def refresh(
 ):
     """リフレッシュトークン（Cookie）から新しいアクセストークンを発行する。"""
     if refresh_token is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="リフレッシュトークンがありません",
+        raise AppError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.AUTH_REFRESH_TOKEN_MISSING,
+            "Missing refresh token",
         )
 
     user_id, jti = decode_refresh_token(refresh_token)
@@ -118,14 +120,15 @@ async def refresh(
     stored = await repo.get_by_jti(jti)
 
     if stored is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
 
     if stored.revoked_at is not None:
         # 失効済みトークンの再利用 → このユーザーの全トークンを無効化
         await repo.revoke_all_for_user(user_id)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token reuse detected",
+        raise AppError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.AUTH_TOKEN_REUSE_DETECTED,
+            "Token reuse detected",
         )
 
     new_jti = await repo.rotate(
@@ -151,6 +154,6 @@ async def logout(
         try:
             _, jti = decode_refresh_token(refresh_token)
             await RefreshTokenRepository(db).revoke(jti)
-        except HTTPException:
+        except AppError:
             pass  # 期限切れ・不正なトークンでもログアウト自体は成功させる
     response.delete_cookie(key=_REFRESH_COOKIE)

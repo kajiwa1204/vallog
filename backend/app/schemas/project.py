@@ -13,7 +13,7 @@ class CategoryWeights(BaseModel):
     def weights_must_sum_to_100(self) -> "CategoryWeights":
         total = self.activity + self.speed + self.quality
         if total != 100:
-            raise ValueError(f"重みの合計は100である必要があります（現在: {total}）")
+            raise ValueError(f"Category weights must sum to 100 (got {total})")
         return self
 
 

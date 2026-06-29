@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,6 +12,34 @@ class Settings(BaseSettings):
     frontend_url: str
     fastapi_root_path: str = ""
     github_cache_ttl_seconds: int = 300
+
+    # LLM provider selection
+    summary_provider: Literal["claude", "openai", "ollama"] = "claude"
+
+    # Claude
+    claude_api_key: str = ""
+    claude_pr_model: str = "claude-haiku-4-5-20251001"
+    claude_member_model: str = "claude-haiku-4-5-20251001"
+    claude_pr_concurrency: int = 5
+    claude_member_concurrency: int = 3
+    # Haiku非対応。0で無効化。有効時は max_tokens = この値 + 2048 で送信する
+    claude_thinking_budget_tokens: int = 1024
+
+    # OpenAI-compatible (Ollama /v1, Gemini free tier, etc.)
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_api_key: str = ""
+    openai_pr_model: str = "gpt-4o-mini"
+    openai_member_model: str = "gpt-4o-mini"
+    openai_pr_concurrency: int = 5
+    openai_member_concurrency: int = 3
+
+    # Ollama native /api/chat
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_context_length: int = 8192
+    ollama_pr_model: str = "qwen3:4b-instruct"
+    ollama_member_model: str = "qwen3:4b-instruct"
+    ollama_pr_concurrency: int = 2
+    ollama_member_concurrency: int = 1
 
     model_config = SettingsConfigDict(extra="ignore")
 

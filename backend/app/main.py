@@ -2,12 +2,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.errors import AppError, app_error_handler
 from app.routers import auth, invitations, members, projects
 
 app = FastAPI(
     title="vallog API",
     root_path=settings.fastapi_root_path,
 )
+
+app.add_exception_handler(AppError, app_error_handler)
 
 app.add_middleware(
     CORSMiddleware,

@@ -11,6 +11,7 @@ backend/
 │   ├── core/
 │   │   ├── config.py                # 環境変数・設定（Pydantic Settings）
 │   │   ├── database.py              # async engine・session
+│   │   ├── errors.py               # AppError・ErrorCode・例外ハンドラ
 │   │   └── security.py             # JWTトークン検証
 │   ├── routers/                     # モデルごとにエンドポイントを配置
 │   │   ├── auth.py                  # POST /auth/github, POST /auth/refresh
@@ -101,7 +102,8 @@ frontend/
 │   ├── hooks/
 │   │   └── useAuth.ts                            # 認証状態管理（features横断）
 │   ├── lib/
-│   │   └── api.ts                                # APIクライアント（fetch wrapper）
+│   │   ├── api.ts                                # トランスポート専任（fetch・認証・ApiError正規化）
+│   │   └── errorMessages.ts                      # APIエラーのユーザー向け日本語化（i18n）
 │   ├── types/
 │   │   └── index.ts                              # features横断の共通型定義
 │   └── constants/
@@ -118,4 +120,4 @@ frontend/
 | バックエンドAPIのバージョニング | `api/v1/` は不採用。MVPではフロントが唯一のクライアントのため過剰設計 |
 | フロントのコンポーネント設計 | Atomic Design は不採用。featuresベースのフラット構成 |
 | features内の分割 | 基本はフラット。ファイルが増えてきたら hooks/ などのサブディレクトリに分けてよい |
-| routers からのDBアクセス | 原則 `routers → service → repository` の依存順を守る。ただしビジネスルールを持たない単純なデータ取得のみのエンドポイント（例: `GET /projects` のリスト取得）は `routers` から `repository` を直接呼んでよい。ビジネスルールが絡んだ時点で `service` に移す。 |
+| routers からのDBアクセス | 原則 `routers → services → repositories`。例外として、**単一 repository メソッドを1回呼んで結果をそのまま返す参照（GET）のみ** `routers` から `repository` を直接呼んでよい。リクエスト由来の絞り込み（例: `GET /projects` で自分がメンバーのプロジェクトのみ取得）は許容する。所有チェックによる拒否・複数 repository・集約・キャッシュ・書き込みが入ったら `services` を経由する。判定基準は AGENTS.md「バックエンド」を正とする。 |
