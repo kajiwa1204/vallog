@@ -21,6 +21,8 @@ class Project(Base):
     weight_quality: Mapped[int] = mapped_column(Integer, nullable=False, default=25)
     # GitHubキャッシュ同期のスタンピード対策フラグ（SELECT FOR UPDATEで原子的に確認する）
     github_syncing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # github_syncing=True のまま一定時間経過したら「死んだ同期」とみなして再取得を許可するための開始時刻
+    github_syncing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     github_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
