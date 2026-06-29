@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { useProject } from "@/hooks/useProject";
+import { useAuth } from "@/hooks/useAuth";
 import { api } from "@/lib/api";
 import { messageForError } from "@/lib/errorMessages";
 import { WeightEditor } from "@/features/projects/WeightEditor";
@@ -18,12 +19,15 @@ import styles from "./page.module.css";
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>();
+  // リダイレクトは AppShell 側の useAuth が担う。ここでは認証確定を待つためだけに参照する
+  const { status } = useAuth({ required: false });
+  const authed = status === "authenticated";
   const {
     project,
     error: projectError,
     loading: projectLoading,
     setProject,
-  } = useProject(id);
+  } = useProject(id, authed);
 
   const [members, setMembers] = useState<Member[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
@@ -37,6 +41,7 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    if (!authed) return;
     let cancelled = false;
     api
       .get<Member[]>(`/projects/${id}/members`)
@@ -52,7 +57,7 @@ export default function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, authed]);
 
   const saveWeights = async (weights: CategoryWeights) => {
     setSavingWeights(true);
