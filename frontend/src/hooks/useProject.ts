@@ -9,8 +9,11 @@ import type { Project } from "@/types";
 export function useProject(projectId: string) {
   const [project, setProject] = useState<Project | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
       setProject(await api.get<Project>(`/projects/${projectId}`));
     } catch (e) {
@@ -20,6 +23,8 @@ export function useProject(projectId: string) {
           fallback: "プロジェクトの読み込みに失敗しました",
         }),
       );
+    } finally {
+      setLoading(false);
     }
   }, [projectId]);
 
@@ -27,5 +32,5 @@ export function useProject(projectId: string) {
     reload();
   }, [reload]);
 
-  return { project, error, reload, setProject };
+  return { project, error, loading, reload, setProject };
 }

@@ -36,6 +36,7 @@ export function NewProjectModal({ open, onClose }: Props) {
     setSelectedRepo(null);
     setProjectName("");
     setSubmitError(null);
+    setReposError(null);
 
     setReposLoading(true);
     api

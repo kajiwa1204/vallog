@@ -18,7 +18,12 @@ import styles from "./page.module.css";
 
 export default function SettingsPage() {
   const { id } = useParams<{ id: string }>();
-  const { project, setProject } = useProject(id);
+  const {
+    project,
+    error: projectError,
+    loading: projectLoading,
+    setProject,
+  } = useProject(id);
 
   const [members, setMembers] = useState<Member[] | null>(null);
   const [membersError, setMembersError] = useState<string | null>(null);
@@ -97,8 +102,12 @@ export default function SettingsPage() {
         <h1 className={styles.title}>プロジェクト設定</h1>
       </header>
 
-      {!project ? (
+      {projectLoading ? (
         <Spinner />
+      ) : !project ? (
+        <p className={styles.error}>
+          {projectError ?? "プロジェクトの読み込みに失敗しました"}
+        </p>
       ) : (
         <div className={styles.stack}>
           <Card title="リポジトリ">

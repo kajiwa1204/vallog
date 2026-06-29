@@ -86,6 +86,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     throw new ApiError(res.status, detail, code);
   }
 
+  // 204 No Content はボディを持たないため res.json() を呼ばない
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 

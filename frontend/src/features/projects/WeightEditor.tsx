@@ -76,7 +76,7 @@ export function WeightEditor({ weights, saving, onSave }: Props) {
               onChange={(e) =>
                 setDraft((prev) => ({
                   ...prev,
-                  [c.key]: parseInt(e.target.value, 10) || 0,
+                  [c.key]: Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)),
                 }))
               }
             />
