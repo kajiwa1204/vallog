@@ -60,6 +60,7 @@
 - `routers/` はリクエスト/レスポンスの変換のみ。ビジネスロジック（条件分岐を伴う判定・集約・複数モデルの操作）を書かない
 - `services/` はビジネスロジックのみ。DBアクセスをしない（`repositories/` を呼ぶ）
 - `repositories/` はDBアクセスのみ。ビジネスロジックを持たない
+- `repositories/` の書き込みメソッドは、単純追加ならORMモデルインスタンス、真のupsertならDTOを受け取る（詳細は `docs/directory_structure.md`「設計上の判断」を参照）
 - 複数テーブルへの書き込みは `services/` でトランザクションを明示的に囲む
 - 依存方向は `routers → services → repositories`。`routers` から `repositories` を直接呼んでよいのは、**次をすべて満たす参照（GET）のみ**:
   - 単一の `repository` メソッドを1回呼ぶだけ

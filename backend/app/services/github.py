@@ -1,3 +1,5 @@
+import asyncio
+import re
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
 
@@ -9,6 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.errors import AppError, ErrorCode
 from app.models.project import Project
+from app.repositories.github_cache import (
+    AssigneeData,
+    GitHubCacheRepository,
+    IssueData,
+    PullRequestData,
+    ReviewData,
+)
 from app.repositories.project import ProjectRepository
 
 
@@ -23,6 +32,14 @@ FetchAndStore = Callable[["GitHubClient", Project, AsyncSession], Awaitable[None
 # github_syncing=True のままプロセスが例外以外の形（SIGKILL/OOM等）で落ちた場合、
 # フラグが残り続けて二度と再同期されなくなるのを防ぐための上限時間
 STALE_SYNC_THRESHOLD = timedelta(minutes=10)
+
+# 1回の同期で取得する上限ページ数・PR数。レート制限（5,000 req/h）の予算内に収める
+MAX_LIST_PAGES = 5
+MAX_EVENT_PAGES = 10
+MAX_REVIEW_TARGETS = 100
+REVIEW_CONCURRENCY = 5
+
+_SP_LABEL_RE = re.compile(r"^SP:(\d+)$", re.IGNORECASE)
 
 
 class GitHubClient:
@@ -70,20 +87,27 @@ class GitHubClient:
         res.raise_for_status()
         return res.json()
 
+    async def _paginated(
+        self, path: str, params: dict, max_pages: int, per_page: int = 100
+    ) -> list[dict]:
+        """page=1..max_pages を順に取得し、1ページの件数が per_page 未満になったら打ち切る。"""
+        results: list[dict] = []
+        for page in range(1, max_pages + 1):
+            res = await self._request(path, {**params, "per_page": per_page, "page": page})
+            res.raise_for_status()
+            batch = res.json()
+            results.extend(batch)
+            if len(batch) < per_page:
+                break
+        return results
+
     async def list_viewer_repos(self) -> list[dict]:
         """最大500件（5ページ）取得して返す。"""
-        repos: list[dict] = []
-        for page in range(1, 6):
-            res = await self._request(
-                "/user/repos",
-                {"sort": "pushed", "affiliation": "owner,collaborator,organization_member", "per_page": 100, "page": page},
-            )
-            res.raise_for_status()
-            page_items = res.json()
-            repos.extend(page_items)
-            if len(page_items) < 100:
-                break
-        return repos
+        return await self._paginated(
+            "/user/repos",
+            {"sort": "pushed", "affiliation": "owner,collaborator,organization_member"},
+            max_pages=5,
+        )
 
     async def get_contributors(self, owner: str, name: str) -> list[dict]:
         res = await self._request(f"/repos/{owner}/{name}/contributors", {"per_page": 100})
@@ -91,6 +115,44 @@ class GitHubClient:
             return []
         res.raise_for_status()
         return res.json()
+
+    async def list_pull_requests(self, owner: str, name: str) -> list[dict]:
+        return await self._paginated(
+            f"/repos/{owner}/{name}/pulls",
+            {"state": "all", "sort": "created", "direction": "desc"},
+            MAX_LIST_PAGES,
+        )
+
+    async def list_issues(self, owner: str, name: str) -> list[dict]:
+        """Issue一覧にはPRも含まれる（GitHub仕様）。呼び出し側で pull_request キーの有無により除外する。"""
+        return await self._paginated(
+            f"/repos/{owner}/{name}/issues",
+            {"state": "all", "sort": "created", "direction": "desc"},
+            MAX_LIST_PAGES,
+        )
+
+    async def list_issue_events(self, owner: str, name: str) -> list[dict]:
+        return await self._paginated(f"/repos/{owner}/{name}/issues/events", {}, MAX_EVENT_PAGES)
+
+    async def list_review_comments(self, owner: str, name: str) -> list[dict]:
+        """レビューごとのコメント件数集計用。pull_request_review_id でグルーピングする。"""
+        return await self._paginated(f"/repos/{owner}/{name}/pulls/comments", {}, MAX_LIST_PAGES)
+
+    async def list_reviews_for_prs(
+        self, owner: str, name: str, numbers: list[int]
+    ) -> dict[int, list[dict]]:
+        semaphore = asyncio.Semaphore(REVIEW_CONCURRENCY)
+
+        async def fetch(number: int) -> tuple[int, list[dict]]:
+            async with semaphore:
+                res = await self._request(
+                    f"/repos/{owner}/{name}/pulls/{number}/reviews", {"per_page": 100}
+                )
+                res.raise_for_status()
+                return number, res.json()
+
+        results = await asyncio.gather(*(fetch(n) for n in numbers))
+        return dict(results)
 
 
 def _is_fresh(project: Project, now: datetime, ttl: timedelta) -> bool:
@@ -152,3 +214,144 @@ async def ensure_synced(
         raise
 
     return locked
+
+
+def _parse_dt(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _parse_story_points(labels: list[str]) -> int | None:
+    for label in labels:
+        m = _SP_LABEL_RE.match(label)
+        if m:
+            return int(m.group(1))
+    return None
+
+
+def _aggregate_issue_events(
+    events: list[dict],
+) -> tuple[dict[tuple[int, str], datetime], dict[int, int]]:
+    """assigned/reopenedイベントから、アサイン日時（複数回アサインされた場合は最初の時刻）と
+    再オープン回数（品質・可用性カテゴリの手戻り率指標）を集計する。
+    """
+    assigned_at: dict[tuple[int, str], datetime] = {}
+    reopened_count: dict[int, int] = {}
+    for ev in events:
+        issue = ev.get("issue") or {}
+        number = issue.get("number")
+        if number is None:
+            continue
+        event_type = ev.get("event")
+        if event_type == "assigned" and ev.get("assignee"):
+            key = (number, ev["assignee"]["login"])
+            ts = _parse_dt(ev.get("created_at"))
+            if ts is not None and (key not in assigned_at or ts < assigned_at[key]):
+                assigned_at[key] = ts
+        elif event_type == "reopened":
+            reopened_count[number] = reopened_count.get(number, 0) + 1
+    return assigned_at, reopened_count
+
+
+def _count_comments_by_review(comments: list[dict]) -> dict[int, int]:
+    counts: dict[int, int] = {}
+    for c in comments:
+        review_id = c.get("pull_request_review_id")
+        if review_id is None:
+            continue
+        counts[review_id] = counts.get(review_id, 0) + 1
+    return counts
+
+
+def _build_pull_request_rows(
+    pulls: list[dict], reopened_count: dict[int, int]
+) -> list[PullRequestData]:
+    return [
+        PullRequestData(
+            github_id=p["id"],
+            number=p["number"],
+            title=p["title"],
+            author_login=(p.get("user") or {}).get("login", "unknown"),
+            state=p["state"],
+            draft=bool(p.get("draft")),
+            html_url=p["html_url"],
+            gh_created_at=_parse_dt(p["created_at"]),
+            merged_at=_parse_dt(p.get("merged_at")),
+            closed_at=_parse_dt(p.get("closed_at")),
+            reopened_count=reopened_count.get(p["number"], 0),
+        )
+        for p in pulls
+    ]
+
+
+def _build_issue_rows(
+    issues: list[dict], assigned_at: dict[tuple[int, str], datetime]
+) -> list[IssueData]:
+    rows = []
+    for i in issues:
+        if "pull_request" in i:
+            continue  # /issues エンドポイントにはPRも含まれるため除外
+        number = i["number"]
+        labels = [label["name"] for label in i.get("labels", [])]
+        rows.append(
+            IssueData(
+                github_id=i["id"],
+                number=number,
+                title=i["title"],
+                author_login=(i.get("user") or {}).get("login", "unknown"),
+                state=i["state"],
+                labels=labels,
+                story_points=_parse_story_points(labels),
+                html_url=i["html_url"],
+                gh_created_at=_parse_dt(i["created_at"]),
+                closed_at=_parse_dt(i.get("closed_at")),
+                assignees=[
+                    AssigneeData(login=a["login"], assigned_at=assigned_at.get((number, a["login"])))
+                    for a in i.get("assignees", [])
+                ],
+            )
+        )
+    return rows
+
+
+def _build_review_rows(
+    reviews_by_pr: dict[int, list[dict]], comment_counts: dict[int, int]
+) -> list[ReviewData]:
+    return [
+        ReviewData(
+            github_id=r["id"],
+            pr_number=pr_number,
+            reviewer_login=(r.get("user") or {}).get("login", "unknown"),
+            state=r["state"],
+            body=r.get("body") or "",
+            comment_count=comment_counts.get(r["id"], 0),
+            html_url=r["html_url"],
+            submitted_at=_parse_dt(r.get("submitted_at")),
+        )
+        for pr_number, reviews in reviews_by_pr.items()
+        for r in reviews
+    ]
+
+
+async def fetch_and_store(client: GitHubClient, project: Project, db: AsyncSession) -> None:
+    """`ensure_synced` に渡す `FetchAndStore` の実装。GitHub APIからPR・Issue・Reviewを取得し、
+    `GitHubCacheRepository` 経由でDBにupsertする。db.commit/rollbackはしない（ensure_synced側の責務）。
+    """
+    owner, name = project.repo_owner, project.repo_name
+    pulls, issues, events, review_comments = await asyncio.gather(
+        client.list_pull_requests(owner, name),
+        client.list_issues(owner, name),
+        client.list_issue_events(owner, name),
+        client.list_review_comments(owner, name),
+    )
+    assigned_at, reopened_count = _aggregate_issue_events(events)
+    comment_counts = _count_comments_by_review(review_comments)
+
+    review_targets = [p["number"] for p in pulls[:MAX_REVIEW_TARGETS]]
+    reviews_by_pr = await client.list_reviews_for_prs(owner, name, review_targets)
+
+    cache_repo = GitHubCacheRepository(db)
+    await cache_repo.upsert_pull_requests(project.id, _build_pull_request_rows(pulls, reopened_count))
+    await cache_repo.upsert_issues(project.id, _build_issue_rows(issues, assigned_at))
+    await cache_repo.upsert_reviews(project.id, _build_review_rows(reviews_by_pr, comment_counts))
