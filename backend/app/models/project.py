@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,9 +19,7 @@ class Project(Base):
     weight_activity: Mapped[int] = mapped_column(Integer, nullable=False, default=40)
     weight_speed: Mapped[int] = mapped_column(Integer, nullable=False, default=35)
     weight_quality: Mapped[int] = mapped_column(Integer, nullable=False, default=25)
-    # GitHubキャッシュ同期のスタンピード対策フラグ（SELECT FOR UPDATEで原子的に確認する）
-    github_syncing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    # github_syncing=True のまま一定時間経過したら「死んだ同期」とみなして再取得を許可するための開始時刻
+    # GitHubキャッシュ同期中の開始時刻。None なら同期中ではない
     github_syncing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     github_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(

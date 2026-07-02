@@ -11,12 +11,12 @@
 
 「オンデマンド」＝ **リアルタイム更新（WebSocket）をしない** という意味であり、キャッシュの有無とは別の話。
 
-| 軸 | 方針 |
-|---|---|
-| 更新タイミング | リクエスト時（ページリロード）に最新データを取得して表示。WebSocketは不採用 |
-| GitHubデータの保持 | DBにキャッシュとして保存する |
-| スコアの保持 | DBには保存しない。キャッシュ済みGitHubデータから都度計算 |
-| 計算済みスコアの保存 | ❌ 不採用。「なぜそのスコアか」の根拠を隠してしまう |
+| 軸                   | 方針                                                                        |
+| -------------------- | --------------------------------------------------------------------------- |
+| 更新タイミング       | リクエスト時（ページリロード）に最新データを取得して表示。WebSocketは不採用 |
+| GitHubデータの保持   | DBにキャッシュとして保存する                                                |
+| スコアの保持         | DBには保存しない。キャッシュ済みGitHubデータから都度計算                    |
+| 計算済みスコアの保存 | ❌ 不採用。「なぜそのスコアか」の根拠を隠してしまう                         |
 
 **GitHubデータをキャッシュする理由**: PR・Issue・レビューなど複数エンドポイントを叩くため、1回のダッシュボード表示で数十〜数百リクエストになりえる。APIレート制限（認証済み: 5,000 req/h）はMVP段階でも超える可能性がある。
 
@@ -26,22 +26,22 @@
 
 ## エンティティ一覧
 
-| エンティティ | 役割 |
-|---|---|
-| users | Vallogアカウント（GitHub OAuthで作成） |
-| projects | Vallogプロジェクト（GitHubリポジトリに紐づく） |
-| project_members | ユーザーとプロジェクトの多対多を解消する中間テーブル |
-| invitation_links | 招待リンク |
-| github_pull_requests | GitHubキャッシュ: PRの生データ |
-| github_issues | GitHubキャッシュ: Issueの生データ |
+| エンティティ           | 役割                                                      |
+| ---------------------- | --------------------------------------------------------- |
+| users                  | Vallogアカウント（GitHub OAuthで作成）                    |
+| projects               | Vallogプロジェクト（GitHubリポジトリに紐づく）            |
+| project_members        | ユーザーとプロジェクトの多対多を解消する中間テーブル      |
+| invitation_links       | 招待リンク                                                |
+| github_pull_requests   | GitHubキャッシュ: PRの生データ                            |
+| github_issues          | GitHubキャッシュ: Issueの生データ                         |
 | github_issue_assignees | github_issuesとGitHubユーザーの多対多（複数アサイン対応） |
-| github_reviews | GitHubキャッシュ: レビューの生データ |
-| distribution_proposals | 分配シミュレーション案 |
-| distribution_items | 分配案のメンバー別配分値 |
-| distribution_edit_logs | 分配案の編集履歴（透明性の担保） |
-| contribution_summaries | LLMが生成したメンバー貢献サマリーのキャッシュ（Tier 2） |
-| pr_summaries | LLMが生成したPR単位サマリーのキャッシュ（Tier 1） |
-| summary_jobs | サマリー生成のバックグラウンドジョブ（状態・進捗） |
+| github_reviews         | GitHubキャッシュ: レビューの生データ                      |
+| distribution_proposals | 分配シミュレーション案                                    |
+| distribution_items     | 分配案のメンバー別配分値                                  |
+| distribution_edit_logs | 分配案の編集履歴（透明性の担保）                          |
+| contribution_summaries | LLMが生成したメンバー貢献サマリーのキャッシュ（Tier 2）   |
+| pr_summaries           | LLMが生成したPR単位サマリーのキャッシュ（Tier 1）         |
+| summary_jobs           | サマリー生成のバックグラウンドジョブ（状態・進捗）        |
 
 ---
 
@@ -91,7 +91,7 @@ users
 
 `fetched_at` を見てTTLが切れていたらリロード時に再取得する。リロード時に最新データが見えれば十分なユースケースのため。
 
-複数ユーザーが同時にリロードした際のスタンピード対策として、`projects`テーブルに`github_syncing`フラグを持ち、`SELECT FOR UPDATE`で原子的にロックを取る。取得中の場合は古いキャッシュをそのまま返す。
+複数ユーザーが同時にリロードした際のスタンピード対策として、`projects`テーブルに`github_syncing_started_at`を持ち、`SELECT FOR UPDATE`で原子的にロックを取る。同期中の場合は古いキャッシュをそのまま返す。
 
 ### usersテーブルにgithub_access_tokenを持つ
 
@@ -117,6 +117,6 @@ LLMの生成コストがかかるため、生成済みのサマリーをDBに保
 
 ## 未決事項（Post-MVP検討）
 
-| 項目 | 内容 |
-|---|---|
+| 項目        | 内容                                                  |
+| ----------- | ----------------------------------------------------- |
 | Discordログ | Post-MVP①でコミュニケーションデータのエンティティ追加 |

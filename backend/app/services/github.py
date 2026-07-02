@@ -20,8 +20,8 @@ _TIMEOUT = 30.0
 # fetch_and_store が未コミットのまま積んだ変更を巻き戻すことに依存している。
 FetchAndStore = Callable[["GitHubClient", Project, AsyncSession], Awaitable[None]]
 
-# github_syncing=True のままプロセスが例外以外の形（SIGKILL/OOM等）で落ちた場合、
-# フラグが残り続けて二度と再同期されなくなるのを防ぐための上限時間
+# github_syncing_started_at が一定時間以上残っている場合、
+# プロセスが例外以外の形（SIGKILL/OOM等）で落ちた「死んだ同期」とみなして再取得を許可する
 STALE_SYNC_THRESHOLD = timedelta(minutes=10)
 
 
@@ -98,11 +98,7 @@ def _is_fresh(project: Project, now: datetime, ttl: timedelta) -> bool:
 
 
 def _is_syncing(project: Project, now: datetime) -> bool:
-    """死んだ同期（フラグが立ったまま STALE_SYNC_THRESHOLD 以上更新されていない）は
-    syncing とみなさない。これにより、プロセスがcommit後に異常終了してもいつか復旧する。
-    """
-    if not project.github_syncing:
-        return False
+    """開始時刻があり、しきい値以内なら同期中とみなす。"""
     started_at = project.github_syncing_started_at
     return started_at is not None and now - started_at < STALE_SYNC_THRESHOLD
 
@@ -115,9 +111,9 @@ async def ensure_synced(
     force: bool = False,
 ) -> Project:
     """GitHub APIへの実取得は数秒〜十数秒かかりうるため、その間はDBの行ロックを
-    保持しない。同期中の他リクエストはフラグを見て待たずに今のキャッシュを返す
+    保持しない。同期中の他リクエストは開始時刻を見て待たずに今のキャッシュを返す
     （初回同期なら github_synced_at=None のまま）。完了を見せたい場合はフロント側で
-    github_syncing をポーリングする想定（このIssueのスコープ外）。
+    同期中状態をポーリングする想定（このIssueのスコープ外）。
     """
     now = datetime.now(timezone.utc)
     ttl = timedelta(seconds=settings.github_cache_ttl_seconds)
