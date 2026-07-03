@@ -67,6 +67,10 @@ export type InvitationInfo = {
   expires_at: string;
 };
 
+export type JoinResponse = {
+  project_id: string;
+};
+
 export type MetricRaw = {
   issues_opened: number;
   prs_opened: number;
