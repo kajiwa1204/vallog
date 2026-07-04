@@ -1,6 +1,7 @@
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -14,6 +15,10 @@ from app.models.github_cache import (
     GitHubReview,
 )
 
+PullRequestState = Literal["open", "closed"]
+IssueState = Literal["open", "closed"]
+ReviewState = Literal["APPROVED", "CHANGES_REQUESTED", "COMMENTED", "DISMISSED", "PENDING"]
+
 
 @dataclass
 class PullRequestData:
@@ -21,7 +26,7 @@ class PullRequestData:
     number: int
     title: str
     author_login: str
-    state: str
+    state: PullRequestState
     draft: bool
     html_url: str
     gh_created_at: datetime
@@ -42,7 +47,7 @@ class IssueData:
     number: int
     title: str
     author_login: str
-    state: str
+    state: IssueState
     labels: list[str]
     story_points: int | None
     html_url: str
@@ -56,7 +61,7 @@ class ReviewData:
     github_id: int
     pr_number: int
     reviewer_login: str
-    state: str
+    state: ReviewState
     body: str
     comment_count: int
     html_url: str
@@ -179,6 +184,10 @@ class GitHubCacheRepository:
     async def upsert_issues(self, project_id: uuid.UUID, rows: list[IssueData]) -> None:
         if not rows:
             return
+        # sort=created でページングする間にissueが増減すると、稀に同じnumberが2ページに
+        # またがって重複しうる。ON CONFLICT DO UPDATEは同一文内で同じ行を2度更新できず
+        # エラーになるため、事前に number で重複排除する（後勝ち）
+        rows = list({r.number: r for r in rows}.values())
         values = [
             {
                 "id": uuid.uuid4(),
@@ -219,6 +228,10 @@ class GitHubCacheRepository:
         result = await self.db.execute(stmt)
         id_by_number: dict[int, uuid.UUID] = {number: issue_id for issue_id, number in result.all()}
 
+        # assigneeは他テーブルと違い真のupsertにせず削除→再挿入で洗い替える。PR/Issueの行id安定性は
+        # 将来のpr_summaries等からの参照を見据えたものだが、assigneeの集合自体は「現在誰がアサイン
+        # されているか」だけが意味を持ち、assigned_atはissueイベントから毎回決定的に再計算されるため、
+        # idが同期のたびに変わっても情報は失われない
         issue_ids = list(id_by_number.values())
         if issue_ids:
             await self.db.execute(

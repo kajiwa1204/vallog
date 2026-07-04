@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta, timezone
@@ -41,6 +42,8 @@ REVIEW_CONCURRENCY = 5
 
 _SP_LABEL_RE = re.compile(r"^SP:(\d+)$", re.IGNORECASE)
 
+logger = logging.getLogger(__name__)
+
 
 class GitHubClient:
     def __init__(self, token: str):
@@ -77,6 +80,18 @@ class GitHubClient:
                 status.HTTP_502_BAD_GATEWAY,
                 ErrorCode.GITHUB_FORBIDDEN,
                 "GitHub API access denied (possibly rate limited)",
+            )
+        if res.status_code == 429:
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_RATE_LIMITED,
+                "GitHub API rate limit exceeded",
+            )
+        if res.status_code >= 500:
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_UNAVAILABLE,
+                "GitHub API returned a server error",
             )
         return res
 
@@ -222,6 +237,27 @@ def _parse_dt(value: str | None) -> datetime | None:
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _parse_dt_required(value: str) -> datetime:
+    """gh_created_at相当の必須フィールド用。GitHub APIは常に値を返す前提のフィールドに使う。
+    _parse_dtはOptionalフィールド専用（merged_at/closed_at/submitted_at等）で、
+    必須フィールドに使うとNoneが型チェックをすり抜けてDTOに渡り、DBのNOT NULL制約違反という
+    離れた場所で初めて失敗が顕在化してしまう。
+    """
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _actor_login(actor: dict | None, context: str) -> str:
+    """user/assignee/reviewerフィールドからloginを取り出す。GitHubアカウント削除等でNoneに
+    なるのは正常だが、パース側のバグ（フィールド名変更等）による欠落と区別できないため、
+    フォールバックが発生したことをログに残す。
+    """
+    login = (actor or {}).get("login")
+    if login is None:
+        logger.warning("github %s: actor login missing, falling back to 'unknown': %r", context, actor)
+        return "unknown"
+    return login
+
+
 def _parse_story_points(labels: list[str]) -> int | None:
     for label in labels:
         m = _SP_LABEL_RE.match(label)
@@ -231,10 +267,12 @@ def _parse_story_points(labels: list[str]) -> int | None:
 
 
 def _aggregate_issue_events(
-    events: list[dict],
+    events: list[dict], pr_numbers: set[int]
 ) -> tuple[dict[tuple[int, str], datetime], dict[int, int]]:
     """assigned/reopenedイベントから、アサイン日時（複数回アサインされた場合は最初の時刻）と
-    再オープン回数（品質・可用性カテゴリの手戻り率指標）を集計する。
+    PRの再オープン回数（品質・可用性カテゴリの「手戻り率」指標。docs/scoring_design.md が
+    定義するのは「PR再オープン回数」であり、issueのreopenedはスコープ外のため pr_numbers で
+    絞り込む）を集計する。
     """
     assigned_at: dict[tuple[int, str], datetime] = {}
     reopened_count: dict[int, int] = {}
@@ -249,7 +287,7 @@ def _aggregate_issue_events(
             ts = _parse_dt(ev.get("created_at"))
             if ts is not None and (key not in assigned_at or ts < assigned_at[key]):
                 assigned_at[key] = ts
-        elif event_type == "reopened":
+        elif event_type == "reopened" and number in pr_numbers:
             reopened_count[number] = reopened_count.get(number, 0) + 1
     return assigned_at, reopened_count
 
@@ -272,11 +310,11 @@ def _build_pull_request_rows(
             github_id=p["id"],
             number=p["number"],
             title=p["title"],
-            author_login=(p.get("user") or {}).get("login", "unknown"),
+            author_login=_actor_login(p.get("user"), "pull_request.user"),
             state=p["state"],
             draft=bool(p.get("draft")),
             html_url=p["html_url"],
-            gh_created_at=_parse_dt(p["created_at"]),
+            gh_created_at=_parse_dt_required(p["created_at"]),
             merged_at=_parse_dt(p.get("merged_at")),
             closed_at=_parse_dt(p.get("closed_at")),
             reopened_count=reopened_count.get(p["number"], 0),
@@ -299,12 +337,12 @@ def _build_issue_rows(
                 github_id=i["id"],
                 number=number,
                 title=i["title"],
-                author_login=(i.get("user") or {}).get("login", "unknown"),
+                author_login=_actor_login(i.get("user"), "issue.user"),
                 state=i["state"],
                 labels=labels,
                 story_points=_parse_story_points(labels),
                 html_url=i["html_url"],
-                gh_created_at=_parse_dt(i["created_at"]),
+                gh_created_at=_parse_dt_required(i["created_at"]),
                 closed_at=_parse_dt(i.get("closed_at")),
                 assignees=[
                     AssigneeData(login=a["login"], assigned_at=assigned_at.get((number, a["login"])))
@@ -322,7 +360,7 @@ def _build_review_rows(
         ReviewData(
             github_id=r["id"],
             pr_number=pr_number,
-            reviewer_login=(r.get("user") or {}).get("login", "unknown"),
+            reviewer_login=_actor_login(r.get("user"), "review.user"),
             state=r["state"],
             body=r.get("body") or "",
             comment_count=comment_counts.get(r["id"], 0),
@@ -345,7 +383,8 @@ async def fetch_and_store(client: GitHubClient, project: Project, db: AsyncSessi
         client.list_issue_events(owner, name),
         client.list_review_comments(owner, name),
     )
-    assigned_at, reopened_count = _aggregate_issue_events(events)
+    pr_numbers = {p["number"] for p in pulls}
+    assigned_at, reopened_count = _aggregate_issue_events(events, pr_numbers)
     comment_counts = _count_comments_by_review(review_comments)
 
     review_targets = [p["number"] for p in pulls[:MAX_REVIEW_TARGETS]]
