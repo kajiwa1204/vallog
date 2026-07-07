@@ -9,3 +9,9 @@ class UserResponse(BaseModel):
     avatar_url: str | None
 
     model_config = {"from_attributes": True}
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

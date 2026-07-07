@@ -18,6 +18,7 @@ from app.core.security import (
 )
 from app.repositories.refresh_token import RefreshTokenRepository
 from app.repositories.user import UserRepository
+from app.schemas.user import TokenResponse, UserResponse
 from app.services.auth import fetch_github_access_token, fetch_github_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -100,7 +101,7 @@ async def github_callback(
     return redirect
 
 
-@router.post("/refresh")
+@router.post("/refresh", response_model=TokenResponse)
 async def refresh(
     response: Response,
     refresh_token: str | None = Cookie(default=None, alias=_REFRESH_COOKIE),
@@ -131,6 +132,12 @@ async def refresh(
             "Token reuse detected",
         )
 
+    user = await UserRepository(db).get_by_id(user_id)
+    if user is None:
+        raise AppError(
+            status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_USER_NOT_FOUND, "User not found"
+        )
+
     new_jti = await repo.rotate(
         old_jti=jti,
         user_id=user_id,
@@ -140,7 +147,10 @@ async def refresh(
     new_access_token = create_access_token(user_id)
     new_refresh_token = create_refresh_token(user_id, new_jti)
     _set_refresh_cookie(response, new_refresh_token)
-    return {"access_token": new_access_token, "token_type": "bearer"}
+    return TokenResponse(
+        access_token=new_access_token,
+        user=UserResponse.model_validate(user),
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
