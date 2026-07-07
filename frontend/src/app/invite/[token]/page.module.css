@@ -1,5 +1,6 @@
-.page {
+.root {
   min-height: 100vh;
+  background: var(--paper);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12,54 +13,88 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-l);
-  padding: 48px 40px;
+  padding: 40px 40px 44px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
+  gap: 24px;
+  box-shadow: var(--shadow-modal);
 }
 
-.brand {
-  font-size: 22px;
-  margin-bottom: 24px;
+.wordmark {
+  display: flex;
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.invalid {
+  font-size: 14px;
+  color: var(--ink-2);
+  line-height: 1.65;
+  text-align: center;
+  padding: 16px 0;
 }
 
 .lead {
-  font-size: 13px;
+  font-size: 15px;
   color: var(--ink-2);
 }
 
+.projectInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  background: var(--surface-dim);
+  border-radius: var(--radius-m);
+  border: 1px solid var(--line);
+}
+
 .projectName {
-  margin-top: 8px;
   font-size: 22px;
   font-weight: 700;
   color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1.3;
 }
 
 .repo {
-  margin-top: 4px;
   font-size: 13px;
   color: var(--ink-2);
 }
 
 .meta {
-  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.metaItem {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.metaSep {
+  font-size: 12px;
+  color: var(--line-strong);
+}
+
+.metaLabel {
   font-size: 12px;
   color: var(--ink-3);
 }
 
 .error {
-  margin-top: 20px;
-  width: 100%;
-  padding: 10px 12px;
-  background: var(--red-tint);
-  color: var(--red);
-  border-radius: var(--radius-s);
   font-size: 13px;
+  color: var(--red);
+  padding: 0;
 }
 
 .action {
-  margin-top: 28px;
   width: 100%;
   display: inline-flex;
   align-items: center;
@@ -68,14 +103,37 @@
 }
 
 .joining {
-  margin-top: 28px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  padding: 8px 0;
 }
 
 .joiningText {
   font-size: 13px;
   color: var(--ink-2);
+}
+
+.githubButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 20px;
+  background: #24292f;
+  color: #ffffff;
+  border: none;
+  border-radius: var(--radius-m);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.githubButton:hover {
+  background: #3a4148;
 }

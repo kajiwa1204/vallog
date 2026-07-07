@@ -83,15 +83,15 @@ export default function InvitePage() {
     : null;
 
   return (
-    <main className={styles.page}>
+    <div className={styles.root}>
       <div className={styles.card}>
-        <div className={styles.brand}>
+        <div className={styles.wordmark}>
           <Wordmark />
         </div>
 
         {error && (
           <>
-            <p className={styles.error} role="alert">
+            <p className={styles.invalid} role="alert">
               {error}
             </p>
             <Button
@@ -104,19 +104,32 @@ export default function InvitePage() {
           </>
         )}
 
-        {!error && (invitation === null || status === "loading") && <Spinner />}
+        {!error && (invitation === null || status === "loading") && (
+          <div className={styles.center}>
+            <Spinner />
+          </div>
+        )}
 
         {!error && invitation !== null && status !== "loading" && (
           <>
-            <p className={styles.lead}>プロジェクトに招待されています</p>
-            <h1 className={styles.projectName}>{invitation.project_name}</h1>
-            <p className={`${styles.repo} num`}>
-              {invitation.repo_owner}/{invitation.repo_name}
-            </p>
-            <p className={styles.meta}>
-              <span className="num">{invitation.member_count}</span> members ・{" "}
-              <span className="num">{expiresAt}</span> まで有効
-            </p>
+            <p className={styles.lead}>プロジェクトへの招待が届いています</p>
+
+            <div className={styles.projectInfo}>
+              <div className={styles.projectName}>
+                {invitation.project_name}
+              </div>
+              <div className={`${styles.repo} num`}>
+                {invitation.repo_owner}/{invitation.repo_name}
+              </div>
+              <div className={styles.meta}>
+                <span className={`${styles.metaItem} num`}>
+                  {invitation.member_count} members
+                </span>
+                <span className={styles.metaSep}>·</span>
+                <span className={styles.metaLabel}>有効期限</span>
+                <span className={`${styles.metaItem} num`}>{expiresAt}</span>
+              </div>
+            </div>
 
             {joinError && (
               <p className={styles.error} role="alert">
@@ -127,23 +140,25 @@ export default function InvitePage() {
             {status === "authenticated" && !joinError && (
               <div className={styles.joining}>
                 <Spinner />
-                <p className={styles.joiningText}>プロジェクトに参加しています…</p>
+                <p className={styles.joiningText}>
+                  プロジェクトに参加しています…
+                </p>
               </div>
             )}
 
             {status === "unauthenticated" && (
-              <Button
-                variant="primary"
-                className={styles.action}
+              <button
+                type="button"
+                className={styles.githubButton}
                 onClick={() => startGitHubLogin(`/invite/${token}`)}
               >
-                <GitHubIcon />
+                <GitHubIcon size={20} />
                 GitHubでログインして参加
-              </Button>
+              </button>
             )}
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 }

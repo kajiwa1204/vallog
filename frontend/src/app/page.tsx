@@ -2,7 +2,6 @@
 
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/Button";
 import { GitHubIcon } from "@/components/ui/GitHubIcon";
 import { Spinner } from "@/components/ui/Spinner";
 import { Wordmark } from "@/components/ui/AppShell";
@@ -28,9 +27,9 @@ function LoginContent() {
   // セッション確認中・ログイン済み（遷移待ち）はスピナーのみ表示
   if (status !== "unauthenticated") {
     return (
-      <main className={styles.page}>
+      <div className={styles.loadingWrap}>
         <Spinner />
-      </main>
+      </div>
     );
   }
 
@@ -40,32 +39,62 @@ function LoginContent() {
     : null;
 
   return (
-    <main className={styles.page}>
-      <div className={styles.card}>
-        <div className={styles.brand}>
-          <Wordmark />
+    <div className={styles.root}>
+      {/* Left brand panel */}
+      <div className={styles.brand}>
+        <div className={styles.brandTop}>
+          <Wordmark inverse />
         </div>
-        <p className={styles.tagline}>貢献を、記録する</p>
-        <p className={styles.description}>
-          チーム開発の貢献を客観データで可視化し、正しく報いるためのインフラ
-        </p>
 
-        {errorMessage && (
-          <p className={styles.error} role="alert">
-            {errorMessage}
+        <div className={styles.brandCenter}>
+          <h1 className={styles.copy}>貢献を、記録する。</h1>
+          <p className={styles.desc}>
+            チーム開発の貢献を客観データで可視化し、正しく報いるためのインフラ。スコアの根拠はすべてGitHubの実データに直リンクします。
           </p>
-        )}
 
-        <Button
-          variant="primary"
-          className={styles.loginButton}
-          onClick={() => startGitHubLogin()}
-        >
-          <GitHubIcon />
-          GitHubでログイン
-        </Button>
+          {/* Contribution bars */}
+          <div className={styles.bars} aria-hidden>
+            <div className={`${styles.bar} ${styles.barActivity}`} />
+            <div className={`${styles.bar} ${styles.barSpeed}`} />
+            <div className={`${styles.bar} ${styles.barQuality}`} />
+          </div>
+        </div>
+
+        <div className={styles.brandBottom}>
+          <span className={`${styles.value} num`}>透明性</span>
+          <span className={styles.valueSep}>/</span>
+          <span className={`${styles.value} num`}>客観性</span>
+          <span className={styles.valueSep}>/</span>
+          <span className={`${styles.value} num`}>チームの自律</span>
+        </div>
       </div>
-    </main>
+
+      {/* Right login panel */}
+      <div className={styles.login}>
+        <div className={styles.loginCard}>
+          <h2 className={styles.loginTitle}>Vallogにログイン</h2>
+
+          {errorMessage && (
+            <p className={styles.error} role="alert">
+              {errorMessage}
+            </p>
+          )}
+
+          <button
+            type="button"
+            className={styles.githubButton}
+            onClick={() => startGitHubLogin()}
+          >
+            <GitHubIcon size={20} />
+            GitHubでログイン
+          </button>
+
+          <p className={styles.note}>
+            ログインすることで、GitHubの公開・所属リポジトリ情報の読み取りを許可します
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -73,9 +102,9 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <main className={styles.page}>
+        <div className={styles.loadingWrap}>
           <Spinner />
-        </main>
+        </div>
       }
     >
       <LoginContent />
