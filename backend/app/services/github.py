@@ -52,11 +52,20 @@ class GitHubClient:
             "Accept": "application/vnd.github+json",
             "X-GitHub-Api-Version": "2022-11-28",
         }
+        # 呼び出しごとに接続を張り直さないよう、インスタンスの生存期間で共有する
+        self._client = httpx.AsyncClient(timeout=_TIMEOUT)
 
-    async def _request(self, path: str, params: dict | None = None) -> httpx.Response:
+    async def __aenter__(self) -> "GitHubClient":
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        await self._client.aclose()
+
+    async def _request(
+        self, path: str, params: dict | None = None, *, not_found_ok: bool = False
+    ) -> httpx.Response:
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                res = await client.get(f"{GITHUB_API}{path}", params=params, headers=self._headers)
+            res = await self._client.get(f"{GITHUB_API}{path}", params=params, headers=self._headers)
         except httpx.TimeoutException as e:
             raise AppError(
                 status.HTTP_502_BAD_GATEWAY,
@@ -81,6 +90,14 @@ class GitHubClient:
                 ErrorCode.GITHUB_FORBIDDEN,
                 "GitHub API access denied (possibly rate limited)",
             )
+        if res.status_code == 404 and not_found_ok:
+            return res
+        if res.status_code == 404:
+            raise AppError(
+                status.HTTP_404_NOT_FOUND,
+                ErrorCode.REPO_NOT_FOUND,
+                "GitHub repository or resource not found",
+            )
         if res.status_code == 429:
             raise AppError(
                 status.HTTP_502_BAD_GATEWAY,
@@ -93,13 +110,20 @@ class GitHubClient:
                 ErrorCode.GITHUB_UNAVAILABLE,
                 "GitHub API returned a server error",
             )
+        if res.status_code >= 400:
+            # 401/403/404/429/5xxで拾いきれない想定外の4xx（410/422等）。生のhttpx例外を
+            # routerまで漏らさず、契約通りAppError/GITHUB_*として返す
+            raise AppError(
+                status.HTTP_502_BAD_GATEWAY,
+                ErrorCode.GITHUB_UNAVAILABLE,
+                f"GitHub API returned an unexpected status: {res.status_code}",
+            )
         return res
 
     async def get_repo(self, owner: str, name: str) -> dict | None:
-        res = await self._request(f"/repos/{owner}/{name}")
+        res = await self._request(f"/repos/{owner}/{name}", not_found_ok=True)
         if res.status_code == 404:
             return None
-        res.raise_for_status()
         return res.json()
 
     async def _paginated(
@@ -109,11 +133,18 @@ class GitHubClient:
         results: list[dict] = []
         for page in range(1, max_pages + 1):
             res = await self._request(path, {**params, "per_page": per_page, "page": page})
-            res.raise_for_status()
             batch = res.json()
             results.extend(batch)
             if len(batch) < per_page:
                 break
+        else:
+            # max_pagesに達して打ち切った＝取得しきれていないデータがある可能性
+            logger.warning(
+                "github pagination capped: path=%s max_pages=%d params=%r (more data may exist)",
+                path,
+                max_pages,
+                params,
+            )
         return results
 
     async def list_viewer_repos(self) -> list[dict]:
@@ -128,7 +159,6 @@ class GitHubClient:
         res = await self._request(f"/repos/{owner}/{name}/contributors", {"per_page": 100})
         if res.status_code == 204:
             return []
-        res.raise_for_status()
         return res.json()
 
     async def list_pull_requests(self, owner: str, name: str) -> list[dict]:
@@ -150,8 +180,14 @@ class GitHubClient:
         return await self._paginated(f"/repos/{owner}/{name}/issues/events", {}, MAX_EVENT_PAGES)
 
     async def list_review_comments(self, owner: str, name: str) -> list[dict]:
-        """レビューごとのコメント件数集計用。pull_request_review_id でグルーピングする。"""
-        return await self._paginated(f"/repos/{owner}/{name}/pulls/comments", {}, MAX_LIST_PAGES)
+        """レビューごとのコメント件数集計用。pull_request_review_id でグルーピングする。
+        上限到達時に直近のコメントを優先して残すため、他の一覧系と同じく作成日時降順で取得する。
+        """
+        return await self._paginated(
+            f"/repos/{owner}/{name}/pulls/comments",
+            {"sort": "created", "direction": "desc"},
+            MAX_LIST_PAGES,
+        )
 
     async def list_reviews_for_prs(
         self, owner: str, name: str, numbers: list[int]
@@ -163,7 +199,6 @@ class GitHubClient:
                 res = await self._request(
                     f"/repos/{owner}/{name}/pulls/{number}/reviews", {"per_page": 100}
                 )
-                res.raise_for_status()
                 return number, res.json()
 
         results = await asyncio.gather(*(fetch(n) for n in numbers))
@@ -216,7 +251,8 @@ async def ensure_synced(
     await db.commit()  # 即座にcommitしてロックを解放し、この後の外部API呼び出し中は保持しない
 
     try:
-        await fetch_and_store(GitHubClient(access_token), locked, db)
+        async with GitHubClient(access_token) as client:
+            await fetch_and_store(client, locked, db)
         await repo.mark_synced(locked, datetime.now(timezone.utc))
         await db.commit()
     except Exception:
@@ -283,7 +319,7 @@ def _aggregate_issue_events(
             continue
         event_type = ev.get("event")
         if event_type == "assigned" and ev.get("assignee"):
-            key = (number, ev["assignee"]["login"])
+            key = (number, _actor_login(ev.get("assignee"), "issue_event.assignee"))
             ts = _parse_dt(ev.get("created_at"))
             if ts is not None and (key not in assigned_at or ts < assigned_at[key]):
                 assigned_at[key] = ts
@@ -332,6 +368,7 @@ def _build_issue_rows(
             continue  # /issues エンドポイントにはPRも含まれるため除外
         number = i["number"]
         labels = [label["name"] for label in i.get("labels", [])]
+        assignee_logins = [_actor_login(a, "issue.assignees") for a in i.get("assignees", [])]
         rows.append(
             IssueData(
                 github_id=i["id"],
@@ -345,8 +382,8 @@ def _build_issue_rows(
                 gh_created_at=_parse_dt_required(i["created_at"]),
                 closed_at=_parse_dt(i.get("closed_at")),
                 assignees=[
-                    AssigneeData(login=a["login"], assigned_at=assigned_at.get((number, a["login"])))
-                    for a in i.get("assignees", [])
+                    AssigneeData(login=login, assigned_at=assigned_at.get((number, login)))
+                    for login in assignee_logins
                 ],
             )
         )

@@ -23,7 +23,8 @@ async def create_project(db: AsyncSession, user: User, payload: ProjectCreate) -
             ErrorCode.REPO_ALREADY_REGISTERED,
             "Repository is already registered",
         )
-    gh_repo = await GitHubClient(user.github_access_token).get_repo(payload.repo_owner, payload.repo_name)
+    async with GitHubClient(user.github_access_token) as client:
+        gh_repo = await client.get_repo(payload.repo_owner, payload.repo_name)
     if gh_repo is None:
         raise AppError(
             status.HTTP_404_NOT_FOUND,
@@ -95,7 +96,8 @@ async def join_via_invitation(db: AsyncSession, token: str, user: User) -> Proje
     project = invitation.project
 
     # privateリポジトリの場合、アクセス権のないGitHubアカウントの参加を拒否する
-    gh_repo = await GitHubClient(user.github_access_token).get_repo(project.repo_owner, project.repo_name)
+    async with GitHubClient(user.github_access_token) as client:
+        gh_repo = await client.get_repo(project.repo_owner, project.repo_name)
     if gh_repo is None:
         raise AppError(
             status.HTTP_403_FORBIDDEN,
