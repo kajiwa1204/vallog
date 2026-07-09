@@ -10,9 +10,8 @@ router = APIRouter(tags=["members"])
 
 @router.get("/projects/{project_id}/members", response_model=list[MemberResponse])
 async def list_members(project: MemberProject, user: CurrentUser, db: DB):
-    contributors = await GitHubClient(user.github_access_token).get_contributors(
-        project.repo_owner, project.repo_name
-    )
+    async with GitHubClient(user.github_access_token) as client:
+        contributors = await client.get_contributors(project.repo_owner, project.repo_name)
     registered = {
         u.github_login for u in await ProjectRepository(db).list_member_users(project.id)
     }

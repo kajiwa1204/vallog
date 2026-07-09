@@ -70,7 +70,8 @@ async def update_project(payload: ProjectUpdate, project: MemberProject, db: DB)
 @router.get("/github/repos", response_model=list[RepoOption])
 async def list_github_repos(user: CurrentUser):
     """プロジェクト作成画面でリポジトリを選択するためのエンドポイント。"""
-    repos = await GitHubClient(user.github_access_token).list_viewer_repos()
+    async with GitHubClient(user.github_access_token) as client:
+        repos = await client.list_viewer_repos()
     return [
         RepoOption(
             owner=r["owner"]["login"],
