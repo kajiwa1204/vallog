@@ -378,6 +378,10 @@ class _RaceJobRepo:
         self.db.active.append(job)
         return job
 
+    async def expire_stale(self, project_id, login, pr_number, threshold):
+        # このテストでは死骸ジョブを扱わないので no-op
+        return None
+
 
 async def test_concurrent_enqueue_converges_to_single_active_job():
     project_id = uuid.uuid4()
@@ -448,3 +452,38 @@ async def test_enqueue_reraises_integrity_error_when_no_active_job():
             await enqueue_summary_job(db, project_id, "alice")
 
     db.rollback.assert_awaited()
+
+
+async def test_enqueue_expires_stale_running_job_then_creates_new():
+    # プロセス異常終了で running のまま残ったジョブは失効させ、新規ジョブを作れる
+    project_id = uuid.uuid4()
+    stale = SummaryJob(
+        id=uuid.uuid4(),
+        project_id=project_id,
+        github_login="alice",
+        status="running",
+        pr_number=None,
+    )
+    repo = AsyncMock()
+
+    def _expire(*_args, **_kwargs):
+        stale.status = "failed"  # 失効を模擬（部分ユニークindexの対象から外れる）
+
+    repo.expire_stale.side_effect = _expire
+    repo.get_active.side_effect = lambda *a, **k: (
+        stale if stale.status in ("pending", "running") else None
+    )
+    new_job = SummaryJob(
+        id=uuid.uuid4(),
+        project_id=project_id,
+        github_login="alice",
+        status="pending",
+    )
+    repo.create.return_value = new_job
+
+    with patch("app.services.summary.SummaryJobRepository", lambda _s: repo):
+        job, created = await enqueue_summary_job(AsyncMock(), project_id, "alice")
+
+    repo.expire_stale.assert_awaited()
+    assert created is True
+    assert job is new_job

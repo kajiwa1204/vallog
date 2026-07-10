@@ -12,7 +12,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
@@ -55,6 +55,10 @@ GitHubの活動データをもとに、指定されたメンバーの貢献サ�
 # 1バッチあたりのPRサマリー同時生成数。GitHubのdiff取得を束ねる単位で、
 # LLM呼び出し自体の同時実行数は llm 側のセマフォが別途制御する
 _PR_BATCH_SIZE = 5
+
+# これより古い pending/running ジョブは、プロセス異常終了で残った死骸とみなして
+# 失効させる（生成は数分で終わる想定）。github同期の STALE_SYNC_THRESHOLD と同趣旨
+STALE_JOB_THRESHOLD = timedelta(minutes=15)
 
 # バックグラウンドタスクへの参照を保持し、GCで消されないようにする
 _background_tasks: set[asyncio.Task] = set()
@@ -321,6 +325,9 @@ async def enqueue_summary_job(
     ときだけ呼び出し側がバックグラウンド生成を起動する。
     """
     job_repo = SummaryJobRepository(db)
+
+    # プロセス異常終了で running のまま残った死骸を失効させ、恒久ブロックを防ぐ
+    await job_repo.expire_stale(project_id, login, pr_number, STALE_JOB_THRESHOLD)
 
     active = await job_repo.get_active(project_id, login, pr_number)
     if active is not None:
