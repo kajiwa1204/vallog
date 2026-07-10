@@ -6,6 +6,7 @@ from app.models.github_cache import (
 )
 from app.models.project import InvitationLink, Project, ProjectMember
 from app.models.refresh_token import RefreshToken
+from app.models.summary import ContributionSummary, PRSummary, SummaryJob
 from app.models.user import User
 
 __all__ = [
@@ -18,4 +19,7 @@ __all__ = [
     "GitHubIssue",
     "GitHubIssueAssignee",
     "GitHubReview",
+    "PRSummary",
+    "ContributionSummary",
+    "SummaryJob",
 ]

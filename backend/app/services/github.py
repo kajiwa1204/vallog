@@ -62,10 +62,16 @@ class GitHubClient:
         await self._client.aclose()
 
     async def _request(
-        self, path: str, params: dict | None = None, *, not_found_ok: bool = False
+        self,
+        path: str,
+        params: dict | None = None,
+        *,
+        not_found_ok: bool = False,
+        accept: str | None = None,
     ) -> httpx.Response:
+        headers = self._headers if accept is None else {**self._headers, "Accept": accept}
         try:
-            res = await self._client.get(f"{GITHUB_API}{path}", params=params, headers=self._headers)
+            res = await self._client.get(f"{GITHUB_API}{path}", params=params, headers=headers)
         except httpx.TimeoutException as e:
             raise AppError(
                 status.HTTP_502_BAD_GATEWAY,
@@ -188,6 +194,14 @@ class GitHubClient:
             {"sort": "created", "direction": "desc"},
             MAX_LIST_PAGES,
         )
+
+    async def fetch_pr_diff(self, owner: str, name: str, number: int) -> str:
+        """PRのdiff本文を取得する（PRサマリー生成の入力用）。"""
+        res = await self._request(
+            f"/repos/{owner}/{name}/pulls/{number}",
+            accept="application/vnd.github.diff",
+        )
+        return res.text
 
     async def list_reviews_for_prs(
         self, owner: str, name: str, numbers: list[int]
@@ -346,6 +360,8 @@ def _build_pull_request_rows(
             github_id=p["id"],
             number=p["number"],
             title=p["title"],
+            body=p.get("body"),
+            head_sha=(p.get("head") or {}).get("sha"),
             author_login=_actor_login(p.get("user"), "pull_request.user"),
             state=p["state"],
             draft=bool(p.get("draft")),
