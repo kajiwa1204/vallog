@@ -86,7 +86,8 @@ def _trim_diff(raw_diff: str) -> str:
 
     result = "".join(selected)
     if skipped:
-        result += f"\n(以降 {skipped} ファイルの差分は省略)"
+        # 上限超過分は並び順の途中でも飛ばすため「以降」とは限らない。位置に依らず正確な表現にする
+        result += f"\n(他 {skipped} ファイルの差分は文字数上限により省略)"
     return result
 
 
