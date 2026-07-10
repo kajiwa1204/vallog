@@ -8,6 +8,7 @@ Tier 1の内容が変わった場合のみ再生成する。
 
 import asyncio
 import hashlib
+import json
 import logging
 import re
 import uuid
@@ -106,6 +107,17 @@ def reviews_for_pr(reviews: list[GitHubReview], pr_number: int) -> list[GitHubRe
     )
 
 
+def _digest(payload: object) -> str:
+    """入力構造をJSONで正規化して指紋化する。
+
+    区切り文字（':' '|'）でフィールドを連結すると、タイトルや本文に区切り文字が
+    含まれたときに別入力が同一文字列になり、ハッシュ衝突で再生成が漏れる（stale）。
+    JSONは各フィールドを構造的に分離しエスケープするため、この混入を防ぐ。
+    """
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def pr_context_hash(
     pr: GitHubPullRequest, reviews: list[GitHubReview], cache_prefix: str
 ) -> str:
@@ -117,11 +129,16 @@ def pr_context_hash(
     サマリーが混在するのを防ぐ。
     """
     pr_reviews = reviews_for_pr(reviews, pr.number)
-    review_part = "|".join(
-        f"{rv.reviewer_login}:{rv.state}:{rv.body[:200]}" for rv in pr_reviews[:10]
-    )
-    raw = f"{pr.title}\n{pr.body or ''}\n{pr.head_sha or ''}\n{review_part}\n{cache_prefix}"
-    return hashlib.sha256(raw.encode()).hexdigest()
+    payload = {
+        "title": pr.title,
+        "body": pr.body or "",
+        "head_sha": pr.head_sha or "",
+        "reviews": [
+            [rv.reviewer_login, rv.state, rv.body[:200]] for rv in pr_reviews[:10]
+        ],
+        "prefix": cache_prefix,
+    }
+    return _digest(payload)
 
 
 def member_context_hash(
@@ -138,8 +155,6 @@ def member_context_hash(
     Tier 1だけでなくIssue/Reviewの変化でも再生成されるよう、生成入力と
     ハッシュ入力を一致させる。
     """
-    pr_part = "|".join(f"{ps.pr_number}:{ps.content}" for ps in pr_summaries)
-
     member_issues = sorted(
         (
             i
@@ -148,23 +163,27 @@ def member_context_hash(
         ),
         key=lambda i: i.number,
     )
-    issue_part = "|".join(
-        f"{i.number}:{i.title}:{i.state}:"
-        f"{'author' if i.author_login == login else 'assignee'}:"
-        f"{','.join(i.labels or [])}"
-        for i in member_issues
-    )
-
     member_reviews = sorted(
         (rv for rv in reviews if rv.reviewer_login == login),
         key=lambda rv: rv.github_id,
     )
-    review_part = "|".join(
-        f"{rv.pr_number}:{rv.state}:{rv.body[:200]}" for rv in member_reviews
-    )
-
-    raw = f"{login}\n{pr_part}\n{issue_part}\n{review_part}\n{cache_prefix}"
-    return hashlib.sha256(raw.encode()).hexdigest()
+    payload = {
+        "login": login,
+        "prs": [[ps.pr_number, ps.content] for ps in pr_summaries],
+        "issues": [
+            [
+                i.number,
+                i.title,
+                i.state,
+                "author" if i.author_login == login else "assignee",
+                list(i.labels or []),
+            ]
+            for i in member_issues
+        ],
+        "reviews": [[rv.pr_number, rv.state, rv.body[:200]] for rv in member_reviews],
+        "prefix": cache_prefix,
+    }
+    return _digest(payload)
 
 
 def select_prs_to_generate(
