@@ -60,6 +60,9 @@ _PR_BATCH_SIZE = 5
 # 失効させる（生成は数分で終わる想定）。github同期の STALE_SYNC_THRESHOLD と同趣旨
 STALE_JOB_THRESHOLD = timedelta(minutes=15)
 
+# enqueue時に競合(IntegrityError)で作成に失敗した場合の再試行回数
+_ENQUEUE_MAX_ATTEMPTS = 3
+
 # バックグラウンドタスクへの参照を保持し、GCで消されないようにする
 _background_tasks: set[asyncio.Task] = set()
 
@@ -321,29 +324,34 @@ async def enqueue_summary_job(
 
     get_active→create の間に別リクエストが割り込む TOCTOU があるため、DBの部分ユニーク
     制約（uq_summary_jobs_active_member / _active_pr）で二重作成を弾く。競合で作成に
-    失敗したら既存のアクティブジョブを返す。戻り値は (job, created) で、created=True の
+    失敗したら取り直して収束させる。戻り値は (job, created) で、created=True の
     ときだけ呼び出し側がバックグラウンド生成を起動する。
     """
     job_repo = SummaryJobRepository(db)
+    last_error: IntegrityError | None = None
 
-    # プロセス異常終了で running のまま残った死骸を失効させ、恒久ブロックを防ぐ
-    await job_repo.expire_stale(project_id, login, pr_number, STALE_JOB_THRESHOLD)
+    for _ in range(_ENQUEUE_MAX_ATTEMPTS):
+        # プロセス異常終了で running のまま残った死骸を失効させ、恒久ブロックを防ぐ
+        await job_repo.expire_stale(project_id, login, pr_number, STALE_JOB_THRESHOLD)
 
-    active = await job_repo.get_active(project_id, login, pr_number)
-    if active is not None:
-        return active, False
+        active = await job_repo.get_active(project_id, login, pr_number)
+        if active is not None:
+            return active, False
 
-    try:
-        job = await job_repo.create(project_id, login, pr_number)
-        await db.commit()
-    except IntegrityError:
-        await db.rollback()
-        existing = await job_repo.get_active(project_id, login, pr_number)
-        if existing is None:
-            raise
-        return existing, False
+        try:
+            job = await job_repo.create(project_id, login, pr_number)
+            await db.commit()
+            return job, True
+        except IntegrityError as e:
+            # 競合で作成に失敗。ロールバックして先頭から取り直す。競合相手がまだ
+            # アクティブなら次周の get_active が拾い、既に完了していれば作成し直す。
+            # 「失敗直後の再取得がNULL→即raise」だと、相手が一瞬で完了しただけで
+            # 500になるため、収束するまで数回リトライする
+            last_error = e
+            await db.rollback()
 
-    return job, True
+    # 想定外に収束しなかった場合のみ、最後のDBエラーを伝播する
+    raise last_error  # type: ignore[misc]
 
 
 async def run_summary_job(

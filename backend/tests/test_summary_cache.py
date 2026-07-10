@@ -440,10 +440,10 @@ async def test_enqueue_returns_existing_active_job_without_creating():
 
 
 async def test_enqueue_reraises_integrity_error_when_no_active_job():
-    # レースではない本物の制約違反(リトライ後もアクティブジョブが現れない)は握り潰さない
+    # レースでない本物の制約違反(リトライしてもアクティブジョブが現れない)は握り潰さず伝播する
     project_id = uuid.uuid4()
     repo = AsyncMock()
-    repo.get_active.return_value = None  # 事前チェックも事後リフェッチもNone
+    repo.get_active.return_value = None  # 毎回アクティブジョブなし
     repo.create.side_effect = IntegrityError("INSERT", {}, Exception("boom"))
 
     db = AsyncMock()
