@@ -474,15 +474,24 @@ async def _run_member_batch_job(
                 failed_prs.append(pr.number)
         await db.commit()
 
+    pr_summaries = await pr_summary_repo.list_for_author(project.id, login)
+
     if failed_prs:
-        # 不完全なTier1集合からTier2を作ると誤った内容になるため生成しない。
-        # 成功分はコミット済みなので、再実行すると失敗分のみが再試行される
         numbers = ", ".join(f"#{n}" for n in failed_prs)
-        raise RuntimeError(
-            f"一部のPRサマリー生成に失敗しました（{numbers}）。再実行すると失敗分のみ再試行されます。"
+        if not pr_summaries:
+            # 生成できたTier1が1件もない（トークン失効・全面障害等）ならTier2は作らない。
+            # 成功分はコミット済みなので、再実行すると失敗分のみが再試行される
+            raise RuntimeError(
+                f"全てのPRサマリー生成に失敗しました（{numbers}）。再実行すると失敗分のみ再試行されます。"
+            )
+        # 巨大diff等で恒久的に取得できないPRが混じっても、取得できたTier1だけで
+        # メンバーサマリーを生成する。1件の失敗でメンバー全体が永久にブロックされるのを防ぐ。
+        # 失敗分は次回実行で再試行され、成功すれば pr_summaries が変わって自動で作り直される
+        logger.warning(
+            "Member %s: %d PR summary(ies) failed (%s); building Tier2 from %d available",
+            login, len(failed_prs), numbers, len(pr_summaries),
         )
 
-    pr_summaries = await pr_summary_repo.list_for_author(project.id, login)
     member_prefix = llm.cache_key_prefix(SummaryUseCase.MEMBER)
     member_digest = member_context_hash(
         login, pr_summaries, issues, reviews, member_prefix
