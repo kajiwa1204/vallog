@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.summary import ContributionSummary, PRSummary
@@ -37,23 +37,27 @@ class SummaryRepository:
         github_login: str,
         content: str,
         context_hash: str,
-    ) -> ContributionSummary:
-        summary = await self.get(project_id, github_login)
-        if summary is None:
-            summary = ContributionSummary(
-                project_id=project_id,
-                github_login=github_login,
-                content=content,
-                context_hash=context_hash,
-            )
-            self.db.add(summary)
-        else:
-            summary.content = content
-            summary.context_hash = context_hash
-            # server_defaultは挿入時のみ効くため、再生成時は明示的に日時を更新する
-            summary.generated_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        return summary
+    ) -> None:
+        # INSERT ... ON CONFLICT DO UPDATE でアトミックに挿入/更新する。
+        # get→addの2段構えだと、同一メンバーを対象にした複数ジョブが同時に走った際に
+        # UniqueConstraint違反で片方が落ちる（部分ユニークindexはメンバー一括とPR単独の
+        # 同時実行を許すため、この競合は実際に起こりうる）。
+        stmt = pg_insert(ContributionSummary).values(
+            project_id=project_id,
+            github_login=github_login,
+            content=content,
+            context_hash=context_hash,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["project_id", "github_login"],
+            set_={
+                "content": content,
+                "context_hash": context_hash,
+                # server_defaultは挿入時のみ効くため、更新時は明示的に打ち直す
+                "generated_at": func.now(),
+            },
+        )
+        await self.db.execute(stmt)
 
 
 class PRSummaryRepository:
@@ -88,20 +92,23 @@ class PRSummaryRepository:
         author_login: str,
         content: str,
         context_hash: str,
-    ) -> PRSummary:
-        summary = await self.get(project_id, pr_number)
-        if summary is None:
-            summary = PRSummary(
-                project_id=project_id,
-                pr_number=pr_number,
-                author_login=author_login,
-                content=content,
-                context_hash=context_hash,
-            )
-            self.db.add(summary)
-        else:
-            summary.content = content
-            summary.context_hash = context_hash
-            summary.generated_at = datetime.now(timezone.utc)
-        await self.db.flush()
-        return summary
+    ) -> None:
+        # メンバー一括ジョブとPR単独ジョブが同一PRを同時にupsertしても落ちないよう、
+        # INSERT ... ON CONFLICT DO UPDATE でアトミックに書き込む
+        stmt = pg_insert(PRSummary).values(
+            project_id=project_id,
+            pr_number=pr_number,
+            author_login=author_login,
+            content=content,
+            context_hash=context_hash,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["project_id", "pr_number"],
+            set_={
+                "author_login": author_login,
+                "content": content,
+                "context_hash": context_hash,
+                "generated_at": func.now(),
+            },
+        )
+        await self.db.execute(stmt)
