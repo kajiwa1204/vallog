@@ -27,6 +27,7 @@ from app.repositories.project import ProjectRepository
 from app.repositories.summary import PRSummaryRepository, SummaryRepository
 from app.repositories.summary_job import SummaryJobRepository
 from app.repositories.user import UserRepository
+from app.schemas.summary import PRSummaryItem, SummaryJobResponse
 from app.services.github import GitHubClient, ensure_synced, fetch_and_store
 from app.services.llm import SummaryUseCase, get_llm_client
 
@@ -259,6 +260,51 @@ def derive_pr_state(pr: GitHubPullRequest) -> str:
     if pr.draft:
         return "draft"
     return pr.state
+
+
+async def list_member_pr_summaries(
+    db: AsyncSession, project_id: uuid.UUID, login: str
+) -> list[PRSummaryItem]:
+    """loginが author のPR一覧を、生成済みPRサマリーと最新のPR単独ジョブをマージして返す。
+
+    複数リポジトリの取得結果を突き合わせて集約するため、routerではなくservicesに置く。
+    """
+    prs = await GitHubCacheRepository(db).list_pull_requests(project_id)
+    author_prs = [p for p in prs if p.author_login == login]
+
+    summaries_by_number = {
+        ps.pr_number: ps
+        for ps in await PRSummaryRepository(db).list_for_author(project_id, login)
+    }
+    jobs_by_pr = await SummaryJobRepository(db).list_latest_per_pr(project_id, login)
+
+    items = [
+        PRSummaryItem(
+            pr_number=pr.number,
+            title=pr.title,
+            html_url=pr.html_url,
+            state=derive_pr_state(pr),
+            content=(
+                summaries_by_number[pr.number].content
+                if pr.number in summaries_by_number
+                else None
+            ),
+            generated_at=(
+                summaries_by_number[pr.number].generated_at
+                if pr.number in summaries_by_number
+                else None
+            ),
+            job=(
+                SummaryJobResponse.model_validate(jobs_by_pr[pr.number])
+                if pr.number in jobs_by_pr
+                else None
+            ),
+        )
+        for pr in author_prs
+    ]
+    # 新しいPRが先頭に来るよう降順ソート
+    items.sort(key=lambda x: x.pr_number, reverse=True)
+    return items
 
 
 async def enqueue_summary_job(

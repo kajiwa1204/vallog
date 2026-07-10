@@ -1,8 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
-from app.repositories.github_cache import GitHubCacheRepository
-from app.repositories.summary import PRSummaryRepository, SummaryRepository
+from app.repositories.summary import SummaryRepository
 from app.repositories.summary_job import SummaryJobRepository
 from app.routers.deps import DB, CurrentUser, MemberProject
 from app.schemas.summary import PRSummaryItem, SummaryJobResponse, SummaryResponse
@@ -77,43 +76,4 @@ async def list_summary_jobs(project: MemberProject, db: DB):
 )
 async def list_pr_summaries(login: str, project: MemberProject, db: DB):
     """loginが author のPR一覧を、PRサマリーとPR単独ジョブをマージして返す。"""
-    cache_repo = GitHubCacheRepository(db)
-    prs = await cache_repo.list_pull_requests(project.id)
-    author_prs = [p for p in prs if p.author_login == login]
-
-    pr_summary_repo = PRSummaryRepository(db)
-    summaries_by_number = {
-        ps.pr_number: ps
-        for ps in await pr_summary_repo.list_for_author(project.id, login)
-    }
-
-    job_repo = SummaryJobRepository(db)
-    jobs_by_pr = await job_repo.list_latest_per_pr(project.id, login)
-
-    items = [
-        PRSummaryItem(
-            pr_number=pr.number,
-            title=pr.title,
-            html_url=pr.html_url,
-            state=summary_service.derive_pr_state(pr),
-            content=(
-                summaries_by_number[pr.number].content
-                if pr.number in summaries_by_number
-                else None
-            ),
-            generated_at=(
-                summaries_by_number[pr.number].generated_at
-                if pr.number in summaries_by_number
-                else None
-            ),
-            job=(
-                SummaryJobResponse.model_validate(jobs_by_pr[pr.number])
-                if pr.number in jobs_by_pr
-                else None
-            ),
-        )
-        for pr in author_prs
-    ]
-    # 新しいPRが先頭に来るよう降順ソート
-    items.sort(key=lambda x: x.pr_number, reverse=True)
-    return items
+    return await summary_service.list_member_pr_summaries(db, project.id, login)
