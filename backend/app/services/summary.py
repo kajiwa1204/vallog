@@ -14,12 +14,13 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import HTTPException
+from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.core.errors import AppError, ErrorCode
 from app.models import GitHubIssue, GitHubPullRequest, GitHubReview, PRSummary
 from app.models.summary import SummaryJob
 from app.repositories.github_cache import GitHubCacheRepository
@@ -314,6 +315,23 @@ async def list_member_pr_summaries(
     return items
 
 
+async def _ensure_pr_exists(
+    db: AsyncSession, project_id: uuid.UUID, login: str, pr_number: int
+) -> None:
+    """指定PRが login を author とするキャッシュ済みPRとして存在することを確認する。
+
+    存在しなければ 404 を同期的に返す。ジョブを積んでから非同期に失敗させると、
+    呼び出し側は一旦成功(202)を受け取ってしまうため、enqueue前に弾く。
+    """
+    prs = await GitHubCacheRepository(db).list_pull_requests(project_id)
+    if not any(p.author_login == login and p.number == pr_number for p in prs):
+        raise AppError(
+            status.HTTP_404_NOT_FOUND,
+            ErrorCode.SUMMARY_PR_NOT_FOUND,
+            f"PR #{pr_number} authored by '{login}' not found in cache",
+        )
+
+
 async def enqueue_summary_job(
     db: AsyncSession,
     project_id: uuid.UUID,
@@ -327,6 +345,9 @@ async def enqueue_summary_job(
     失敗したら取り直して収束させる。戻り値は (job, created) で、created=True の
     ときだけ呼び出し側がバックグラウンド生成を起動する。
     """
+    if pr_number is not None:
+        await _ensure_pr_exists(db, project_id, login, pr_number)
+
     job_repo = SummaryJobRepository(db)
     last_error: IntegrityError | None = None
 

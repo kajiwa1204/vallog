@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.exc import IntegrityError
 
+from app.core.errors import AppError, ErrorCode
 from app.models import (
     GitHubIssue,
     GitHubPullRequest,
@@ -408,9 +409,19 @@ async def test_concurrent_enqueue_for_distinct_prs_creates_two_jobs():
     db = _FakeDB()
     barrier = _Barrier(2)
 
+    # PR単独ジョブは enqueue 時にPRの存在を同期チェックするので、キャッシュをスタブする
+    cache_repo = AsyncMock()
+    cache_repo.list_pull_requests.return_value = [
+        _pr(number=1, author_login="alice"),
+        _pr(number=2, author_login="alice"),
+    ]
+
     with patch(
         "app.services.summary.SummaryJobRepository",
         lambda _session: _RaceJobRepo(db, barrier),
+    ), patch(
+        "app.services.summary.GitHubCacheRepository",
+        lambda _session: cache_repo,
     ):
         results = await asyncio.gather(
             enqueue_summary_job(db, project_id, "alice", 1),
@@ -452,6 +463,20 @@ async def test_enqueue_reraises_integrity_error_when_no_active_job():
             await enqueue_summary_job(db, project_id, "alice")
 
     db.rollback.assert_awaited()
+
+
+async def test_enqueue_pr_job_raises_404_when_pr_not_authored_by_member():
+    # 存在しない/別人authorのPRは、ジョブを積まず同期的に404を返す（202→非同期失敗にしない）
+    project_id = uuid.uuid4()
+    cache_repo = AsyncMock()
+    cache_repo.list_pull_requests.return_value = [_pr(number=1, author_login="bob")]
+
+    with patch("app.services.summary.GitHubCacheRepository", lambda _s: cache_repo):
+        with pytest.raises(AppError) as exc_info:
+            await enqueue_summary_job(AsyncMock(), project_id, "alice", 1)
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.code == ErrorCode.SUMMARY_PR_NOT_FOUND
 
 
 async def test_enqueue_expires_stale_running_job_then_creates_new():
