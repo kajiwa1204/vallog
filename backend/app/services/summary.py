@@ -166,6 +166,36 @@ def pr_context_hash(
     return _digest(payload)
 
 
+def member_issues_for(issues: list[GitHubIssue], login: str) -> list[GitHubIssue]:
+    """login が作成 or 担当している Issue を決定的な順序（番号昇順）で返す。
+
+    member_context_hash と build_member_context で同じ絞り込み・並びを共有し、
+    ハッシュ入力と生成入力を一致させる（reviews_for_pr と同じ狙い）。list_issues の
+    返却順（gh_created_at降順）に依存すると両者がずれ、Tier2がstaleになりうる。
+    """
+    return sorted(
+        (
+            i
+            for i in issues
+            if i.author_login == login or any(a.login == login for a in i.assignees)
+        ),
+        key=lambda i: i.number,
+    )
+
+
+def member_reviews_for(reviews: list[GitHubReview], login: str) -> list[GitHubReview]:
+    """login が実施したレビューを決定的な順序（github_id昇順）で返す。
+
+    submitted_at は NULL 可（PENDING等）で list_reviews の返却順（submitted_at降順）は
+    NULLの並びが不定になりうる。github_id で安定ソートし、生成入力とハッシュ入力の
+    並びを揃える。member_context_hash と build_member_context で共有する。
+    """
+    return sorted(
+        (rv for rv in reviews if rv.reviewer_login == login),
+        key=lambda rv: rv.github_id,
+    )
+
+
 def member_context_hash(
     login: str,
     pr_summaries: list[PRSummary],
@@ -180,21 +210,14 @@ def member_context_hash(
     Tier 1だけでなくIssue/Reviewの変化でも再生成されるよう、生成入力と
     ハッシュ入力を一致させる。
     """
-    member_issues = sorted(
-        (
-            i
-            for i in issues
-            if i.author_login == login or any(a.login == login for a in i.assignees)
-        ),
-        key=lambda i: i.number,
-    )
-    member_reviews = sorted(
-        (rv for rv in reviews if rv.reviewer_login == login),
-        key=lambda rv: rv.github_id,
-    )
+    member_issues = member_issues_for(issues, login)
+    member_reviews = member_reviews_for(reviews, login)
     payload = {
         "login": login,
-        "prs": [[ps.pr_number, ps.content] for ps in pr_summaries],
+        "prs": [
+            [ps.pr_number, ps.content]
+            for ps in sorted(pr_summaries, key=lambda ps: ps.pr_number)
+        ],
         "issues": [
             [
                 i.number,
@@ -259,20 +282,17 @@ def build_member_context(
     reviews: list[GitHubReview],
 ) -> str:
     lines = [f"対象メンバー: {login}", "", "## 作成したPull Requestの貢献内容"]
-    for ps in pr_summaries:
+    for ps in sorted(pr_summaries, key=lambda ps: ps.pr_number):
         lines.append(f"- #{ps.pr_number} {ps.content}")
     lines.append("")
     lines.append("## 作成・担当したIssue")
-    for i in issues:
-        if i.author_login == login or any(a.login == login for a in i.assignees):
-            role = "作成" if i.author_login == login else "担当"
-            labels = f" [{', '.join(i.labels)}]" if i.labels else ""
-            lines.append(f"- #{i.number} {i.title} ({role}/{i.state}){labels}")
+    for i in member_issues_for(issues, login):
+        role = "作成" if i.author_login == login else "担当"
+        labels = f" [{', '.join(i.labels)}]" if i.labels else ""
+        lines.append(f"- #{i.number} {i.title} ({role}/{i.state}){labels}")
     lines.append("")
     lines.append("## 実施したコードレビュー")
-    for rv in reviews:
-        if rv.reviewer_login != login:
-            continue
+    for rv in member_reviews_for(reviews, login):
         comment = _review_snippet(rv.body)
         suffix = f": {comment}" if comment else ""
         lines.append(f"- PR #{rv.pr_number} ({rv.state}){suffix}")

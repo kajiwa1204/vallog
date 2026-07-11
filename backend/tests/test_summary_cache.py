@@ -24,6 +24,7 @@ from app.models import (
 from app.services.summary import (
     _PR_BODY_CHAR_LIMIT,
     _trim_diff,
+    build_member_context,
     enqueue_summary_job,
     member_context_hash,
     pr_context_hash,
@@ -240,6 +241,37 @@ def test_member_hash_ignores_review_body_whitespace():
         "bob", [], [], [_review(1, body="  Good\nwork  ", reviewer_login="bob")], _PREFIX
     )
     assert plain == padded
+
+
+def test_member_hash_is_stable_under_input_reordering():
+    # list_issues/list_reviews の返却順（作成日時降順・submitted_at降順でNULL不定）が
+    # 揺れても、ハッシュは決定的順序で指紋化するため変わらない
+    prs = [_summary(2, "h2", content="B"), _summary(1, "h1", content="A")]
+    issues = [_issue(3, author_login="alice"), _issue(1, author_login="alice")]
+    reviews = [
+        _review(5, body="five", reviewer_login="alice"),
+        _review(2, body="two", reviewer_login="alice"),
+    ]
+    a = member_context_hash("alice", prs, issues, reviews, _PREFIX)
+    b = member_context_hash(
+        "alice", list(reversed(prs)), list(reversed(issues)), list(reversed(reviews)), _PREFIX
+    )
+    assert a == b
+
+
+def test_build_member_context_is_stable_under_input_reordering():
+    # 生成プロンプトもハッシュと同じ決定的順序で組む。入力順が変わっても不変（=stale防止）
+    prs = [_summary(2, "h2", content="B"), _summary(1, "h1", content="A")]
+    issues = [_issue(3, author_login="alice"), _issue(1, author_login="alice")]
+    reviews = [
+        _review(5, body="five", reviewer_login="alice"),
+        _review(2, body="two", reviewer_login="alice"),
+    ]
+    a = build_member_context("alice", prs, issues, reviews)
+    b = build_member_context(
+        "alice", list(reversed(prs)), list(reversed(issues)), list(reversed(reviews))
+    )
+    assert a == b
 
 
 def test_member_hash_changes_when_tier1_set_changes():
