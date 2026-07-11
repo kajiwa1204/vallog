@@ -589,9 +589,12 @@ async def _run_member_batch_job(
                 await pr_summary_repo.upsert(
                     project.id, pr.number, pr.author_login, content, digest
                 )
-                job.done_prs += 1
             else:
                 failed_prs.append(pr.number)
+            # 成否に関わらず処理済み件数として進捗を進める。成功だけ数えると、失敗PRが
+            # あるとき done_prs が total_prs に届かないまま succeeded になり、進捗
+            # (done_prs/total_prs) が完了しても100%にならず不整合になる
+            job.done_prs += 1
         await db.commit()
 
     pr_summaries = await pr_summary_repo.list_for_author(project.id, login)

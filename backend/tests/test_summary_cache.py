@@ -8,7 +8,8 @@ LLM・GitHub API・DBは使わない。
 import asyncio
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -360,6 +361,60 @@ def test_trim_diff_skips_files_over_total_limit():
     result = _trim_diff("".join(chunks))
     assert len(result) < 32000
     assert "省略" in result
+
+
+# ---------------------------------------------------------------------------
+# _run_member_batch_job（進捗カウント）
+# ---------------------------------------------------------------------------
+
+async def test_member_batch_done_prs_reaches_total_with_partial_failure():
+    """一部PRの生成が失敗しても done_prs は total_prs に達する。
+
+    成功分だけ数えると、失敗PRがあるとき succeeded なのに done_prs < total_prs の
+    まま止まり、進捗(done/total)が完了しても100%にならない不整合になる。
+    """
+    from app.services.summary import _run_member_batch_job
+
+    project_id = uuid.uuid4()
+    project = SimpleNamespace(id=project_id)
+    prs = [_pr(number=n, author_login="alice") for n in (1, 2, 3)]
+    job = SummaryJob(
+        project_id=project_id, github_login="alice", status="running",
+        total_prs=0, done_prs=0,
+    )
+
+    generated = [_summary(1, "h1"), _summary(3, "h3")]
+    pr_summary_repo = AsyncMock()
+    # 1回目=既存(なし)、2回目=生成後のTier1集合(#2は失敗し欠落)
+    pr_summary_repo.list_for_author.side_effect = [[], generated]
+
+    def fake_generate(project, pr, reviews, gh_client):
+        if pr.number == 2:
+            raise RuntimeError("diff too large")
+        return f"summary {pr.number}"
+
+    llm = MagicMock()
+    llm.cache_key_prefix.return_value = _PREFIX
+    llm.complete = AsyncMock(return_value=SimpleNamespace(content="member summary"))
+
+    with patch(
+        "app.services.summary._generate_pr_summary",
+        new=AsyncMock(side_effect=fake_generate),
+    ), patch(
+        "app.services.summary.get_llm_client", return_value=llm
+    ), patch(
+        "app.services.summary.SummaryRepository"
+    ) as summary_repo_cls:
+        summary_repo_cls.return_value.get = AsyncMock(return_value=None)
+        summary_repo_cls.return_value.upsert = AsyncMock()
+        await _run_member_batch_job(
+            AsyncMock(), job, project, "alice", prs, [], [],
+            pr_summary_repo, MagicMock(),
+        )
+
+    assert job.total_prs == 3
+    assert job.done_prs == 3  # 修正前は成功2件のみで 2
+    assert job.status == "succeeded"
 
 
 # ---------------------------------------------------------------------------
