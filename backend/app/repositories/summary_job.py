@@ -125,4 +125,6 @@ class SummaryJobRepository:
             .distinct(SummaryJob.pr_number)
             .order_by(SummaryJob.pr_number, SummaryJob.created_at.desc())
         )
-        return {job.pr_number: job for job in rows.all()}
+        # pr_number IS NOT NULL で絞っているので実行時は常に int だが、
+        # job.pr_number の型は int | None。返り値型 dict[int, ...] と揃えるため明示的に除外する
+        return {job.pr_number: job for job in rows.all() if job.pr_number is not None}
