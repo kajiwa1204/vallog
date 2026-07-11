@@ -22,6 +22,7 @@ from app.models import (
     SummaryJob,
 )
 from app.services.summary import (
+    _PR_BODY_CHAR_LIMIT,
     _trim_diff,
     enqueue_summary_job,
     member_context_hash,
@@ -135,6 +136,21 @@ def test_pr_context_hash_changes_when_model_changes():
     assert pr_context_hash(pr, [], "claude:model-a") != pr_context_hash(
         pr, [], "claude:model-b"
     )
+
+
+def test_pr_context_hash_ignores_body_changes_beyond_generation_limit():
+    # 本文の先頭 _PR_BODY_CHAR_LIMIT 字までしかLLMに渡さない（build_pr_context）ので、
+    # それ以降だけ変わってもLLM出力は同一。ハッシュも変わらず再生成（＝再課金）しない
+    head = "x" * _PR_BODY_CHAR_LIMIT
+    base = pr_context_hash(_pr(body=head + "AAA"), [], _PREFIX)
+    tail_changed = pr_context_hash(_pr(body=head + "BBB"), [], _PREFIX)
+    assert base == tail_changed
+
+
+def test_pr_context_hash_changes_when_body_changes_within_generation_limit():
+    within = pr_context_hash(_pr(body="original body"), [], _PREFIX)
+    changed = pr_context_hash(_pr(body="edited body"), [], _PREFIX)
+    assert within != changed
 
 
 def test_pr_context_hash_is_stable_under_review_reordering():

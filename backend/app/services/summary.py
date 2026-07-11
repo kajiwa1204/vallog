@@ -57,6 +57,11 @@ GitHubの活動データをもとに、指定されたメンバーの貢献サ�
 # LLM呼び出し自体の同時実行数は llm 側のセマフォが別途制御する
 _PR_BATCH_SIZE = 5
 
+# PR本文の使用文字数。LLMへ渡す入力(build_pr_context)と context_hash の両方で
+# 同じ長さに切る。揃えないと、この長さ以降だけ変わったPRでLLM出力は同一なのに
+# ハッシュが変わり、無駄にTier1を再生成（＝再課金）してしまう
+_PR_BODY_CHAR_LIMIT = 2000
+
 # これより古い pending/running ジョブは、プロセス異常終了で残った死骸とみなして
 # 失効させる（生成は数分で終わる想定）。github同期の STALE_SYNC_THRESHOLD と同趣旨
 STALE_JOB_THRESHOLD = timedelta(minutes=15)
@@ -140,7 +145,7 @@ def pr_context_hash(
     pr_reviews = reviews_for_pr(reviews, pr.number)
     payload = {
         "title": pr.title,
-        "body": pr.body or "",
+        "body": (pr.body or "")[:_PR_BODY_CHAR_LIMIT],
         "head_sha": pr.head_sha or "",
         "reviews": [
             [rv.reviewer_login, rv.state, rv.body[:200]] for rv in pr_reviews[:10]
@@ -213,7 +218,7 @@ def select_prs_to_generate(
 def build_pr_context(
     pr: GitHubPullRequest, reviews: list[GitHubReview], diff: str
 ) -> str:
-    body_text = pr.body[:2000] if pr.body else "(本文なし)"
+    body_text = pr.body[:_PR_BODY_CHAR_LIMIT] if pr.body else "(本文なし)"
     lines = [
         f"PR #{pr.number}: {pr.title}",
         f"状態: {derive_pr_state(pr)}",
