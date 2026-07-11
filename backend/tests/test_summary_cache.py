@@ -153,6 +153,15 @@ def test_pr_context_hash_changes_when_body_changes_within_generation_limit():
     assert within != changed
 
 
+def test_pr_context_hash_ignores_review_body_whitespace():
+    # build_pr_context はレビュー本文を strip()+改行→空白に正規化して渡すので、
+    # 整形だけが違う本文はハッシュも変わらず、無駄な再生成をしない
+    pr = _pr()
+    plain = pr_context_hash(pr, [_review(pr.number, body="LGTM nice")], _PREFIX)
+    padded = pr_context_hash(pr, [_review(pr.number, body="  LGTM\nnice  ")], _PREFIX)
+    assert plain == padded
+
+
 def test_pr_context_hash_is_stable_under_review_reordering():
     # レビューのDB返却順が不定でも（submitted_atがNULL可）ハッシュは揺れない
     pr = _pr(number=1)
@@ -220,6 +229,17 @@ def test_member_hash_changes_when_tier1_content_changes():
         "alice", [_summary(1, "h1", content="Aを改修")], [], [], _PREFIX
     )
     assert before != after
+
+
+def test_member_hash_ignores_review_body_whitespace():
+    # build_member_context 側と同じ正規化をかけ、整形差での再生成を防ぐ
+    plain = member_context_hash(
+        "bob", [], [], [_review(1, body="Good work", reviewer_login="bob")], _PREFIX
+    )
+    padded = member_context_hash(
+        "bob", [], [], [_review(1, body="  Good\nwork  ", reviewer_login="bob")], _PREFIX
+    )
+    assert plain == padded
 
 
 def test_member_hash_changes_when_tier1_set_changes():

@@ -132,6 +132,16 @@ def _digest(payload: object) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _review_snippet(body: str) -> str:
+    """レビュー本文をプロンプト表示用に正規化する。
+
+    context_hash（*_context_hash）と生成入力（build_*_context）の両方で同じ整形を
+    通す。揃えないと、改行や前後空白だけが違うレビューでプロンプトは同一なのに
+    ハッシュが変わり、無駄にTier1を再生成（＝再課金）してしまう。
+    """
+    return body.strip().replace("\n", " ")[:200]
+
+
 def pr_context_hash(
     pr: GitHubPullRequest, reviews: list[GitHubReview], cache_prefix: str
 ) -> str:
@@ -148,7 +158,8 @@ def pr_context_hash(
         "body": (pr.body or "")[:_PR_BODY_CHAR_LIMIT],
         "head_sha": pr.head_sha or "",
         "reviews": [
-            [rv.reviewer_login, rv.state, rv.body[:200]] for rv in pr_reviews[:10]
+            [rv.reviewer_login, rv.state, _review_snippet(rv.body)]
+            for rv in pr_reviews[:10]
         ],
         "prefix": cache_prefix,
     }
@@ -194,7 +205,9 @@ def member_context_hash(
             ]
             for i in member_issues
         ],
-        "reviews": [[rv.pr_number, rv.state, rv.body[:200]] for rv in member_reviews],
+        "reviews": [
+            [rv.pr_number, rv.state, _review_snippet(rv.body)] for rv in member_reviews
+        ],
         "prefix": cache_prefix,
     }
     return _digest(payload)
@@ -233,7 +246,7 @@ def build_pr_context(
     ]
     pr_reviews = reviews_for_pr(reviews, pr.number)
     for rv in pr_reviews[:10]:
-        comment = rv.body.strip().replace("\n", " ")[:200]
+        comment = _review_snippet(rv.body)
         suffix = f": {comment}" if comment else ""
         lines.append(f"- {rv.reviewer_login} ({rv.state}){suffix}")
     return "\n".join(lines)
@@ -260,7 +273,7 @@ def build_member_context(
     for rv in reviews:
         if rv.reviewer_login != login:
             continue
-        comment = rv.body.strip().replace("\n", " ")[:200]
+        comment = _review_snippet(rv.body)
         suffix = f": {comment}" if comment else ""
         lines.append(f"- PR #{rv.pr_number} ({rv.state}){suffix}")
     return "\n".join(lines)
