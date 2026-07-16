@@ -25,6 +25,8 @@ class PullRequestData:
     github_id: int
     number: int
     title: str
+    body: str | None
+    head_sha: str | None
     author_login: str
     state: PullRequestState
     draft: bool
@@ -107,6 +109,8 @@ class GitHubCacheRepository:
                 "github_id": r.github_id,
                 "number": r.number,
                 "title": r.title,
+                "body": r.body,
+                "head_sha": r.head_sha,
                 "author_login": r.author_login,
                 "state": r.state,
                 "draft": r.draft,
@@ -124,6 +128,8 @@ class GitHubCacheRepository:
             for c in (
                 "github_id",
                 "title",
+                "body",
+                "head_sha",
                 "author_login",
                 "state",
                 "draft",

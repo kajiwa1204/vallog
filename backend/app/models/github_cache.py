@@ -29,6 +29,10 @@ class GitHubPullRequest(Base):
     github_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     title: Mapped[str] = mapped_column(String, nullable=False)
+    # PRサマリー(Tier1)の入力とcontext_hash算出に使う
+    body: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # head_shaの変化でdiffの変化を検知する。キャッシュ判定時にGitHub APIを呼ばずに済む
+    head_sha: Mapped[str | None] = mapped_column(String, nullable=True)
     author_login: Mapped[str] = mapped_column(String, nullable=False)
     state: Mapped[str] = mapped_column(String, nullable=False)
     draft: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

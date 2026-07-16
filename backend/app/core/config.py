@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     # LLM provider selection
     summary_provider: Literal["claude", "openai", "ollama"] = "claude"
+    # PR diffの1リクエストあたりの最大文字数（Tier1サマリーの入力上限 = コスト上限）
+    pr_diff_char_limit: int = 30000
 
     # Claude
     claude_api_key: str = ""
