@@ -13,7 +13,6 @@
 設定値そのものは画面3の重み編集が参照するため書き換えない。
 """
 
-import re
 from collections.abc import Iterable
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,9 +26,6 @@ from app.schemas.score import CategoryScores, MemberScore, ScoreResponse
 from app.services.github import ensure_synced, fetch_and_store
 
 _APPROVE_OR_CHANGES = {"APPROVED", "CHANGES_REQUESTED"}
-
-# 「バグ起因の手戻り」を数えるためのラベル判定。type:bug / bugfix 等も拾えるよう部分一致にする
-_BUG_LABEL_RE = re.compile(r"bug", re.IGNORECASE)
 
 
 def _is_excluded(login: str) -> bool:
@@ -97,6 +93,7 @@ def _activity_relative(
     logins: set[str],
 ) -> dict[str, float]:
     """GitHub活動量（40%）。4サブ指標を均等割りで合成した相対スコア。"""
+    pr_author = {pr.number: pr.author_login for pr in prs}
     authored = {login: 0.0 for login in logins}
     for pr in prs:
         if pr.author_login in authored:
@@ -110,6 +107,8 @@ def _activity_relative(
     for r in reviews:
         if r.reviewer_login not in review_comments:
             continue
+        if _is_self_review(r, pr_author):
+            continue
         if r.comment_count > 0 or r.body.strip():
             review_comments[r.reviewer_login] += 1
         if r.state in _APPROVE_OR_CHANGES:
@@ -118,6 +117,14 @@ def _activity_relative(
     turnaround = _turnaround_values(prs, reviews, logins)
 
     return _combine_equal([authored, review_comments, approve_changes, turnaround], logins)
+
+
+def _is_self_review(review: GitHubReview, pr_author: dict[int, str]) -> bool:
+    """PR作者自身によるレビューか。GitHubはPR作者が自分のPRにインラインコメントを付けると
+    作者名義のCOMMENTEDレビューを作る。これをレビュー貢献・TATに数えると、セルフコメントで
+    レビュー数が水増しされ、PR作成直後（経過時間ほぼ0）のTATが応答性を不当に押し上げるため除外する。
+    """
+    return review.reviewer_login == pr_author.get(review.pr_number)
 
 
 def _turnaround_values(
@@ -129,10 +136,13 @@ def _turnaround_values(
     正規化（個人÷チーム合計）に載せられるよう「多い/速いほど高い」向きに揃える。
     """
     pr_created = {pr.number: pr.gh_created_at for pr in prs}
+    pr_author = {pr.number: pr.author_login for pr in prs}
     total_hours: dict[str, float] = {login: 0.0 for login in logins}
     counts: dict[str, int] = {login: 0 for login in logins}
     for r in reviews:
         if r.reviewer_login not in total_hours or r.submitted_at is None:
+            continue
+        if _is_self_review(r, pr_author):
             continue
         created = pr_created.get(r.pr_number)
         if created is None:
@@ -153,36 +163,51 @@ def _turnaround_values(
     return responsiveness
 
 
+# 経過時間の下限（時間）。アサイン直後にクローズされたIssueで SP÷ごく短時間 の
+# 巨大値が出るのを抑える。プロトタイプ準拠（max(hours, 0.1)）
+_MIN_ELAPSED_HOURS = 0.1
+
+
 def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, float]:
     """タスク完了スピード（35%）の生値。獲得SP ÷ 経過時間（アサイン〜完了）。
 
+    タスク分割に中立にするため、メンバー単位で「総獲得SP ÷ 総経過時間」を取る。
+    Issueごとに SP/時間 を出して足し上げると、同じ仕事を細かく分割するほどスコアが
+    膨らむ（SP5×1件=0.1 に対し SP1×5件=0.5）ため、分割数に依存しない総量比にする。
+    物量は活動量（起票数）と品質（マージPR数）で既に報われている。
+
     Issueのclosed_atを完了時刻の代理とする（GitHubはPRマージ時に紐づくIssueを自動クローズするため）。
+    not_planned でクローズされたIssue（着手せず却下・重複等）は成果ではないため除外する。
+    state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として計上する。
     複数アサインの場合は各担当者を満額で評価する。
 
     assigned_at は /issues/events から集計するが、取得件数に上限（MAX_EVENT_PAGES）があるため、
     アサイン済みでもイベントが窓から溢れて None になりうる。その場合は起点をIssue作成時刻に
     代替する。資料の計測区間「アサインから」からは外れ、アサイン待ち時間の分だけ経過時間が
-    長く出るが、完了した獲得SPが丸ごとスコアから消えるより実態に近い（作成〜アサインが極端に
-    空いた場合は SP/経過時間 が自然に0へ近づくため、最悪でもスキップ相当に劣化するだけ）。
+    長く出るが、完了した獲得SPが丸ごとスコアから消えるより実態に近い。
     """
-    values = {login: 0.0 for login in logins}
+    sp_sum = {login: 0 for login in logins}
+    hours_sum = {login: 0.0 for login in logins}
     for issue in issues:
         if issue.story_points is None or issue.closed_at is None:
             continue
+        if issue.state_reason == "not_planned":
+            continue
         for a in issue.assignees:
-            if a.login not in values:
+            if a.login not in sp_sum:
                 continue
             start = a.assigned_at or issue.gh_created_at
             elapsed_hours = (issue.closed_at - start).total_seconds() / 3600
-            if elapsed_hours <= 0:
-                continue
-            values[a.login] += issue.story_points / elapsed_hours
-    return values
+            sp_sum[a.login] += issue.story_points
+            hours_sum[a.login] += max(elapsed_hours, _MIN_ELAPSED_HOURS)
+    return {
+        login: sp_sum[login] / hours_sum[login] if hours_sum[login] > 0 else 0.0
+        for login in logins
+    }
 
 
 def _quality_values(
     prs: list[GitHubPullRequest],
-    issues: list[GitHubIssue],
     reviews: list[GitHubReview],
     logins: set[str],
 ) -> dict[str, float]:
@@ -190,8 +215,9 @@ def _quality_values(
 
     可用性は「他者にApproveされた自分のマージ済みPR数」を代理指標とする
     （docs/scoring_design.md「実装者以外のメンバーがレビュー・検証」）。
-    手戻りは同ドキュメントの定義どおり「バグ報告数 + PR再オープン回数」で数え、
-    バグ報告はbugラベルのIssueをアサインされた担当者に帰属させる。
+    手戻りはPR再オープン回数のみで数え、PR作者に帰属させる。scoring_design.md は
+    「バグ報告数 + PR再オープン回数」と定義するが、バグ報告を正しい原因者に帰属させる
+    手段がキャッシュに無いため、MVPでは再オープンのみとする（バグ報告の帰属は #75 で設計）。
     """
     approvers_by_pr: dict[int, set[str]] = {}
     for r in reviews:
@@ -206,13 +232,6 @@ def _quality_values(
         if pr.merged_at is not None and external_approvers:
             values[pr.author_login] += 1
         values[pr.author_login] -= pr.reopened_count
-
-    for issue in issues:
-        if not any(_BUG_LABEL_RE.search(label) for label in issue.labels):
-            continue
-        for a in issue.assignees:
-            if a.login in values:
-                values[a.login] -= 1
 
     return {login: max(0.0, v) for login, v in values.items()}
 
@@ -235,7 +254,7 @@ def compute_scores(
 
     activity = _activity_relative(prs, issues, reviews, logins)
     speed = _shares(_speed_values(issues, logins)) or zeros
-    quality = _shares(_quality_values(prs, issues, reviews, logins)) or zeros
+    quality = _shares(_quality_values(prs, reviews, logins)) or zeros
 
     # データが無いカテゴリ（例: SPラベル未運用でスピードが全員0）はその重みを配分せず、
     # 値を持つカテゴリだけで重みを正規化する。全員のスコアを同じ定数で割ることと等価なので
@@ -278,7 +297,11 @@ def compute_scores(
 async def get_project_scores(
     db: AsyncSession, project: Project, access_token: str, force: bool = False
 ) -> ScoreResponse:
-    """TTLに従いGitHubキャッシュを最新化してからスコアを計算する。"""
+    """TTLに従いGitHubキャッシュを最新化してからスコアを計算する。
+
+    force はダッシュボードの手動リフレッシュ（TTLを無視した強制再同期）の布石。
+    現状ルーターからは常に False だが、公開時にクエリパラメータで渡せるよう残す。
+    """
     await ensure_synced(db, project, access_token, fetch_and_store, force=force)
 
     cache = GitHubCacheRepository(db)

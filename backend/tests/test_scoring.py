@@ -9,11 +9,13 @@ from types import SimpleNamespace
 import pytest
 
 from app.services.scoring import (
+    _activity_relative,
     _collect_logins,
     _combine_equal,
     _quality_values,
     _shares,
     _speed_values,
+    _turnaround_values,
     compute_scores,
 )
 
@@ -33,12 +35,16 @@ def _pr(number, author, *, merged=True, created_day=1, reopened=0):
     )
 
 
-def _issue(number, author, *, sp=None, created_day=1, closed_day=None, assignees=(), labels=()):
+def _issue(
+    number, author, *, sp=None, created_day=1, closed_day=None,
+    assignees=(), labels=(), state_reason=None,
+):
     return SimpleNamespace(
         number=number,
         author_login=author,
         story_points=sp,
         labels=list(labels),
+        state_reason=state_reason,
         gh_created_at=_dt(created_day),
         closed_at=_dt(closed_day) if closed_day else None,
         assignees=[SimpleNamespace(login=a[0], assigned_at=_dt(a[1])) for a in assignees],
@@ -119,9 +125,22 @@ def test_combine_equal_all_inactive_returns_zeros():
 # _speed_values  (獲得SP ÷ 経過時間)
 # ---------------------------------------------------------------------------
 
-def test_speed_values_sp_over_elapsed_hours():
+def test_speed_values_total_sp_over_total_hours():
     issues = [_issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)])]  # 48h
     assert _speed_values(issues, {"alice"})["alice"] == pytest.approx(3 / 48)
+
+
+def test_speed_values_neutral_to_task_splitting():
+    """総SP÷総時間なので、同じ仕事を分割してもスコアは変わらない
+    （SP2×1件と SP1×2件が同じ経過時間合計なら等価）。"""
+    single = [_issue(10, "alice", sp=2, closed_day=3, assignees=[("alice", 1)])]  # 2/48
+    split = [
+        _issue(11, "alice", sp=1, closed_day=2, assignees=[("alice", 1)]),  # 24h
+        _issue(12, "alice", sp=1, closed_day=2, assignees=[("alice", 1)]),  # 24h
+    ]  # 合計 2SP / 48h
+    assert _speed_values(single, {"alice"})["alice"] == pytest.approx(
+        _speed_values(split, {"alice"})["alice"]
+    )
 
 
 def test_speed_values_skips_when_no_sp_or_not_closed():
@@ -130,6 +149,18 @@ def test_speed_values_skips_when_no_sp_or_not_closed():
     not_closed = [_issue(11, "alice", sp=3, assignees=[("alice", 1)])]
     assert _speed_values(no_sp, logins)["alice"] == 0.0
     assert _speed_values(not_closed, logins)["alice"] == 0.0
+
+
+def test_speed_values_excludes_not_planned_issues():
+    """Close as not planned で中止されたIssueは成果ではないためSPを計上しない。"""
+    issues = [_issue(10, "alice", sp=5, closed_day=3, assignees=[("alice", 1)], state_reason="not_planned")]
+    assert _speed_values(issues, {"alice"})["alice"] == 0.0
+
+
+def test_speed_values_counts_state_reason_none_as_completed():
+    """state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当で計上する。"""
+    issues = [_issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)], state_reason=None)]
+    assert _speed_values(issues, {"alice"})["alice"] == pytest.approx(3 / 48)
 
 
 def test_speed_values_falls_back_to_issue_creation_when_assigned_at_missing():
@@ -146,10 +177,11 @@ def test_speed_values_prefers_assigned_at_over_creation():
     assert _speed_values([issue], {"alice"})["alice"] == pytest.approx(3 / 24)
 
 
-def test_speed_values_ignores_nonpositive_elapsed():
-    # assigned_at (day 3) が closed_at (day 3, 00:00) 以降 → 経過0以下として無視
+def test_speed_values_clamps_tiny_elapsed():
+    """アサイン直後クローズ（経過0以下）は下限0.1hにクランプして巨大値を防ぐ。"""
+    # assigned_at (day 3) == closed_at (day 3, 00:00) → 経過0 → 0.1hにクランプ
     issues = [_issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 3)])]
-    assert _speed_values(issues, {"alice"})["alice"] == 0.0
+    assert _speed_values(issues, {"alice"})["alice"] == pytest.approx(3 / 0.1)
 
 
 # ---------------------------------------------------------------------------
@@ -159,45 +191,59 @@ def test_speed_values_ignores_nonpositive_elapsed():
 def test_quality_counts_externally_approved_merged_pr():
     prs = [_pr(1, "alice")]
     reviews = [_review(1, "bob", "APPROVED")]
-    assert _quality_values(prs, [], reviews, {"alice", "bob"})["alice"] == 1.0
+    assert _quality_values(prs, reviews, {"alice", "bob"})["alice"] == 1.0
 
 
 def test_quality_ignores_self_approval():
     prs = [_pr(1, "alice")]
     reviews = [_review(1, "alice", "APPROVED")]
-    assert _quality_values(prs, [], reviews, {"alice"})["alice"] == 0.0
+    assert _quality_values(prs, reviews, {"alice"})["alice"] == 0.0
 
 
 def test_quality_subtracts_reopened_and_floors_at_zero():
     prs = [_pr(1, "alice", reopened=2)]
     reviews = [_review(1, "bob", "APPROVED")]  # +1 availability, -2 rework → floored to 0
-    assert _quality_values(prs, [], reviews, {"alice", "bob"})["alice"] == 0.0
+    assert _quality_values(prs, reviews, {"alice", "bob"})["alice"] == 0.0
 
 
-@pytest.mark.parametrize("label", ["bug", "Bug", "type:bug", "bugfix"])
-def test_quality_subtracts_assigned_bug_reports(label):
-    # 可用性+2、bugラベルIssueのアサイン-1 → 1.0
-    prs = [_pr(1, "alice"), _pr(2, "alice", created_day=2)]
-    reviews = [_review(1, "bob", "APPROVED"), _review(2, "bob", "APPROVED", submitted_day=2)]
-    issues = [_issue(10, "carol", labels=[label], assignees=[("alice", 1)])]
-    assert _quality_values(prs, issues, reviews, {"alice", "bob"})["alice"] == 1.0
-
-
-def test_quality_ignores_non_bug_issues():
+def test_quality_rework_is_pr_reopen_only():
+    """手戻りはPR再オープンのみ。可用性1・再オープンなし → 満額のまま。
+    bugラベルによる帰属減点は廃止した（正しい帰属は #75 で設計）。"""
     prs = [_pr(1, "alice")]
     reviews = [_review(1, "bob", "APPROVED")]
-    issues = [_issue(10, "carol", labels=["enhancement"], assignees=[("alice", 1)])]
-    assert _quality_values(prs, issues, reviews, {"alice", "bob"})["alice"] == 1.0
+    assert _quality_values(prs, reviews, {"alice", "bob"})["alice"] == 1.0
 
 
-def test_quality_bug_report_charged_to_assignee_not_reporter():
+# ---------------------------------------------------------------------------
+# _activity_relative / _turnaround_values  (セルフレビュー除外)
+# ---------------------------------------------------------------------------
+
+def test_activity_excludes_self_review_comments():
+    """PR作者が自分のPRに付けたコメント（作者名義のCOMMENTEDレビュー）は
+    レビュー貢献に数えない。aliceのセルフコメントは無視され、実レビュアーbobのみ残る。"""
     prs = [_pr(1, "alice")]
-    reviews = [_review(1, "bob", "APPROVED")]
-    # bobが報告しaliceがアサインされたバグ → aliceの手戻りとして数える
-    issues = [_issue(10, "bob", labels=["bug"], assignees=[("alice", 1)])]
-    values = _quality_values(prs, issues, reviews, {"alice", "bob"})
-    assert values["alice"] == 0.0  # 可用性1 - バグ1
-    assert values["bob"] == 0.0
+    reviews = [
+        _review(1, "alice", "COMMENTED", comments=3),  # セルフコメント → 無視
+        _review(1, "bob", "COMMENTED", comments=1),    # 実レビュー
+    ]
+    activity = _activity_relative(prs, [], reviews, {"alice", "bob"})
+    # レビュー貢献はbobのみ。aliceの活動量は起票(PR1)由来だけで、レビュー分は乗らない
+    assert activity["bob"] > 0
+    # bobはレビュー貢献シェアを独占するので、レビュー系3指標でaliceを上回る
+    assert activity["bob"] > activity["alice"]
+
+
+def test_turnaround_excludes_self_review():
+    """セルフコメントはPR作成直後に付き経過時間ほぼ0の「爆速レビュー」になるため、
+    TATから除外する。除外しないとaliceの応答性が不当に跳ね上がる。"""
+    prs = [_pr(1, "alice", created_day=1), _pr(2, "bob", created_day=1)]
+    reviews = [
+        _review(1, "alice", "COMMENTED", submitted_day=1, submitted_hour=1),  # 自PR: 除外対象
+        _review(2, "alice", "APPROVED", submitted_day=3, submitted_hour=0),  # 他PRへの通常レビュー(48h)
+    ]
+    tat = _turnaround_values(prs, reviews, {"alice", "bob"})
+    # aliceのTATは他PR(48h)のみで算出される。自PRの1hが混ざれば平均が大きく下がるはず
+    assert tat["alice"] == pytest.approx(1 / (1 + 48))
 
 
 # ---------------------------------------------------------------------------
