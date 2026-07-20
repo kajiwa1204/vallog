@@ -50,6 +50,7 @@ class IssueData:
     title: str
     author_login: str
     state: IssueState
+    state_reason: str | None
     labels: list[str]
     story_points: int | None
     html_url: str
@@ -203,6 +204,7 @@ class GitHubCacheRepository:
                 "title": r.title,
                 "author_login": r.author_login,
                 "state": r.state,
+                "state_reason": r.state_reason,
                 "labels": r.labels,
                 "story_points": r.story_points,
                 "html_url": r.html_url,
@@ -219,6 +221,7 @@ class GitHubCacheRepository:
                 "title",
                 "author_login",
                 "state",
+                "state_reason",
                 "labels",
                 "story_points",
                 "html_url",

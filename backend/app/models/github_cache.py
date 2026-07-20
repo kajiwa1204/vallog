@@ -60,6 +60,9 @@ class GitHubIssue(Base):
     title: Mapped[str] = mapped_column(String, nullable=False)
     author_login: Mapped[str] = mapped_column(String, nullable=False)
     state: Mapped[str] = mapped_column(String, nullable=False)
+    # GitHubの state_reason（completed / not_planned / reopened / null）。
+    # スピード集計で not_planned（中止・却下）のIssueを除外するために使う
+    state_reason: Mapped[str | None] = mapped_column(String, nullable=True)
     # GitHub上の生ラベル名（表示・監査用）。story_points はここから抽出した派生値
     labels: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
     story_points: Mapped[int | None] = mapped_column(Integer, nullable=True)

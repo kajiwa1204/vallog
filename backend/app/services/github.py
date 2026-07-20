@@ -392,6 +392,7 @@ def _build_issue_rows(
                 title=i["title"],
                 author_login=_actor_login(i.get("user"), "issue.user"),
                 state=i["state"],
+                state_reason=i.get("state_reason"),
                 labels=labels,
                 story_points=_parse_story_points(labels),
                 html_url=i["html_url"],
