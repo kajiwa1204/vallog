@@ -68,6 +68,8 @@ frontend/
 │   │   │       └── distribution/page.tsx         # 分配シミュレーション（画面7）
 │   │   └── invite/[token]/page.tsx               # 招待リンク経由
 │   ├── components/
+│   │   ├── ChangeLogList.tsx                     # 変化ログの共有プリミティブ（第1層・#77・props駆動）
+│   │   ├── ChangeLogList.module.css
 │   │   └── ui/                                   # 汎用コンポーネント（自前実装）
 │   │       ├── Button.tsx
 │   │       ├── Button.module.css
@@ -77,7 +79,7 @@ frontend/
 │   │       └── Input.module.css
 │   ├── features/                                 # 機能別コンポーネント（画面内フラット）
 │   │   ├── dashboard/
-│   │   │   ├── TeamChangeLog.tsx                 # 主役: チーム変化ログ（第1層・AIなし）
+│   │   │   ├── TeamChangeLog.tsx                 # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
 │   │   │   ├── TeamChangeLog.module.css
 │   │   │   ├── MemberCard.tsx                    # 副次: スコアサマリー
 │   │   │   ├── MemberCard.module.css
@@ -85,7 +87,7 @@ frontend/
 │   │   │   ├── ScoreChart.module.css
 │   │   │   └── useDashboard.ts
 │   │   ├── distribution/
-│   │   │   ├── ChangeLogPanel.tsx               # 主役: 全メンバーの変化ログ（第1層）
+│   │   │   ├── ChangeLogPanel.tsx               # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
 │   │   │   ├── ChangeLogPanel.module.css
 │   │   │   ├── AllocationTable.tsx
 │   │   │   ├── AllocationTable.module.css
@@ -95,7 +97,7 @@ frontend/
 │   │   │   ├── EditHistoryTimeline.module.css
 │   │   │   └── useDistribution.ts
 │   │   ├── members/
-│   │   │   ├── ChangeLog.tsx                     # 主軸: そのメンバーの変化ログ（第1層）
+│   │   │   ├── ChangeLog.tsx                     # 主軸: ChangeLogList を包む薄いラッパー（単一メンバー）
 │   │   │   ├── ChangeLog.module.css
 │   │   │   ├── ScoreBreakdown.tsx                # 副次: カテゴリ別スコア内訳
 │   │   │   ├── ScoreBreakdown.module.css
@@ -109,7 +111,8 @@ frontend/
 │   │       ├── WeightEditor.module.css
 │   │       └── useProjects.ts
 │   ├── hooks/
-│   │   └── useAuth.ts                            # 認証状態管理（features横断）
+│   │   ├── useAuth.ts                            # 認証状態管理（features横断）
+│   │   └── useChangeLog.ts                       # 変化ログ取得（GET /projects/{id}/changelog・#77）
 │   ├── lib/
 │   │   ├── api.ts                                # トランスポート専任（fetch・認証・ApiError正規化）
 │   │   └── errorMessages.ts                      # APIエラーのユーザー向け日本語化（i18n）
