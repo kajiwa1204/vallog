@@ -18,6 +18,7 @@ backend/
 │   │   ├── projects.py              # GET/POST /projects, GET/PATCH /projects/{id}
 │   │   ├── members.py               # GET /projects/{id}/members
 │   │   ├── scores.py                # GET /projects/{id}/scores
+│   │   ├── changelog.py             # GET /projects/{id}/changelog（変化ログ・第1層・AIなし）
 │   │   ├── distribution.py          # GET/POST /projects/{id}/distributions
 │   │   └── summaries.py             # POST /projects/{id}/summaries
 │   ├── models/                      # SQLAlchemyモデル（エンティティ対応）
@@ -30,11 +31,13 @@ backend/
 │   │   ├── user.py                  # UserResponse
 │   │   ├── project.py               # ProjectCreate, ProjectResponse
 │   │   ├── score.py                 # ScoreResponse, MemberScore
+│   │   ├── changelog.py             # ChangeLogEntry, ChangeLogResponse
 │   │   ├── distribution.py          # ProposalCreate, ProposalResponse, ItemUpdate
 │   │   └── summary.py               # SummaryResponse
 │   ├── services/                    # ビジネスロジック
 │   │   ├── github.py                # GitHub APIクライアント・TTLキャッシュ管理
 │   │   ├── scoring.py               # スコア計算ロジック
+│   │   ├── changelog.py             # 変化ログ整形（PR/Issueを時系列マージ・既存キャッシュから読み取り）
 │   │   └── claude.py                # 貢献サマリー生成（Claude API）
 │   └── repositories/                # DBアクセス層
 │       ├── project.py               # ProjectRepository
@@ -65,6 +68,8 @@ frontend/
 │   │   │       └── distribution/page.tsx         # 分配シミュレーション（画面7）
 │   │   └── invite/[token]/page.tsx               # 招待リンク経由
 │   ├── components/
+│   │   ├── ChangeLogList.tsx                     # 変化ログの共有プリミティブ（第1層・#77・props駆動）
+│   │   ├── ChangeLogList.module.css
 │   │   └── ui/                                   # 汎用コンポーネント（自前実装）
 │   │       ├── Button.tsx
 │   │       ├── Button.module.css
@@ -74,23 +79,29 @@ frontend/
 │   │       └── Input.module.css
 │   ├── features/                                 # 機能別コンポーネント（画面内フラット）
 │   │   ├── dashboard/
-│   │   │   ├── MemberCard.tsx
+│   │   │   ├── TeamChangeLog.tsx                 # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
+│   │   │   ├── TeamChangeLog.module.css
+│   │   │   ├── MemberCard.tsx                    # 副次: スコアサマリー
 │   │   │   ├── MemberCard.module.css
-│   │   │   ├── ScoreChart.tsx
+│   │   │   ├── ScoreChart.tsx                    # 副次: スコア棒/円グラフ
 │   │   │   ├── ScoreChart.module.css
 │   │   │   └── useDashboard.ts
 │   │   ├── distribution/
+│   │   │   ├── ChangeLogPanel.tsx               # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
+│   │   │   ├── ChangeLogPanel.module.css
 │   │   │   ├── AllocationTable.tsx
 │   │   │   ├── AllocationTable.module.css
-│   │   │   ├── SummaryPanel.tsx
+│   │   │   ├── SummaryPanel.tsx                  # 第2層: 変化ログの詳細（AIサマリー）
 │   │   │   ├── SummaryPanel.module.css
 │   │   │   ├── EditHistoryTimeline.tsx
 │   │   │   ├── EditHistoryTimeline.module.css
 │   │   │   └── useDistribution.ts
 │   │   ├── members/
-│   │   │   ├── ScoreBreakdown.tsx
+│   │   │   ├── ChangeLog.tsx                     # 主軸: ChangeLogList を包む薄いラッパー（単一メンバー）
+│   │   │   ├── ChangeLog.module.css
+│   │   │   ├── ScoreBreakdown.tsx                # 副次: カテゴリ別スコア内訳
 │   │   │   ├── ScoreBreakdown.module.css
-│   │   │   ├── ContributionSummary.tsx
+│   │   │   ├── ContributionSummary.tsx           # 第2層: 変化ログの詳細（AIサマリー）
 │   │   │   ├── ContributionSummary.module.css
 │   │   │   └── useMemberDetail.ts
 │   │   └── projects/
@@ -100,7 +111,8 @@ frontend/
 │   │       ├── WeightEditor.module.css
 │   │       └── useProjects.ts
 │   ├── hooks/
-│   │   └── useAuth.ts                            # 認証状態管理（features横断）
+│   │   ├── useAuth.ts                            # 認証状態管理（features横断）
+│   │   └── useChangeLog.ts                       # 変化ログ取得（GET /projects/{id}/changelog・#77）
 │   ├── lib/
 │   │   ├── api.ts                                # トランスポート専任（fetch・認証・ApiError正規化）
 │   │   └── errorMessages.ts                      # APIエラーのユーザー向け日本語化（i18n）

@@ -39,9 +39,11 @@
 | distribution_proposals | 分配シミュレーション案 |
 | distribution_items | 分配案のメンバー別配分値 |
 | distribution_edit_logs | 分配案の編集履歴（透明性の担保） |
-| contribution_summaries | LLMが生成したメンバー貢献サマリーのキャッシュ（Tier 2） |
-| pr_summaries | LLMが生成したPR単位サマリーのキャッシュ（Tier 1） |
+| contribution_summaries | LLMが生成したメンバー貢献サマリーのキャッシュ（Tier 2・第2層） |
+| pr_summaries | LLMが生成したPR単位サマリーのキャッシュ（Tier 1・第2層） |
 | summary_jobs | サマリー生成のバックグラウンドジョブ（状態・進捗） |
+
+> **変化ログ（第1層）は新規テーブル不要**。既存の `github_pull_requests` / `github_issues` から時系列に整形して提供する（AIなし・読み取りのみ）。上記の summary 系3テーブルは、その詳細を担う第2層（AIサマリー）のキャッシュ。詳細は `docs/scoring_design.md`「変化ログと貢献サマリー」を参照。
 
 ---
 
