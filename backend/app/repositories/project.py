@@ -87,18 +87,15 @@ class ProjectRepository:
         )
 
     async def mark_syncing(self, project: Project, started_at: datetime) -> None:
-        project.github_syncing = True
         project.github_syncing_started_at = started_at
         await self.db.flush()
 
     async def mark_synced(self, project: Project, synced_at: datetime) -> None:
         project.github_synced_at = synced_at
-        project.github_syncing = False
         project.github_syncing_started_at = None
         await self.db.flush()
 
     async def clear_syncing(self, project: Project) -> None:
-        project.github_syncing = False
         project.github_syncing_started_at = None
         await self.db.flush()
 
