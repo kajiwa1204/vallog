@@ -12,6 +12,8 @@ import styles from "./page.module.css";
 const ERROR_MESSAGES: Record<string, string> = {
   auth_denied: "GitHub認証がキャンセルされました。もう一度お試しください。",
   auth_failed: "ログインに失敗しました。もう一度お試しください。",
+  auth_state_mismatch:
+    "認証リクエストを検証できませんでした。お手数ですが、この画面からもう一度ログインしてください。",
 };
 
 function LoginContent() {

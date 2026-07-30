@@ -1,6 +1,4 @@
 import secrets
-import uuid
-from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Cookie, Depends, Response, status
@@ -9,41 +7,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.errors import AppError, ErrorCode
-from app.core.security import (
-    REFRESH_TOKEN_EXPIRE_DAYS,
-    create_access_token,
-    create_refresh_token,
-    decode_refresh_token,
-)
-from app.repositories.refresh_token import RefreshTokenRepository
-from app.repositories.user import UserRepository
+from app.core.security import REFRESH_TOKEN_EXPIRE_DAYS
 from app.schemas.user import TokenResponse, UserResponse
-from app.services.auth import fetch_github_access_token, fetch_github_user
+from app.services.auth import login_with_github_code, revoke_session, rotate_session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 _REFRESH_COOKIE = "refresh_token"
 _OAUTH_STATE_COOKIE = "github_oauth_state"
+_OAUTH_STATE_MAX_AGE = 60 * 10
+_REFRESH_MAX_AGE = 60 * 60 * 24 * REFRESH_TOKEN_EXPIRE_DAYS
 _GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
 _GITHUB_SCOPES = "read:user"
 
 
-def _refresh_token_expires_at() -> datetime:
-    return datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-
-
-def _set_refresh_cookie(response: Response, token: str) -> None:
+def _cookie_secure() -> bool:
     # localhost（開発環境）では secure=False にしないと Cookie が送信されない
-    secure = settings.frontend_url.startswith("https://")
+    if settings.cookie_secure is not None:
+        return settings.cookie_secure
+    return settings.frontend_url.startswith("https://")
+
+
+def _set_auth_cookie(response: Response, key: str, value: str, max_age: int) -> None:
     response.set_cookie(
-        key=_REFRESH_COOKIE,
-        value=token,
+        key=key,
+        value=value,
         httponly=True,
-        secure=secure,
+        secure=_cookie_secure(),
         samesite="lax",
-        max_age=60 * 60 * 24 * REFRESH_TOKEN_EXPIRE_DAYS,
+        max_age=max_age,
+        path=settings.auth_cookie_path,
     )
+
+
+def _delete_auth_cookie(response: Response, key: str) -> None:
+    # path は set 時と一致させないと削除されない
+    response.delete_cookie(key=key, path=settings.auth_cookie_path)
+
+
+def _drop_legacy_root_cookies(response: Response) -> None:
+    """path を絞る前に発行した Path=/ の Cookie を掃除する。
+
+    残っていると同名Cookieが2つ送られ、Starlette のパースは後勝ちなので古い方
+    （Path=/）が読まれる。refresh では失効済みトークンとして再利用検知に当たり
+    続けるため、30日間ログインが壊れる。全セッションが入れ替わったら削除してよい。
+    """
+    if settings.auth_cookie_path == "/":
+        return
+    for key in (_REFRESH_COOKIE, _OAUTH_STATE_COOKIE):
+        response.delete_cookie(key=key, path="/")
 
 
 @router.get("/github")
@@ -53,51 +65,45 @@ async def login_github():
     url = f"{_GITHUB_AUTHORIZE_URL}?{urlencode({'client_id': settings.github_client_id, 'scope': _GITHUB_SCOPES, 'state': state})}"
 
     redirect = RedirectResponse(url)
-    secure = settings.frontend_url.startswith("https://")
-    redirect.set_cookie(
-        key=_OAUTH_STATE_COOKIE,
-        value=state,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        max_age=60 * 10,
-    )
+    _set_auth_cookie(redirect, _OAUTH_STATE_COOKIE, state, _OAUTH_STATE_MAX_AGE)
+    _drop_legacy_root_cookies(redirect)
     return redirect
 
 
 @router.get("/github/callback")
 async def github_callback(
     code: str | None = None,
+    state: str | None = None,
     error: str | None = None,
+    expected_state: str | None = Cookie(default=None, alias=_OAUTH_STATE_COOKIE),
     db: AsyncSession = Depends(get_db),
 ):
-    """GitHub からのコールバック。code を受け取り JWT を発行してフロントへリダイレクト。"""
+    """GitHub からのコールバック。code を検証してリフレッシュトークンを発行する。"""
     frontend_origin = settings.frontend_url.rstrip("/")
 
+    def failure(reason: str) -> RedirectResponse:
+        redirect = RedirectResponse(url=f"{frontend_origin}/?error={reason}")
+        _delete_auth_cookie(redirect, _OAUTH_STATE_COOKIE)
+        return redirect
+
     if error or code is None:
-        return RedirectResponse(url=f"{frontend_origin}/?error=auth_denied")
+        return failure("auth_denied")
 
-    github_token = await fetch_github_access_token(code)
-    github_user = await fetch_github_user(github_token)
+    # state を検証しないと、攻撃者が取得した code を踏ませて被害者のブラウザを
+    # 攻撃者のアカウントでログインさせられる（ログインCSRF）
+    if (
+        state is None
+        or expected_state is None
+        or not secrets.compare_digest(state, expected_state)
+    ):
+        return failure("auth_state_mismatch")
 
-    user = await UserRepository(db).upsert(
-        github_id=github_user["id"],
-        github_login=github_user["login"],
-        github_access_token=github_token,
-        avatar_url=github_user.get("avatar_url"),
-    )
-
-    jti = uuid.uuid4()
-    refresh_token = create_refresh_token(user.id, jti)
-    await RefreshTokenRepository(db).create(
-        jti=jti,
-        user_id=user.id,
-        expires_at=_refresh_token_expires_at(),
-    )
+    refresh_token = await login_with_github_code(db, code)
 
     redirect = RedirectResponse(url=f"{frontend_origin}/auth/callback")
-    redirect.delete_cookie(key=_OAUTH_STATE_COOKIE)
-    _set_refresh_cookie(redirect, refresh_token)
+    _delete_auth_cookie(redirect, _OAUTH_STATE_COOKIE)
+    _set_auth_cookie(redirect, _REFRESH_COOKIE, refresh_token, _REFRESH_MAX_AGE)
+    _drop_legacy_root_cookies(redirect)
     return redirect
 
 
@@ -108,48 +114,12 @@ async def refresh(
     db: AsyncSession = Depends(get_db),
 ):
     """リフレッシュトークン（Cookie）から新しいアクセストークンを発行する。"""
-    if refresh_token is None:
-        raise AppError(
-            status.HTTP_401_UNAUTHORIZED,
-            ErrorCode.AUTH_REFRESH_TOKEN_MISSING,
-            "Missing refresh token",
-        )
-
-    user_id, jti = decode_refresh_token(refresh_token)
-
-    repo = RefreshTokenRepository(db)
-    stored = await repo.get_by_jti(jti)
-
-    if stored is None:
-        raise AppError(status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
-
-    if stored.revoked_at is not None:
-        # 失効済みトークンの再利用 → このユーザーの全トークンを無効化
-        await repo.revoke_all_for_user(user_id)
-        raise AppError(
-            status.HTTP_401_UNAUTHORIZED,
-            ErrorCode.AUTH_TOKEN_REUSE_DETECTED,
-            "Token reuse detected",
-        )
-
-    user = await UserRepository(db).get_by_id(user_id)
-    if user is None:
-        raise AppError(
-            status.HTTP_401_UNAUTHORIZED, ErrorCode.AUTH_USER_NOT_FOUND, "User not found"
-        )
-
-    new_jti = await repo.rotate(
-        old_jti=jti,
-        user_id=user_id,
-        expires_at=_refresh_token_expires_at(),
-    )
-
-    new_access_token = create_access_token(user_id)
-    new_refresh_token = create_refresh_token(user_id, new_jti)
-    _set_refresh_cookie(response, new_refresh_token)
+    session = await rotate_session(db, refresh_token)
+    _set_auth_cookie(response, _REFRESH_COOKIE, session.refresh_token, _REFRESH_MAX_AGE)
+    _drop_legacy_root_cookies(response)
     return TokenResponse(
-        access_token=new_access_token,
-        user=UserResponse.model_validate(user),
+        access_token=session.access_token,
+        user=UserResponse.model_validate(session.user),
     )
 
 
@@ -160,10 +130,6 @@ async def logout(
     db: AsyncSession = Depends(get_db),
 ):
     """リフレッシュトークンを失効させて Cookie を削除する。"""
-    if refresh_token is not None:
-        try:
-            _, jti = decode_refresh_token(refresh_token)
-            await RefreshTokenRepository(db).revoke(jti)
-        except AppError:
-            pass  # 期限切れ・不正なトークンでもログアウト自体は成功させる
-    response.delete_cookie(key=_REFRESH_COOKIE)
+    await revoke_session(db, refresh_token)
+    _delete_auth_cookie(response, _REFRESH_COOKIE)
+    _drop_legacy_root_cookies(response)
