@@ -91,10 +91,17 @@ function LoginContent() {
             GitHubでログイン
           </button>
 
-          <p className={styles.note}>
-            ログインすることで、GitHubのリポジトリ情報（privateを含む）の読み取りを許可します。
-            GitHubの認可画面には書き込み権限も表示されますが、Vallogがリポジトリへ書き込むことはありません。
-          </p>
+          <div className={styles.noteGroup}>
+            <p className={styles.note}>
+              ログインすることで、GitHubのリポジトリ情報（privateを含む）の読み取りを許可します。
+            </p>
+            {/* GitHubの承認画面の文言はスコープから自動生成され、こちらでは変更できない。
+                「Full control」の表示で驚かせないよう、遷移前に実際の文字列を先出しする */}
+            {/* JSXの改行は半角スペースになるため、日本語の文は改行せず1行で書く */}
+            <p className={styles.noteDetail}>
+              GitHubの承認画面には「Full control of private repositories」と表示されます。GitHubにprivateを読み取るだけの権限が用意されていないためで、Vallogが読むのはPR・Issue・コミットのみです。リポジトリへの書き込みは一切行いません。
+            </p>
+          </div>
         </div>
       </div>
     </div>

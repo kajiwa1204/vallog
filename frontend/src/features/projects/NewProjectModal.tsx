@@ -123,17 +123,18 @@ export function NewProjectModal({ open, onClose }: Props) {
         />
 
         {!reposLoading && !privateAccess && (
-          <p className={styles.notice} role="status">
-            privateリポジトリは表示されていません。表示するには
+          <div className={styles.notice} role="status">
+            <p>
+              privateリポジトリは表示されていません。表示するにはGitHubでの再認可が必要です。承認画面には「Full control of private repositories」と表示されますが、Vallogが読むのはPR・Issue・コミットのみで、リポジトリへの書き込みは一切行いません。
+            </p>
             <button
               type="button"
               className={styles.noticeLink}
               onClick={() => startGitHubLogin("/projects")}
             >
-              GitHubで権限を再認可
+              GitHubで再認可する
             </button>
-            してください。
-          </p>
+          </div>
         )}
 
         <div className={styles.listWrap}>
@@ -172,8 +173,7 @@ export function NewProjectModal({ open, onClose }: Props) {
 
         {selectedRepo?.fork && (
           <p className={styles.notice} role="alert">
-            これはforkです。forkには上流リポジトリのPR・Issueが含まれないため、
-            貢献がほとんど集計されません。チームで開発しているリポジトリを選んでください。
+            これはforkです。forkには上流リポジトリのPR・Issueが含まれないため、貢献がほとんど集計されません。チームで開発しているリポジトリを選んでください。
           </p>
         )}
 
