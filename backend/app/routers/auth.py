@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.errors import AppError
 from app.core.security import REFRESH_TOKEN_EXPIRE_DAYS
 from app.schemas.user import TokenResponse, UserResponse
 from app.services.auth import login_with_github_code, revoke_session, rotate_session
@@ -84,6 +85,7 @@ async def github_callback(
     def failure(reason: str) -> RedirectResponse:
         redirect = RedirectResponse(url=f"{frontend_origin}/?error={reason}")
         _delete_auth_cookie(redirect, _OAUTH_STATE_COOKIE)
+        _drop_legacy_root_cookies(redirect)
         return redirect
 
     if error or code is None:
@@ -116,7 +118,16 @@ async def refresh(
     db: AsyncSession = Depends(get_db),
 ):
     """リフレッシュトークン（Cookie）から新しいアクセストークンを発行する。"""
-    session = await rotate_session(db, refresh_token)
+    try:
+        session = await rotate_session(db, refresh_token)
+    except AppError as e:
+        # 死んだリフレッシュCookieを持ち続けると、useAuth が毎マウントで
+        # refresh を叩いて401を繰り返し、ユーザーが自力で復帰できない。
+        # 旧 Path=/ Cookie の掃除もエラー応答では走らないため一緒に消す
+        scrub = Response()
+        _delete_auth_cookie(scrub, _REFRESH_COOKIE)
+        _drop_legacy_root_cookies(scrub)
+        raise e.with_cookies_from(scrub)
     _set_auth_cookie(response, _REFRESH_COOKIE, session.refresh_token, _REFRESH_MAX_AGE)
     _drop_legacy_root_cookies(response)
     return TokenResponse(

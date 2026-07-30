@@ -6,6 +6,7 @@ services/auth.py の判定ロジックだけを検証する。
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -208,6 +209,98 @@ async def test_rotate_prunes_expired_rows():
     assert row.jti in repo.rows
 
 
+# --- 本物の RefreshTokenRepository が発行するSQL ---
+#
+# 上のテストはリポジトリをフェイクに差し替えているため、実際に発行されるSQLは
+# 検証できていない（フェイクが本番ロジックを再実装しており、本物が壊れても緑の
+# まま通る）。実DBに繋ぐ結合テストの基盤整備は #70 のスコープなので、ここでは
+# 本物のリポジトリを呼び、セッションが受け取った文をコンパイルして突き合わせる。
+
+
+class _RecordingSession:
+    """execute() に渡された文を記録するだけの AsyncSession スタブ。"""
+
+    def __init__(self):
+        self.statements = []
+        self.added = []
+
+    async def execute(self, stmt):
+        self.statements.append(stmt)
+        return MagicMock()
+
+    def add(self, obj):
+        self.added.append(obj)
+
+    def compiled(self, index: int = 0) -> str:
+        from sqlalchemy.dialects import postgresql
+
+        return str(self.statements[index].compile(dialect=postgresql.dialect()))
+
+
+def _repo() -> tuple[object, _RecordingSession]:
+    from app.repositories.refresh_token import RefreshTokenRepository
+
+    session = _RecordingSession()
+    return RefreshTokenRepository(session), session
+
+
+async def test_get_by_jti_takes_a_row_lock_only_when_asked():
+    repo, session = _repo()
+
+    await repo.get_by_jti(uuid.uuid4())
+    assert "FOR UPDATE" not in session.compiled(0)
+
+    await repo.get_by_jti(uuid.uuid4(), for_update=True)
+    assert "FOR UPDATE" in session.compiled(1)
+
+
+async def test_rotate_revokes_the_old_row_and_inserts_a_new_one():
+    repo, session = _repo()
+
+    new_jti = await repo.rotate(
+        old_jti=uuid.uuid4(), user_id=_USER_ID, expires_at=datetime.now(timezone.utc)
+    )
+
+    sql = session.compiled(0)
+    assert "UPDATE refresh_tokens SET revoked_at" in sql
+    # 後継への参照はもう持たない（猶予期間の撤回に伴い削除）
+    assert "replaced_by" not in sql
+    assert [row.jti for row in session.added] == [new_jti]
+
+
+async def test_delete_expired_keeps_revoked_but_unexpired_rows():
+    """WHERE が user_id と expires_at だけで絞られている（revoked_at を見ない）。"""
+    repo, session = _repo()
+
+    await repo.delete_expired_for_user(_USER_ID, datetime.now(timezone.utc))
+
+    sql = session.compiled(0)
+    assert sql.startswith("DELETE FROM refresh_tokens")
+    assert "user_id =" in sql
+    assert "expires_at <" in sql
+    assert "revoked_at" not in sql
+
+
+async def test_revoke_all_for_user_only_touches_live_rows():
+    repo, session = _repo()
+
+    await repo.revoke_all_for_user(_USER_ID)
+
+    sql = session.compiled(0)
+    assert "UPDATE refresh_tokens SET revoked_at" in sql
+    assert "user_id =" in sql
+    assert "revoked_at IS NULL" in sql
+
+
+def test_refresh_token_model_has_no_rotation_chain_column():
+    assert "replaced_by_jti" not in RefreshToken.__table__.columns
+    # user_id の索引は全失効・掃除の WHERE で使うため残す
+    assert any(
+        list(index.columns) == [RefreshToken.__table__.c.user_id]
+        for index in RefreshToken.__table__.indexes
+    )
+
+
 # --- OAuth state 検証（ログインCSRF対策） ---
 
 
@@ -289,6 +382,70 @@ def test_logout_also_clears_the_legacy_root_scoped_cookie(client):
         if "refresh_token=" in c
     }
     assert paths == {"/api/auth", "/"}
+
+
+# --- /auth/refresh が401のときのCookie掃除 ---
+
+
+def _refresh_cookie_paths(res) -> set[str]:
+    return {
+        c.split("Path=")[1].split(";")[0]
+        for c in res.headers.get_list("set-cookie")
+        if 'refresh_token=""' in c
+    }
+
+
+def test_refresh_clears_cookies_when_rotation_fails(client):
+    """死んだCookieを持ち続けると useAuth が毎マウントで401を繰り返し復帰できない。
+
+    FastAPI は例外送出時に response パラメータの Set-Cookie をマージしないため、
+    AppError に積んで app_error_handler 側で出す必要がある。
+    """
+    with patch(
+        "app.routers.auth.rotate_session",
+        new=AsyncMock(
+            side_effect=AppError(
+                401, ErrorCode.AUTH_TOKEN_REUSE_DETECTED, "Token reuse detected"
+            )
+        ),
+    ):
+        res = client.post("/auth/refresh")
+
+    assert res.status_code == 401
+    assert res.json()["code"] == "AUTH_TOKEN_REUSE_DETECTED"
+    # 新Path・旧Path（移行前の Path=/）の両方を消す
+    assert _refresh_cookie_paths(res) == {"/api/auth", "/"}
+
+
+def test_refresh_error_response_has_no_duplicate_headers(client):
+    """Set-Cookie だけを足すこと。捨てResponseの content-length を混ぜてはいけない。"""
+    with patch(
+        "app.routers.auth.rotate_session",
+        new=AsyncMock(
+            side_effect=AppError(401, ErrorCode.AUTH_INVALID_TOKEN, "Invalid token")
+        ),
+    ):
+        res = client.post("/auth/refresh")
+
+    assert len(res.headers.get_list("content-length")) == 1
+    assert res.json()["detail"] == "Invalid token"
+
+
+def test_refresh_succeeds_without_touching_the_delete_cookies(client):
+    user = SimpleNamespace(id=_USER_ID, github_login="octocat", avatar_url=None)
+    session = SimpleNamespace(
+        access_token="new-access", refresh_token="new-refresh", user=user
+    )
+    with patch("app.routers.auth.rotate_session", new=AsyncMock(return_value=session)):
+        res = client.post("/auth/refresh")
+
+    assert res.status_code == 200
+    # 正常系では新しいトークンが発行され、削除Cookieは refresh_token では出ない
+    assert any(
+        "new-refresh" in c and "Path=/api/auth" in c
+        for c in res.headers.get_list("set-cookie")
+    )
+    assert _refresh_cookie_paths(res) == {"/"}
 
 
 def test_callback_accepts_matching_state_and_sets_refresh_cookie(client):
