@@ -19,7 +19,7 @@ from app.core.security import (
     decode_refresh_token,
 )
 from app.models.refresh_token import RefreshToken
-from app.services.auth import REFRESH_ROTATION_GRACE, rotate_session
+from app.services.auth import rotate_session
 
 _USER_ID = uuid.UUID("11111111-1111-1111-1111-111111111111")
 
@@ -35,7 +35,7 @@ class FakeRefreshTokenRepo:
         self.rows[jti] = row
         return row
 
-    async def get_by_jti(self, jti):
+    async def get_by_jti(self, jti, *, for_update=False):
         return self.rows.get(jti)
 
     async def revoke(self, jti):
@@ -52,7 +52,6 @@ class FakeRefreshTokenRepo:
         new_jti = uuid.uuid4()
         if old_jti in self.rows:
             self.rows[old_jti].revoked_at = datetime.now(timezone.utc)
-            self.rows[old_jti].replaced_by_jti = new_jti
         self.rows[new_jti] = RefreshToken(
             jti=new_jti, user_id=user_id, expires_at=expires_at
         )
@@ -74,7 +73,6 @@ def _live_token(**overrides) -> RefreshToken:
         expires_at=datetime.now(timezone.utc)
         + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS),
         revoked_at=None,
-        replaced_by_jti=None,
     )
     defaults.update(overrides)
     return RefreshToken(**defaults)
@@ -90,7 +88,7 @@ async def _rotate(repo: FakeRefreshTokenRepo, token: str | None):
         return await rotate_session(AsyncMock(), token)
 
 
-async def test_rotate_revokes_old_token_and_links_successor():
+async def test_rotate_revokes_old_token_and_issues_a_live_successor():
     row = _live_token()
     repo = FakeRefreshTokenRepo([row])
 
@@ -98,12 +96,47 @@ async def test_rotate_revokes_old_token_and_links_successor():
 
     _, new_jti = decode_refresh_token(session.refresh_token)
     assert row.revoked_at is not None
-    assert row.replaced_by_jti == new_jti
     assert repo.rows[new_jti].revoked_at is None
 
 
-async def test_concurrent_refresh_within_grace_returns_successor():
-    """複数タブが同じ旧トークンを送っても、強制ログアウトさせず後継を返す。"""
+async def test_rotate_takes_a_row_lock():
+    """行ロックを取らないと並行リクエストがチェーンを分岐させる。"""
+    row = _live_token()
+    repo = FakeRefreshTokenRepo([row])
+    calls: list[bool] = []
+    original = repo.get_by_jti
+
+    async def spy(jti, *, for_update=False):
+        calls.append(for_update)
+        return await original(jti, for_update=for_update)
+
+    repo.get_by_jti = spy  # type: ignore[method-assign]
+    await _rotate(repo, create_refresh_token(_USER_ID, row.jti))
+
+    assert calls == [True]
+
+
+async def test_revoked_token_is_always_reuse_and_revokes_every_token():
+    """失効済みトークンの再送は、失効直後であっても無条件で全失効させる。
+
+    誤爆の回避はクライアント側（navigator.locks によるタブ間直列化）の責務で、
+    サーバ側は猶予期間を持たない。猶予はサーバが検証できない当て推量であり、
+    その間隔でポーリングすれば再利用検知を恒久的に無効化できてしまう。
+    """
+    other_live = _live_token()
+    row = _live_token(revoked_at=datetime.now(timezone.utc))
+    repo = FakeRefreshTokenRepo([row, other_live])
+
+    with pytest.raises(AppError) as exc:
+        await _rotate(repo, create_refresh_token(_USER_ID, row.jti))
+
+    assert exc.value.code == ErrorCode.AUTH_TOKEN_REUSE_DETECTED
+    # 同一ユーザーの生きているトークンも巻き込んで失効させる
+    assert other_live.revoked_at is not None
+
+
+async def test_reuse_immediately_after_rotation_is_still_reuse():
+    """猶予期間を持たないことを、実際にローテーションした直後の再送で固定する。"""
     row = _live_token()
     repo = FakeRefreshTokenRepo([row])
     old_token = create_refresh_token(_USER_ID, row.jti)
@@ -111,51 +144,22 @@ async def test_concurrent_refresh_within_grace_returns_successor():
     first = await _rotate(repo, old_token)
     _, successor_jti = decode_refresh_token(first.refresh_token)
 
-    # 2枚目のタブが、Set-Cookie が届く前に読んだ旧トークンで再送してくる
-    second = await _rotate(repo, old_token)
-
-    _, second_jti = decode_refresh_token(second.refresh_token)
-    assert second_jti == successor_jti
-    assert repo.rows[successor_jti].revoked_at is None
-
-
-async def test_reuse_after_grace_period_revokes_every_token():
-    successor = _live_token()
-    row = _live_token(
-        revoked_at=datetime.now(timezone.utc) - REFRESH_ROTATION_GRACE - timedelta(seconds=1),
-        replaced_by_jti=successor.jti,
-    )
-    repo = FakeRefreshTokenRepo([row, successor])
-
     with pytest.raises(AppError) as exc:
-        await _rotate(repo, create_refresh_token(_USER_ID, row.jti))
+        await _rotate(repo, old_token)
 
     assert exc.value.code == ErrorCode.AUTH_TOKEN_REUSE_DETECTED
-    assert successor.revoked_at is not None
+    assert repo.rows[successor_jti].revoked_at is not None
 
 
-async def test_reuse_revokes_every_token_when_successor_already_rotated():
-    """世代が進んだ後に古いトークンが出てきたら盗用と見なす。"""
-    successor = _live_token(revoked_at=datetime.now(timezone.utc))
-    row = _live_token(
-        revoked_at=datetime.now(timezone.utc), replaced_by_jti=successor.jti
-    )
-    repo = FakeRefreshTokenRepo([row, successor])
-
-    with pytest.raises(AppError) as exc:
-        await _rotate(repo, create_refresh_token(_USER_ID, row.jti))
-
-    assert exc.value.code == ErrorCode.AUTH_TOKEN_REUSE_DETECTED
-
-
-async def test_revoked_token_without_successor_is_reuse():
-    row = _live_token(revoked_at=datetime.now(timezone.utc))
+async def test_token_belonging_to_another_user_is_rejected():
+    """JWTの sub とDB行の持ち主が食い違ったまま進むと他人のトークンを発行しうる。"""
+    row = _live_token(user_id=uuid.uuid4())
     repo = FakeRefreshTokenRepo([row])
 
     with pytest.raises(AppError) as exc:
         await _rotate(repo, create_refresh_token(_USER_ID, row.jti))
 
-    assert exc.value.code == ErrorCode.AUTH_TOKEN_REUSE_DETECTED
+    assert exc.value.code == ErrorCode.AUTH_INVALID_TOKEN
 
 
 async def test_token_expired_in_db_is_rejected():

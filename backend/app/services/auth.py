@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -14,17 +15,14 @@ from app.core.security import (
     create_refresh_token,
     decode_refresh_token,
 )
-from app.models.refresh_token import RefreshToken
 from app.models.user import User
 from app.repositories.refresh_token import RefreshTokenRepository
 from app.repositories.user import UserRepository
 
+logger = logging.getLogger(__name__)
+
 _GITHUB_TOKEN_URL = "https://github.com/login/oauth/access_token"
 _GITHUB_USER_URL = "https://api.github.com/user"
-
-# ローテーション直後は、Cookieを共有する複数タブが同じ旧トークンを送りうる。
-# この猶予期間内の再送は攻撃ではなく正常系として後継トークンを返す。
-REFRESH_ROTATION_GRACE = timedelta(seconds=30)
 
 
 async def fetch_github_access_token(code: str) -> str:
@@ -157,8 +155,14 @@ async def rotate_session(db: AsyncSession, refresh_token: str | None) -> AuthSes
 
     user_id, jti = decode_refresh_token(refresh_token)
     repo = RefreshTokenRepository(db)
-    stored = await repo.get_by_jti(jti)
+    # 行ロックを取らないと、並行リクエストが揃って未失効を読んでチェーンが分岐する
+    stored = await repo.get_by_jti(jti, for_update=True)
     if stored is None:
+        raise _invalid_token()
+
+    # 署名済みなので現状は一致するが、JWTの sub とDB行の持ち主が食い違ったまま
+    # 進むと他人のトークンを発行しうる
+    if stored.user_id != user_id:
         raise _invalid_token()
 
     now = datetime.now(timezone.utc)
@@ -167,7 +171,24 @@ async def rotate_session(db: AsyncSession, refresh_token: str | None) -> AuthSes
         raise _invalid_token()
 
     if stored.revoked_at is not None:
-        return await _reissue_within_grace(db, repo, stored, now)
+        # レースによる誤爆か真の盗用かを事後に切り分けるための計測。
+        # revoked_age が常に数十msなら並行リクエストが残っている疑い。
+        # トークン値は出さない（jti は識別子なので可）
+        logger.warning(
+            "refresh token reuse detected",
+            extra={
+                "user_id": str(stored.user_id),
+                "jti": str(stored.jti),
+                "revoked_age_seconds": (now - stored.revoked_at).total_seconds(),
+            },
+        )
+        await repo.revoke_all_for_user(stored.user_id)
+        await db.commit()
+        raise AppError(
+            status.HTTP_401_UNAUTHORIZED,
+            ErrorCode.AUTH_TOKEN_REUSE_DETECTED,
+            "Token reuse detected",
+        )
 
     user = await _load_user(db, user_id)
     new_jti = await repo.rotate(
@@ -180,35 +201,6 @@ async def rotate_session(db: AsyncSession, refresh_token: str | None) -> AuthSes
         access_token=create_access_token(user_id),
         refresh_token=create_refresh_token(user_id, new_jti),
         user=user,
-    )
-
-
-async def _reissue_within_grace(
-    db: AsyncSession,
-    repo: RefreshTokenRepository,
-    stored: RefreshToken,
-    now: datetime,
-) -> AuthSession:
-    """失効済みトークンの再送を、並行リクエストと真の再利用に切り分ける。"""
-    child = None
-    if stored.replaced_by_jti is not None and now - stored.revoked_at <= REFRESH_ROTATION_GRACE:
-        child = await repo.get_by_jti(stored.replaced_by_jti)
-
-    # 後継がない・後継も失効済み（＝さらに世代が進んだ後の再送）なら盗用と見なす
-    if child is None or child.revoked_at is not None or child.expires_at <= now:
-        await repo.revoke_all_for_user(stored.user_id)
-        await db.commit()
-        raise AppError(
-            status.HTTP_401_UNAUTHORIZED,
-            ErrorCode.AUTH_TOKEN_REUSE_DETECTED,
-            "Token reuse detected",
-        )
-
-    # 猶予期間内なので再ローテーションはせず、後継トークンをそのまま再発行する
-    return AuthSession(
-        access_token=create_access_token(stored.user_id),
-        refresh_token=create_refresh_token(stored.user_id, child.jti),
-        user=await _load_user(db, stored.user_id),
     )
 
 
