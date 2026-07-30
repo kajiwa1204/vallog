@@ -52,7 +52,15 @@ class RepoOption(BaseModel):
     name: str
     full_name: str
     private: bool
+    fork: bool
     description: str | None
+
+
+class RepoOptionList(BaseModel):
+    repos: list[RepoOption]
+    # トークンに repo スコープがあるか。false の場合 privateリポジトリは一覧に
+    # 含まれないため、フロントは再ログインを促す
+    private_access: bool
 
 
 class MemberResponse(BaseModel):

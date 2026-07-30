@@ -9,7 +9,13 @@ from app.core.errors import AppError, ErrorCode
 from app.models.project import InvitationLink, Project
 from app.models.user import User
 from app.repositories.project import ProjectRepository
-from app.schemas.project import InvitationCreateResponse, ProjectCreate, ProjectUpdate
+from app.schemas.project import (
+    InvitationCreateResponse,
+    ProjectCreate,
+    ProjectUpdate,
+    RepoOption,
+    RepoOptionList,
+)
 from app.services.github import GitHubClient
 
 INVITATION_TTL = timedelta(days=7)
@@ -89,6 +95,30 @@ async def get_valid_invitation(db: AsyncSession, token: str) -> InvitationLink:
             "Invitation link has expired",
         )
     return invitation
+
+
+async def list_selectable_repos(user: User) -> RepoOptionList:
+    """登録フォーム用のリポジトリ一覧。"""
+    async with GitHubClient(user.github_access_token) as client:
+        scopes = await client.get_granted_scopes()
+        repos = await client.list_viewer_repos()
+
+    options = [
+        RepoOption(
+            owner=r["owner"]["login"],
+            name=r["name"],
+            full_name=r["full_name"],
+            private=r["private"],
+            fork=r.get("fork", False),
+            description=r.get("description"),
+        )
+        for r in repos
+    ]
+    # forkは上流の貢献を持たないため、選び間違いを防ぐために後ろへ回す
+    # （sort は安定なので fork 内では pushed 順が保たれる）
+    options.sort(key=lambda o: o.fork)
+
+    return RepoOptionList(repos=options, private_access="repo" in scopes)
 
 
 async def join_via_invitation(db: AsyncSession, token: str, user: User) -> Project:

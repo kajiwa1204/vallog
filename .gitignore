@@ -26,6 +26,9 @@ postgres_data/
 .vscode/
 .idea/
 
+# ブラウザ検証時の生成物（スナップショット・コンソールログ）
+.playwright-mcp/
+
 *.swp
 
 # macosX

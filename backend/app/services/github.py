@@ -161,6 +161,16 @@ class GitHubClient:
             max_pages=5,
         )
 
+    async def get_granted_scopes(self) -> set[str]:
+        """トークンに付与されたスコープを返す。
+
+        スコープを増やしても既存トークンには反映されないため、再ログインが
+        必要かどうかの判定に使う。
+        """
+        res = await self._request("/user")
+        raw = res.headers.get("X-OAuth-Scopes", "")
+        return {s.strip() for s in raw.split(",") if s.strip()}
+
     async def get_contributors(self, owner: str, name: str) -> list[dict]:
         res = await self._request(f"/repos/{owner}/{name}/contributors", {"per_page": 100})
         if res.status_code == 204:

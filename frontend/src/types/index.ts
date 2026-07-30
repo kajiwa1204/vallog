@@ -43,7 +43,14 @@ export type RepoOption = {
   name: string;
   full_name: string;
   private: boolean;
+  fork: boolean;
   description: string | null;
+};
+
+export type RepoOptionList = {
+  repos: RepoOption[];
+  // false の場合、トークンに repo スコープがなく privateリポジトリが含まれない
+  private_access: boolean;
 };
 
 export type Member = {

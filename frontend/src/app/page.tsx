@@ -92,7 +92,8 @@ function LoginContent() {
           </button>
 
           <p className={styles.note}>
-            ログインすることで、GitHubの公開・所属リポジトリ情報の読み取りを許可します
+            ログインすることで、GitHubのリポジトリ情報（privateを含む）の読み取りを許可します。
+            GitHubの認可画面には書き込み権限も表示されますが、Vallogがリポジトリへ書き込むことはありません。
           </p>
         </div>
       </div>

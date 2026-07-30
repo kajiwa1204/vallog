@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { api } from "@/lib/api";
 import { messageForError } from "@/lib/errorMessages";
-import type { RepoOption, Project } from "@/types";
+import { startGitHubLogin } from "@/lib/auth";
+import type { RepoOption, RepoOptionList, Project } from "@/types";
 import styles from "./NewProjectModal.module.css";
 
 type Props = {
@@ -20,6 +21,7 @@ type Props = {
 export function NewProjectModal({ open, onClose }: Props) {
   const router = useRouter();
   const [repos, setRepos] = useState<RepoOption[]>([]);
+  const [privateAccess, setPrivateAccess] = useState(true);
   const [reposLoading, setReposLoading] = useState(false);
   const [reposError, setReposError] = useState<string | null>(null);
 
@@ -40,9 +42,10 @@ export function NewProjectModal({ open, onClose }: Props) {
 
     setReposLoading(true);
     api
-      .get<RepoOption[]>("/github/repos")
+      .get<RepoOptionList>("/github/repos")
       .then((data) => {
-        setRepos(data);
+        setRepos(data.repos);
+        setPrivateAccess(data.private_access);
         setReposLoading(false);
       })
       .catch((e) => {
@@ -119,6 +122,20 @@ export function NewProjectModal({ open, onClose }: Props) {
           id="repo-search"
         />
 
+        {!reposLoading && !privateAccess && (
+          <p className={styles.notice} role="status">
+            privateリポジトリは表示されていません。表示するには
+            <button
+              type="button"
+              className={styles.noticeLink}
+              onClick={() => startGitHubLogin("/projects")}
+            >
+              GitHubで権限を再認可
+            </button>
+            してください。
+          </p>
+        )}
+
         <div className={styles.listWrap}>
           {reposLoading && (
             <div className={styles.center}>
@@ -147,10 +164,18 @@ export function NewProjectModal({ open, onClose }: Props) {
                   {repo.private && (
                     <Badge tone="neutral">private</Badge>
                   )}
+                  {repo.fork && <Badge tone="ochre">fork</Badge>}
                 </button>
               );
             })}
         </div>
+
+        {selectedRepo?.fork && (
+          <p className={styles.notice} role="alert">
+            これはforkです。forkには上流リポジトリのPR・Issueが含まれないため、
+            貢献がほとんど集計されません。チームで開発しているリポジトリを選んでください。
+          </p>
+        )}
 
         <Input
           label="プロジェクト名（任意）"
