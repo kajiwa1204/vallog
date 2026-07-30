@@ -90,11 +90,13 @@ async def github_callback(
         return failure("auth_denied")
 
     # state を検証しないと、攻撃者が取得した code を踏ませて被害者のブラウザを
-    # 攻撃者のアカウントでログインさせられる（ログインCSRF）
+    # 攻撃者のアカウントでログインさせられる（ログインCSRF）。
+    # compare_digest は str 同士だと両方ASCIIでないと TypeError になり、
+    # 攻撃者が制御するクエリで未認証の500を作れてしまうため bytes で比較する
     if (
         state is None
         or expected_state is None
-        or not secrets.compare_digest(state, expected_state)
+        or not secrets.compare_digest(state.encode("utf-8"), expected_state.encode("utf-8"))
     ):
         return failure("auth_state_mismatch")
 

@@ -242,6 +242,31 @@ def test_callback_rejects_mismatched_state(client):
     login.assert_not_awaited()
 
 
+def test_callback_rejects_non_ascii_state_without_erroring(client):
+    """compare_digest は str 同士だと非ASCIIで TypeError になる（＝未認証で踏める500）。"""
+    client.cookies.set("github_oauth_state", "expected-state")
+
+    with patch("app.routers.auth.login_with_github_code", new=AsyncMock()) as login:
+        res = client.get("/auth/github/callback?code=abc&state=あいう")
+
+    assert res.status_code == 307
+    assert "error=auth_state_mismatch" in res.headers["location"]
+    login.assert_not_awaited()
+
+
+def test_callback_rejects_absurdly_long_state_without_erroring(client):
+    # 非ASCII1文字は %XX%XX%XX の9文字になるため、httpx のURL成分上限(65536)に
+    # 収まる範囲で最大級にする（5000文字 → エンコード後45KB）
+    client.cookies.set("github_oauth_state", "expected-state")
+
+    with patch("app.routers.auth.login_with_github_code", new=AsyncMock()) as login:
+        res = client.get(f"/auth/github/callback?code=abc&state={'あ' * 5_000}")
+
+    assert res.status_code == 307
+    assert "error=auth_state_mismatch" in res.headers["location"]
+    login.assert_not_awaited()
+
+
 def test_callback_rejects_missing_state_cookie(client):
     with patch("app.routers.auth.login_with_github_code", new=AsyncMock()) as login:
         res = client.get("/auth/github/callback?code=abc&state=some-state")
