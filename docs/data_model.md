@@ -68,8 +68,11 @@ users
   │                          ├── pr_summaries
   │                          └── summary_jobs
   │
+  ├── distribution_proposals（created_by / finalized_by）
   └── distribution_edit_logs（edited_by）
 ```
+
+> 分配の記録（案・編集履歴）から users への参照は `ON DELETE SET NULL`。退会しても合意内容と編集履歴そのものは残す（記録の全員公開が抑止力の根拠のため）。
 
 > GitHub OAuth App の資格情報（client_id / client_secret）はDBに持たず、環境変数で設定する
 
@@ -87,7 +90,9 @@ users
 
 ### distribution_edit_logs はJSONBスナップショット
 
-変更前後の `distribution_items` の状態をまるごとJSONBで保存する。カラムごとの差分ログよりフロント側でタイムライン表示を組みやすい。`reason`（調整理由）フィールドも持ち、UI側で入力必須とする。定性的な貢献の反映根拠はこのテキストで担保する。
+変更前後の案の状態（`distribution_items` の配分値 + 報酬総額 + カテゴリ重み）をまるごとJSONBで保存する。カラムごとの差分ログよりフロント側でタイムライン表示を組みやすい。`reason`（調整理由）フィールドも持ち、UI・APIともに入力必須とする。定性的な貢献の反映根拠はこのテキストで担保する。
+
+配分値だけでなく重みと総額もスナップショットに含めるのは、画面7で編集できる対象がこの3つで、どれが変わっても同じタイムラインで追えるようにするため（重みを変えると配分値がスコアから再計算されるため、重みは変更の原因として記録が要る）。
 
 ### GitHubキャッシュの更新戦略はTTLベース
 
