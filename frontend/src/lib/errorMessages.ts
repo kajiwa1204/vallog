@@ -28,7 +28,11 @@ export type ApiErrorCode =
   | "GITHUB_TOKEN_EXCHANGE_FAILED"
   | "GITHUB_USER_FETCH_FAILED"
   | "GITHUB_INVALID_RESPONSE"
-  | "SUMMARY_PR_NOT_FOUND";
+  | "SUMMARY_PR_NOT_FOUND"
+  | "DISTRIBUTION_NOT_FOUND"
+  | "DISTRIBUTION_FINALIZED"
+  | "DISTRIBUTION_NO_MEMBERS"
+  | "DISTRIBUTION_RATIO_TOTAL_INVALID";
 
 type ErrorMessageOverrides = {
   // エラーコードごとの上書き文言。同じステータスで意味が分かれる場合に使う
