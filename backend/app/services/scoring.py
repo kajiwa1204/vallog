@@ -242,9 +242,14 @@ def compute_scores(
     issues: list[GitHubIssue],
     reviews: list[GitHubReview],
     registered_logins: Iterable[str] = (),
+    weights: CategoryWeights | None = None,
 ) -> ScoreResponse:
-    """キャッシュ済みGitHubデータからプロジェクトのスコアを計算する（純粋関数・DBアクセスなし）。"""
-    weights = CategoryWeights(
+    """キャッシュ済みGitHubデータからプロジェクトのスコアを計算する（純粋関数・DBアクセスなし）。
+
+    weights はプロジェクトのデフォルト重みの上書き。分配案ごとに別の重みで比較する
+    ユースケース（画面7）のために受け取る。
+    """
+    weights = weights or CategoryWeights(
         activity=project.weight_activity,
         speed=project.weight_speed,
         quality=project.weight_quality,
@@ -295,7 +300,11 @@ def compute_scores(
 
 
 async def get_project_scores(
-    db: AsyncSession, project: Project, access_token: str, force: bool = False
+    db: AsyncSession,
+    project: Project,
+    access_token: str,
+    force: bool = False,
+    weights: CategoryWeights | None = None,
 ) -> ScoreResponse:
     """TTLに従いGitHubキャッシュを最新化してからスコアを計算する。
 
@@ -310,5 +319,10 @@ async def get_project_scores(
     reviews = await cache.list_reviews(project.id)
     members = await ProjectRepository(db).list_member_users(project.id)
     return compute_scores(
-        project, prs, issues, reviews, registered_logins=[u.github_login for u in members]
+        project,
+        prs,
+        issues,
+        reviews,
+        registered_logins=[u.github_login for u in members],
+        weights=weights,
     )
