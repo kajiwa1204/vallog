@@ -1,3 +1,8 @@
+from app.models.distribution import (
+    DistributionEditLog,
+    DistributionItem,
+    DistributionProposal,
+)
 from app.models.github_cache import (
     GitHubIssue,
     GitHubIssueAssignee,
@@ -22,4 +27,7 @@ __all__ = [
     "PRSummary",
     "ContributionSummary",
     "SummaryJob",
+    "DistributionProposal",
+    "DistributionItem",
+    "DistributionEditLog",
 ]
