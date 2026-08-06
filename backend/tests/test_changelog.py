@@ -213,13 +213,22 @@ def test_entries_are_sorted_newest_first_and_limited():
 # build_changelog: 事実注記
 # ---------------------------------------------------------------------------
 
-def test_pr_notes_record_turnaround_and_external_review():
+def test_pr_notes_record_first_review_wait_and_external_review():
     prs = [_pr(1, "alice", created_day=1)]
     reviews = [_review(1, "bob", day=1, hour=5)]
     entries = build_changelog(prs, [], reviews).entries
     notes = next(e for e in entries if e.kind == "pull_request").notes
     assert notes.reviewed_by_others is True
-    assert notes.turnaround_hours == 5.0
+    assert notes.first_review_hours == 5.0
+
+
+def test_review_notes_record_the_reviewers_own_response_time():
+    """PR行の first_review_hours と同じ区間だが、レビュアー側から見た値なので別フィールド。"""
+    prs = [_pr(1, "alice", created_day=1)]
+    entries = build_changelog(prs, [], [_review(1, "bob", day=2, hour=0)]).entries
+    notes = next(e for e in entries if e.kind == "review").notes
+    assert notes.response_hours == 24.0
+    assert notes.first_review_hours is None
 
 
 def test_pr_notes_mark_unreviewed_when_only_self_review_exists():
@@ -227,7 +236,22 @@ def test_pr_notes_mark_unreviewed_when_only_self_review_exists():
     reviews = [_review(1, "alice", "COMMENTED", day=1, hour=5)]
     pr_entry = next(e for e in build_changelog(prs, [], reviews).entries if e.kind == "pull_request")
     assert pr_entry.notes.reviewed_by_others is False
-    assert pr_entry.notes.turnaround_hours is None
+    assert pr_entry.notes.first_review_hours is None
+
+
+def test_bot_review_does_not_mark_a_pull_request_as_reviewed():
+    """注記は必ず一覧上で辿れる、が変化ログの前提。
+
+    botのレビュー行は一覧に出さないので、これを数えると「他者レビュー済み・待ち時間1.0h」と
+    書いてあるのに根拠の行がどこにも無い状態になる。scoring.py も bot を除いたログイン集合で
+    ループしており数えないため、揃えないと同じデータから画面ごとに違う事実が出る。
+    """
+    prs = [_pr(2, "alice", created_day=1)]
+    reviews = [_review(2, "coderabbitai[bot]", day=1, hour=1)]
+    entries = build_changelog(prs, [], reviews).entries
+    assert [e.kind for e in entries] == ["pull_request"]
+    assert entries[0].notes.reviewed_by_others is False
+    assert entries[0].notes.first_review_hours is None
 
 
 def test_pr_notes_carry_draft_and_reopened_count():
@@ -235,9 +259,13 @@ def test_pr_notes_carry_draft_and_reopened_count():
     assert (notes.draft, notes.reopened_count) == (True, 2)
 
 
-def test_issue_notes_carry_story_points():
+def test_issue_notes_leave_pr_only_facts_unset():
+    """「非適用」と「意味のあるゼロ」を区別する。Issueに再オープンの概念は適用しない。"""
     notes = build_changelog([], [_issue(10, "bob", sp=5)], []).entries[0].notes
     assert notes.story_points == 5
+    assert notes.reopened_count is None
+    assert notes.draft is None
+    assert notes.reviewed_by_others is None
 
 
 # ---------------------------------------------------------------------------
@@ -307,3 +335,27 @@ def test_no_member_filter_returns_whole_team():
     prs = [_pr(1, "alice"), _pr(2, "bob")]
     entries = build_changelog(prs, [], []).entries
     assert {e.number for e in entries} == {1, 2}
+
+
+def test_empty_member_is_treated_as_no_filter():
+    """`?member=` は FastAPI では "" になる。絞り込むと0件になり「データが無い」に見える。"""
+    prs = [_pr(1, "alice"), _pr(2, "bob")]
+    entries = build_changelog(prs, [], [], member="").entries
+    assert {e.number for e in entries} == {1, 2}
+
+
+# ---------------------------------------------------------------------------
+# build_changelog: 打ち切り
+# ---------------------------------------------------------------------------
+
+def test_has_more_is_true_when_entries_are_truncated():
+    prs = [_pr(n, "alice", created_day=n) for n in range(1, 6)]
+    res = build_changelog(prs, [], [], limit=3)
+    assert (len(res.entries), res.has_more) == (3, True)
+
+
+def test_has_more_is_false_when_the_result_fits_exactly():
+    """ちょうど limit 件のときに True を返すと、フロントが空の「もっと見る」を出す。"""
+    prs = [_pr(n, "alice", created_day=n) for n in range(1, 4)]
+    res = build_changelog(prs, [], [], limit=3)
+    assert (len(res.entries), res.has_more) == (3, False)

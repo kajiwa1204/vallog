@@ -46,16 +46,25 @@ def _reviews_by_pr(reviews: list[GitHubReview]) -> dict[int, list[GitHubReview]]
 def _first_external_review(
     pr: GitHubPullRequest, reviews: list[GitHubReview]
 ) -> GitHubReview | None:
-    """PR作者以外による最初のレビュー。
+    """PR作者以外の人間による最初のレビュー。
 
     PR作者が自分のPRにインラインコメントを付けるとGitHubは作者名義のCOMMENTEDレビューを
     作る。これを「レビューされた」と数えるとセルフコメントだけでレビュー済みに見えてしまう
     ため除外する（services/scoring.py の _is_self_review と同じ理由）。
+
+    bot（coderabbit等）のレビューも除外する。botのレビュー行は一覧に出さない方針なので、
+    ここで数えると「他者レビュー済み・待ち時間3.2h」と注記されているのに、その根拠となる
+    行がログのどこにも無い状態になる。注記は必ず一覧上で辿れる、が変化ログの前提であり、
+    検証できない注記を出すのはその前提を壊す。services/scoring.py も bot を除いた
+    ログイン集合でループするため数えておらず、揃えないと同じデータから画面ごとに違う
+    事実が出る。
     """
     external = [
         r
         for r in reviews
-        if r.reviewer_login != pr.author_login and r.submitted_at is not None
+        if r.reviewer_login != pr.author_login
+        and not is_excluded_login(r.reviewer_login)
+        and r.submitted_at is not None
     ]
     if not external:
         return None
@@ -80,7 +89,7 @@ def _pr_entry(pr: GitHubPullRequest, reviews: list[GitHubReview]) -> ChangeLogEn
         occurred_at=pr.merged_at or pr.closed_at or pr.gh_created_at,
         html_url=pr.html_url,
         notes=ChangeLogNotes(
-            turnaround_hours=(
+            first_review_hours=(
                 _elapsed_hours(pr.gh_created_at, first_review.submitted_at)
                 if first_review is not None
                 else None
@@ -132,7 +141,7 @@ def _review_entry(review: GitHubReview, pr: GitHubPullRequest) -> ChangeLogEntry
         occurred_at=review.submitted_at,
         html_url=review.html_url,
         notes=ChangeLogNotes(
-            turnaround_hours=_elapsed_hours(pr.gh_created_at, review.submitted_at)
+            response_hours=_elapsed_hours(pr.gh_created_at, review.submitted_at)
         ),
     )
 
@@ -153,7 +162,16 @@ def build_changelog(
 
     member を渡すとそのメンバーの変化だけに絞る（画面5・画面7で再利用）。
     絞り込みは「本人がPRを出した / Issueを起票または担当した / レビューを出した」を対象とする。
+
+    同じPRへの複数レビューは畳まず、レビュー1件を1行として出す。GitHubはインラインコメントの
+    バッチごとに別レビューを作るため1つのPRで数行を占めうるが、会話が往復した事実そのもの
+    なので潰さない。limit を食う問題は has_more で「続きがある」と伝える方向で解く。
+    実画面（#13）で読みづらければ (pr_number, reviewer_login) 単位の畳み込みを再検討する。
     """
+    # `?member=` のように値なしで渡ると FastAPI は "" を入れる。そのまま絞り込むと誰にも
+    # 一致せず0件になり、フロントには「データが無い」と区別が付かないため未指定に倒す
+    member = member or None
+
     pr_by_number = {pr.number: pr for pr in prs}
     reviews_by_pr = _reviews_by_pr(reviews)
 
@@ -198,7 +216,9 @@ def build_changelog(
         entries.append(_review_entry(review, pr))
 
     entries.sort(key=lambda e: e.occurred_at, reverse=True)
-    return ChangeLogResponse(entries=entries[:limit])
+    # 全件読んでから切れるのは、キャッシュ自体が同期側で頭打ちになっているため
+    # （services/github.py の MAX_LIST_PAGES 参照）
+    return ChangeLogResponse(entries=entries[:limit], has_more=len(entries) > limit)
 
 
 async def get_changelog(

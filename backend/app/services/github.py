@@ -34,7 +34,16 @@ FetchAndStore = Callable[["GitHubClient", Project, AsyncSession], Awaitable[None
 # フラグが残り続けて二度と再同期されなくなるのを防ぐための上限時間
 STALE_SYNC_THRESHOLD = timedelta(minutes=10)
 
-# 1回の同期で取得する上限ページ数・PR数。レート制限（5,000 req/h）の予算内に収める
+# 1回の同期で取得する上限ページ数・PR数。レート制限（5,000 req/h）の予算内に収める。
+#
+# MAX_LIST_PAGES=5（× per_page=100）で PR・Issue は各500件が上限になる。これはレート制限
+# だけの都合ではなく、**貢献評価の周期が四半期であること**を前提にした設計判断。1四半期に
+# 500件を超えるPRが動くチームは想定しておらず、企業に導入する場合でも直近500件あれば1Qの
+# 評価は成立する、という見立てで置いている。
+#
+# したがって古い履歴がキャッシュに載らないのは仕様であり、欠陥ではない。上限を上げる必要が
+# 出るのは「評価対象期間の変化がこの件数を超える」ときに限られ、そのときは件数ではなく
+# 期間（updated_at ベースの差分同期）で切る設計に変えるべき。
 MAX_LIST_PAGES = 5
 MAX_EVENT_PAGES = 10
 MAX_REVIEW_TARGETS = 100
