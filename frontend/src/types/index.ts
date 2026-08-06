@@ -200,3 +200,39 @@ export type PRSummaryItem = {
   generated_at: string | null;
   job: SummaryJob | null;
 };
+
+// 変化ログ（第1層・AIなし）。backend/app/schemas/changelog.py と対応する
+export type ChangeKind = "pull_request" | "issue" | "review";
+
+// 各フィールドが null 許容なのは「非適用」と「意味のあるゼロ」を区別するため。
+// Issue行の reopened_count は 0 ではなく null（再オープンの概念を適用しない）で来る
+export type ChangeLogNotes = {
+  story_points: number | null;
+  // PR行のみ: 作成から最初の他者レビューまで（PR作者の待ち時間）
+  first_review_hours: number | null;
+  // レビュー行のみ: PR作成から自分が出すまで（レビュアーの応答時間）
+  response_hours: number | null;
+  reviewed_by_others: boolean | null;
+  reopened_count: number | null;
+  draft: boolean | null;
+};
+
+export type ChangeLogEntry = {
+  // number は kind をまたいで衝突するため、一覧のキーには id を使う
+  id: string;
+  kind: ChangeKind;
+  number: number;
+  title: string;
+  actor_login: string;
+  // PR: merged/open/closed、Issue: open/closed/not_planned、
+  // レビュー: approved/changes_requested/commented/dismissed
+  state: string;
+  occurred_at: string;
+  html_url: string;
+  notes: ChangeLogNotes;
+};
+
+export type ChangeLogResponse = {
+  entries: ChangeLogEntry[];
+  has_more: boolean;
+};
