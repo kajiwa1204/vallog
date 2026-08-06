@@ -136,6 +136,12 @@ export function NeedsAttention({
           },
         ].filter((group) => group.rows.length > 0);
 
+  // 自分が動かせるもの（レビューできる／自分の番）があるか。他人待ちの
+  // 「あなたのPRが待っています」は自分では動かせないので用事に数えない
+  const hasOwnBusiness = rows.some(
+    (row) => (row.kind === "review" && !row.mine) || (row.mine && row.kind !== "review"),
+  );
+
   return (
     <Card
       title="気にかけること"
@@ -150,6 +156,13 @@ export function NeedsAttention({
       <p className={styles.subtitle}>
         レビュー待ち・修正待ち・担当のまま止まっているIssue
       </p>
+
+      {/* 日常の入口として最初に答えるべきは「自分は今日、何かする必要があるか」
+          （docs/screen_design.md 画面4）。自分向けの群が消えるだけだと、用事が
+          無いことを確かめるのに残りを読ませることになる */}
+      {rows.length > 0 && me !== null && !hasOwnBusiness && (
+        <p className={styles.clear}>いま自分がやることはありません</p>
+      )}
 
       {rows.length === 0 ? (
         <p className={styles.empty}>止まっているものはありません</p>
