@@ -24,11 +24,17 @@ class ChangeLogNotes(BaseModel):
 
 
 class ChangeLogEntry(BaseModel):
+    # エントリの一意キー。number は kind をまたいで衝突する（PR #91 と、その
+    # PRへのレビューはどちらも number=91）ため、一覧のキーには使えない。
+    # 同一人物が同じPRに複数回レビューする場合もあるので、レビューは番号ではなく
+    # レビュー自身のIDで識別する
+    id: str
     kind: ChangeKind
     number: int
     title: str
     actor_login: str
-    # 正規化済みの状態。PR: merged/open/closed、Issue: open/closed、
+    # 正規化済みの状態。PR: merged/open/closed、
+    # Issue: open/closed/not_planned（却下・重複でのクローズを完了と区別する）、
     # レビュー: approved/changes_requested/commented/dismissed（小文字）
     state: str
     occurred_at: datetime

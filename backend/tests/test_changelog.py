@@ -44,13 +44,22 @@ def _pr(
 
 
 def _issue(
-    number, author, *, sp=None, created_day=1, closed_day=None, assignees=(), title=None
+    number,
+    author,
+    *,
+    sp=None,
+    created_day=1,
+    closed_day=None,
+    assignees=(),
+    title=None,
+    state_reason=None,
 ):
     return SimpleNamespace(
         number=number,
         title=title or f"Issue {number}",
         author_login=author,
         state="closed" if closed_day else "open",
+        state_reason=state_reason,
         story_points=sp,
         html_url=f"https://github.com/o/r/issues/{number}",
         gh_created_at=_dt(created_day),
@@ -59,12 +68,14 @@ def _issue(
     )
 
 
-def _review(number, reviewer, state="APPROVED", *, day=2, hour=0, submitted=True):
+def _review(number, reviewer, state="APPROVED", *, day=2, hour=0, submitted=True, github_id=None):
+    review_id = github_id if github_id is not None else number * 1000
     return SimpleNamespace(
+        github_id=review_id,
         pr_number=number,
         reviewer_login=reviewer,
         state=state,
-        html_url=f"https://github.com/o/r/pull/{number}#review",
+        html_url=f"https://github.com/o/r/pull/{number}#pullrequestreview-{review_id}",
         submitted_at=_dt(day, hour) if submitted else None,
     )
 
@@ -133,6 +144,29 @@ def test_pr_occurred_at_falls_back_to_closed_then_created():
     assert (still_open.state, still_open.occurred_at) == ("open", _dt(1))
 
 
+def test_closed_issue_keeps_completed_and_rejected_apart():
+    """却下・重複でのクローズを「片付けた仕事」と同じ closed で並べない。
+
+    #18 で分配の根拠（レシート）として読まれるため、着手せず閉じた起票が完遂した
+    Issueと見分けられないと不当な評価になる。
+    """
+    completed = _issue(10, "bob", closed_day=4, state_reason="completed")
+    rejected = _issue(11, "bob", closed_day=4, state_reason="not_planned")
+    states = {e.number: e.state for e in build_changelog([], [completed, rejected], []).entries}
+    assert states == {10: "closed", 11: "not_planned"}
+
+
+def test_closed_issue_without_state_reason_counts_as_completed():
+    """次回同期前の既存キャッシュは state_reason が NULL。completed 相当に倒す。"""
+    entry = build_changelog([], [_issue(10, "bob", closed_day=4)], []).entries[0]
+    assert entry.state == "closed"
+
+
+def test_open_issue_is_never_marked_not_planned():
+    entry = build_changelog([], [_issue(10, "bob", state_reason="not_planned")], []).entries[0]
+    assert entry.state == "open"
+
+
 def test_issue_occurred_at_uses_closed_then_created():
     closed = build_changelog([], [_issue(10, "bob", closed_day=4)], []).entries[0]
     assert (closed.state, closed.occurred_at) == ("closed", _dt(4))
@@ -150,6 +184,25 @@ def test_review_entry_borrows_title_from_its_pull_request():
     assert review.actor_login == "bob"
 
 
+def test_id_separates_a_pull_request_from_its_own_reviews():
+    """number は kind をまたいで衝突するので、一覧のキーには id を使う。"""
+    prs = [_pr(91, "alice")]
+    entries = build_changelog(prs, [], [_review(91, "bob")]).entries
+    assert {e.number for e in entries} == {91}
+    assert len({e.id for e in entries}) == 2
+
+
+def test_id_separates_repeated_reviews_by_the_same_person():
+    """同じ人が同じPRに複数回レビューしても、レビュー自身のIDで区別できる。"""
+    prs = [_pr(91, "alice")]
+    reviews = [
+        _review(91, "bob", "COMMENTED", day=2, github_id=1),
+        _review(91, "bob", "APPROVED", day=3, github_id=2),
+    ]
+    review_ids = {e.id for e in build_changelog(prs, [], reviews).entries if e.kind == "review"}
+    assert review_ids == {"review:1", "review:2"}
+
+
 def test_entries_are_sorted_newest_first_and_limited():
     prs = [_pr(n, "alice", created_day=n, merged_day=n) for n in range(1, 6)]
     entries = build_changelog(prs, [], [], limit=3).entries
@@ -163,7 +216,8 @@ def test_entries_are_sorted_newest_first_and_limited():
 def test_pr_notes_record_turnaround_and_external_review():
     prs = [_pr(1, "alice", created_day=1)]
     reviews = [_review(1, "bob", day=1, hour=5)]
-    notes = build_changelog(prs, [], reviews).entries[-1].notes
+    entries = build_changelog(prs, [], reviews).entries
+    notes = next(e for e in entries if e.kind == "pull_request").notes
     assert notes.reviewed_by_others is True
     assert notes.turnaround_hours == 5.0
 
@@ -196,6 +250,19 @@ def test_bot_and_unknown_activity_is_dropped():
     reviews = [_review(2, "dependabot[bot]")]
     entries = build_changelog(prs, issues, reviews).entries
     assert [(e.kind, e.number) for e in entries] == [("pull_request", 2)]
+
+
+def test_human_review_on_a_bot_pull_request_is_kept():
+    """除外はレビュアー本人にだけかける。対象PRの作者がbotでもレビューは残す。
+
+    レビューは責任を伴う実労働で、依存更新PRのレビューも例外ではない。ここを落とすと
+    セキュリティ更新を丁寧に見ている人の仕事が #18 の分配根拠から消える。
+    bot作者のPR行自体は落ちるので、レビュー行だけが並ぶ状態になるのは意図通り。
+    """
+    prs = [_pr(50, "dependabot[bot]", title="Bump next from 15.4.2 to 15.5.21")]
+    entries = build_changelog(prs, [], [_review(50, "alice")]).entries
+    assert [(e.kind, e.actor_login) for e in entries] == [("review", "alice")]
+    assert entries[0].title == "Bump next from 15.4.2 to 15.5.21"
 
 
 def test_self_review_does_not_become_its_own_entry():

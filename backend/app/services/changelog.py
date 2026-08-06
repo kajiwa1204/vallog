@@ -71,6 +71,7 @@ def _elapsed_hours(start: datetime, end: datetime) -> float | None:
 def _pr_entry(pr: GitHubPullRequest, reviews: list[GitHubReview]) -> ChangeLogEntry:
     first_review = _first_external_review(pr, reviews)
     return ChangeLogEntry(
+        id=f"pull_request:{pr.number}",
         kind="pull_request",
         number=pr.number,
         title=pr.title,
@@ -91,13 +92,29 @@ def _pr_entry(pr: GitHubPullRequest, reviews: list[GitHubReview]) -> ChangeLogEn
     )
 
 
+def _issue_state(issue: GitHubIssue) -> str:
+    """却下・重複でのクローズを完了と区別する。
+
+    GitHubはどちらも state="closed" にするため、state_reason を見ないと
+    「片付けた仕事」と「着手せず閉じた起票」が同じ見た目で並ぶ。変化ログは #18 で
+    分配の根拠（レシート）として読まれるので、この2つは分けて出す必要がある。
+    services/scoring.py も同じ理由で not_planned をスピード集計から除外している。
+
+    state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として扱う。
+    """
+    if issue.state == "closed" and issue.state_reason == "not_planned":
+        return "not_planned"
+    return issue.state
+
+
 def _issue_entry(issue: GitHubIssue) -> ChangeLogEntry:
     return ChangeLogEntry(
+        id=f"issue:{issue.number}",
         kind="issue",
         number=issue.number,
         title=issue.title,
         actor_login=issue.author_login,
-        state=issue.state,
+        state=_issue_state(issue),
         occurred_at=issue.closed_at or issue.gh_created_at,
         html_url=issue.html_url,
         notes=ChangeLogNotes(story_points=issue.story_points),
@@ -106,6 +123,7 @@ def _issue_entry(issue: GitHubIssue) -> ChangeLogEntry:
 
 def _review_entry(review: GitHubReview, pr: GitHubPullRequest) -> ChangeLogEntry:
     return ChangeLogEntry(
+        id=f"review:{review.github_id}",
         kind="review",
         number=review.pr_number,
         title=pr.title,
@@ -167,6 +185,14 @@ def build_changelog(
         # 一次リンクの文脈も出せないため、その1件だけ落とす
         if pr is None:
             continue
+        # 対象PRの作者がbotでも、人間が出したレビューは残す（除外はレビュアー本人にだけ
+        # かける）。レビューは責任を伴う実労働で、依存更新PRのレビューも例外ではない。
+        # ここを落とすと、セキュリティ更新を丁寧に見ている人の仕事が #18 の分配根拠から
+        # まるごと消える。bot作者のPR行自体は上のループで除いているので、そのレビュー行は
+        # 対応するPR行を持たないまま並ぶが、一覧はフラットな時系列でタイトルと一次リンクを
+        # 各行が持つため読みに支障はない。
+        # bot のPRが常態化（dependabot導入等）してノイズが問題になったら、落とすのではなく
+        # 「対象がbot」の注記を足してフロント側で畳む方向に倒す。
         if review.reviewer_login == pr.author_login:
             continue
         entries.append(_review_entry(review, pr))
