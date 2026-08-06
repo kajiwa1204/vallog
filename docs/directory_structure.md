@@ -37,7 +37,7 @@ backend/
 │   ├── services/                    # ビジネスロジック
 │   │   ├── github.py                # GitHub APIクライアント・TTLキャッシュ管理
 │   │   ├── scoring.py               # スコア計算ロジック
-│   │   ├── changelog.py             # 変化ログ整形（PR/Issueを時系列マージ・既存キャッシュから読み取り）
+│   │   ├── changelog.py             # 変化ログ整形（PR/Issue/レビューを時系列マージ・既存キャッシュから読み取り）
 │   │   └── claude.py                # 貢献サマリー生成（Claude API）
 │   └── repositories/                # DBアクセス層
 │       ├── project.py               # ProjectRepository
