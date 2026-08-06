@@ -1,4 +1,4 @@
-"""services/dashboard.py のチーム状況パネル4種のユニットテスト。
+"""services/dashboard.py のチーム状況パネル3種のユニットテスト。
 
 キャッシュ済みGitHubデータ（ORMオブジェクト）を SimpleNamespace で模して渡す。DBは使わない。
 現在時刻は build_dashboard の引数で渡すため、実行時の時計に依存しない。
@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 from app.services.dashboard import (
     DEFAULT_PULSE_DAYS,
+    REVIEW_WAITING_HOURS,
     STALLED_ISSUE_DAYS,
     _local_date,
     build_dashboard,
@@ -169,6 +170,38 @@ def test_review_wanted_lists_open_prs_without_external_review():
     assert result.attention.review_wanted[0].waiting_hours == 60.0
 
 
+def test_review_wanted_ignores_prs_opened_within_the_grace_period():
+    """開いた直後のPRは「気にかけること」ではない。停滞Issueと同じく足切りする。"""
+    just_opened = NOW - timedelta(hours=REVIEW_WAITING_HOURS - 1)
+    waited = NOW - timedelta(hours=REVIEW_WAITING_HOURS + 1)
+    result = _build(
+        prs=[
+            _pr(1, "alice", created_day=just_opened.day, created_hour=just_opened.hour),
+            _pr(2, "bob", created_day=waited.day, created_hour=waited.hour),
+        ]
+    )
+
+    assert [p.number for p in result.attention.review_wanted] == [2]
+
+
+def test_draft_is_listed_regardless_of_the_review_grace_period():
+    """draftはレビューを待っているのではなく、まだ出していない状態なので足切りしない。"""
+    just_opened = NOW - timedelta(hours=REVIEW_WAITING_HOURS - 1)
+    result = _build(
+        prs=[
+            _pr(
+                1,
+                "alice",
+                created_day=just_opened.day,
+                created_hour=just_opened.hour,
+                draft=True,
+            )
+        ]
+    )
+
+    assert [p.number for p in result.attention.drafts] == [1]
+
+
 def test_review_wanted_excludes_prs_already_reviewed_by_others():
     result = _build(
         prs=[_pr(1, "alice", created_day=18)],
@@ -263,50 +296,6 @@ def test_bot_assignee_is_not_stalled():
     assert result.attention.stalled_issues == []
 
 
-# --- collaboration -------------------------------------------------------
-
-
-def test_collaboration_counts_reviewer_to_author():
-    result = _build(
-        prs=[_pr(1, "alice"), _pr(2, "alice"), _pr(3, "bob")],
-        reviews=[
-            _review(1, "bob", github_id=11),
-            _review(2, "bob", github_id=12),
-            _review(3, "alice", github_id=13),
-        ],
-    )
-
-    assert [(e.reviewer_login, e.author_login, e.count) for e in result.collaboration] == [
-        ("bob", "alice", 2),
-        ("alice", "bob", 1),
-    ]
-
-
-def test_collaboration_skips_self_reviews_and_bots():
-    result = _build(
-        prs=[_pr(1, "alice"), _pr(2, "dependabot[bot]")],
-        reviews=[
-            _review(1, "alice", github_id=11),
-            _review(2, "bob", github_id=12),
-            _review(1, "coderabbitai[bot]", github_id=13),
-        ],
-    )
-
-    assert result.collaboration == []
-
-
-def test_collaboration_ties_are_ordered_deterministically():
-    result = _build(
-        prs=[_pr(1, "alice"), _pr(2, "bob")],
-        reviews=[
-            _review(2, "carol", github_id=11),
-            _review(1, "carol", github_id=12),
-        ],
-    )
-
-    assert [e.author_login for e in result.collaboration] == ["alice", "bob"]
-
-
 # --- themes --------------------------------------------------------------
 
 
@@ -364,6 +353,5 @@ def test_empty_cache_yields_empty_panels_not_an_error():
     assert result.attention.review_wanted == []
     assert result.attention.drafts == []
     assert result.attention.stalled_issues == []
-    assert result.collaboration == []
     assert result.themes == []
     assert result.synced_at is None

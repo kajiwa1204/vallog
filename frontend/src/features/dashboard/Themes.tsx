@@ -72,6 +72,8 @@ export function Themes({ themes }: { themes: Theme[] }) {
           オープン
           <span className={styles.swatchClosed} />
           クローズ
+          {/* 活動リズムが直近14日なので、同じ画面で期間を書かないと同じ窓に見える */}
+          <span className={styles.period}>全期間</span>
         </p>
       )}
     </Card>

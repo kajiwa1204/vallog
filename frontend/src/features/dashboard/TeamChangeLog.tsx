@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
 import { ChangeLogList } from "@/components/ChangeLogList";
@@ -9,9 +8,10 @@ import type { ChangeLogEntry } from "@/types";
 import styles from "./TeamChangeLog.module.css";
 
 type Props = {
-  projectId: string;
   entries: ChangeLogEntry[];
   roster: string[];
+  // ログイン中のユーザー。チップの先頭に固定して「自分の記録」に辿り着けるようにする
+  me: string | null;
   selected: string | null;
   onSelect: (login: string | null) => void;
   loading: boolean;
@@ -29,9 +29,9 @@ type Props = {
  * 「取得中/同期中/空」の出し分けだけを持つ。
  */
 export function TeamChangeLog({
-  projectId,
   entries,
   roster,
+  me,
   selected,
   onSelect,
   loading,
@@ -43,6 +43,13 @@ export function TeamChangeLog({
   // 追加読み込みは limit を増やして取り直すため loading が立つ。既に行が見えている間は
   // 全体をスピナーに差し替えず、「もっと見る」だけを読み込み中にする
   const initialLoading = loading && entries.length === 0;
+
+  // 自分だけ先頭に固定する。残りは辞書順のまま（活動量で並べ替えると、ダッシュボードが
+  // 出さないはずの序列がチップに現れる）。自分の定位置は誰の画面でも先頭なので序列にならない
+  const chips =
+    me !== null && roster.includes(me)
+      ? [me, ...roster.filter((login) => login !== me)]
+      : roster;
 
   return (
     <Card
@@ -62,7 +69,7 @@ export function TeamChangeLog({
           >
             すべて
           </button>
-          {roster.map((login) => (
+          {chips.map((login) => (
             <button
               key={login}
               type="button"
@@ -71,6 +78,7 @@ export function TeamChangeLog({
             >
               <Avatar login={login} size={18} />
               <span className={`num ${styles.chipLogin}`}>{login}</span>
+              {login === me && <span className={styles.chipMine}>あなた</span>}
             </button>
           ))}
         </div>
@@ -82,12 +90,6 @@ export function TeamChangeLog({
             <span className={`num ${styles.selectedLogin}`}>{selected}</span>{" "}
             の変化だけを表示中
           </span>
-          <Link
-            className={styles.detailLink}
-            href={`/projects/${projectId}/members/${selected}`}
-          >
-            メンバー詳細 →
-          </Link>
         </div>
       )}
 

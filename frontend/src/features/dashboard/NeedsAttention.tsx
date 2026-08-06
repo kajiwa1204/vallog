@@ -29,8 +29,18 @@ type Row = {
  *
  * ここに並ぶのは誰かの評価ではなく、チームが次に手を付ける先。件数が多いことは
  * 個人の落ち度を意味しない（docs/screen_design.md 画面4）。
+ *
+ * 自分の行に印を付けるのは、全員分が等しく並ぶだけでは「自分がいま動かせるもの」が
+ * 読み取れないため。並び順は経過時間の降順のままにする（自分を先頭に寄せると
+ * 「一番古いものから手を付ける」という並びの意味が壊れる）。
  */
-export function NeedsAttention({ attention }: { attention: Attention }) {
+export function NeedsAttention({
+  attention,
+  me,
+}: {
+  attention: Attention;
+  me: string | null;
+}) {
   const rows: Row[] = [
     ...attention.review_wanted.map((pr) => ({
       key: `review:${pr.number}`,
@@ -92,6 +102,9 @@ export function NeedsAttention({ attention }: { attention: Attention }) {
                 </div>
                 <div className={styles.meta}>
                   <span className={`num ${styles.who}`}>{row.who}</span>
+                  {me !== null && row.who === me && (
+                    <span className={styles.mine}>あなた</span>
+                  )}
                   <span className={`num ${styles.elapsed}`}>
                     {formatElapsed(row.elapsed)}経過
                   </span>

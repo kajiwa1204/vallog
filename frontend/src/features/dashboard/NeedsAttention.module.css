@@ -73,3 +73,15 @@
   font-size: 11px;
   color: var(--ink-3);
 }
+
+/* 「自分が動かせるもの」の目印。順位ではないので強い色は使わない */
+.mine {
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: var(--ink-2);
+  background: var(--surface-dim);
+  border: 1px solid var(--line);
+  margin-left: -4px;
+}

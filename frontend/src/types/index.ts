@@ -273,12 +273,6 @@ export type Attention = {
   stalled_issues: AttentionIssue[];
 };
 
-export type ReviewEdge = {
-  reviewer_login: string;
-  author_login: string;
-  count: number;
-};
-
 export type Theme = {
   label: string;
   open_count: number;
@@ -290,6 +284,5 @@ export type DashboardResponse = {
   synced_at: string | null;
   pulse: PulseDay[];
   attention: Attention;
-  collaboration: ReviewEdge[];
   themes: Theme[];
 };

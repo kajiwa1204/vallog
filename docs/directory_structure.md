@@ -33,7 +33,7 @@ backend/
 │   │   ├── project.py               # ProjectCreate, ProjectResponse
 │   │   ├── score.py                 # ScoreResponse, MemberScore
 │   │   ├── changelog.py             # ChangeLogEntry, ChangeLogResponse
-│   │   ├── dashboard.py             # DashboardResponse（pulse/attention/collaboration/themes）
+│   │   ├── dashboard.py             # DashboardResponse（pulse/attention/themes）
 │   │   ├── distribution.py          # ProposalCreate, ProposalResponse, ItemUpdate
 │   │   └── summary.py               # SummaryResponse
 │   ├── services/                    # ビジネスロジック
@@ -86,7 +86,6 @@ frontend/
 │   │   │   ├── TeamChangeLog.module.css
 │   │   │   ├── TeamPulse.tsx                     # チーム状況: 活動リズム（日次バケット）
 │   │   │   ├── NeedsAttention.tsx                # チーム状況: レビュー待ち・停滞Issue・draft
-│   │   │   ├── ReviewFlow.tsx                    # チーム状況: レビューの流れ
 │   │   │   ├── Themes.tsx                        # チーム状況: 動いている領域（ラベル集計）
 │   │   │   └── useDashboard.ts
 │   │   ├── distribution/

@@ -1,9 +1,15 @@
-"""チーム状況パネル4種（第1層・AIなし）を組み立てる。
+"""チーム状況パネル3種（第1層・AIなし）を組み立てる。
 
 ダッシュボード（画面4）にスコアは載せない（docs/scoring_design.md
 「Goodhart対策とスコアの事後開示」。スコアの開示は分配画面が担う）。代わりにこのモジュールが
-「チームがいま何を動かしているか」を4通りに畳んで返す。4種はいずれも重み付けも順位付けも
-しない事実の集計で、報酬に接続されていない（①ターゲットが折れている）。
+「チームがいま何を動かしているか」を3通りに畳んで返す。3種はいずれも重み付けをせず、
+報酬の算定式には現れない。
+
+ただし attention の停滞時間は、Issueがクローズされた時点でスピードカテゴリの経過時間
+（services/scoring.py の _speed_values。起点は同じ assigned_at）に連続する。それを承知で
+残すのは、止まっているものを動かすには持ち主と経過が要るためで、行動可能性を優先した
+判断である。一方、レビュー本数のように「安く積める量」を個人別に集約して序列化するパネルは
+置かない（変化ログが意図的に脱集約している情報を、画面が再集約し直すことになるため）。
 
 pulse は services/changelog.py の build_changelog がまとめたエントリをそのまま日付で
 畳んだもの。同じ画面に日次バーと変化ログの一覧が並ぶため、独自に時刻を採り直すと
@@ -29,7 +35,6 @@ from app.schemas.dashboard import (
     AttentionPullRequest,
     DashboardResponse,
     PulseDay,
-    ReviewEdge,
     Theme,
 )
 from app.services.changelog import build_changelog, is_excluded_login
@@ -37,6 +42,10 @@ from app.services.github import ensure_synced, fetch_and_store
 
 DEFAULT_PULSE_DAYS = 14
 STALLED_ISSUE_DAYS = 7
+# レビュー待ちとして挙げるまでの猶予。開いた直後のPRは「気にかけること」ではないため、
+# 停滞Issue（STALLED_ISSUE_DAYS）と同じく足切りする。draft には適用しない（draftは
+# レビューを待っているのではなく、まだ出していない状態で、しきい値の意味が違う）
+REVIEW_WAITING_HOURS = 24
 
 # SPラベルは「動いている領域」ではなくストーリーポイントなので themes から落とす。
 # services/github.py の _SP_LABEL_RE と同じパターン（あちらは別Issueで編集中のため
@@ -125,7 +134,9 @@ def _attention(
         if entry.notes.draft:
             drafts.append(_attention_pr(entry, now))
         elif entry.notes.reviewed_by_others is False:
-            review_wanted.append(_attention_pr(entry, now))
+            pr = _attention_pr(entry, now)
+            if pr.waiting_hours >= REVIEW_WAITING_HOURS:
+                review_wanted.append(pr)
 
     stalled_threshold = now - timedelta(days=STALLED_ISSUE_DAYS)
     stalled: list[AttentionIssue] = []
@@ -154,37 +165,6 @@ def _attention(
     drafts.sort(key=lambda p: p.waiting_hours, reverse=True)
     stalled.sort(key=lambda i: i.stalled_hours, reverse=True)
     return Attention(review_wanted=review_wanted, drafts=drafts, stalled_issues=stalled)
-
-
-def _collaboration(
-    prs: list[GitHubPullRequest], reviews: list[GitHubReview]
-) -> list[ReviewEdge]:
-    """レビュアー → PR作者 の本数。
-
-    変化ログと違い、作者がbotのPRへのレビューは数えない。あちらは「レビューという
-    実労働を分配の根拠から消さない」ために残すが、こちらが答えるのは「誰が誰の仕事を
-    見ているか」で、依存更新PRへのレビューをそこに混ぜると人同士の流れが読めなくなる。
-    """
-    author_by_number = {pr.number: pr.author_login for pr in prs}
-
-    counts: dict[tuple[str, str], int] = defaultdict(int)
-    for review in reviews:
-        if review.submitted_at is None or is_excluded_login(review.reviewer_login):
-            continue
-        author = author_by_number.get(review.pr_number)
-        if author is None or is_excluded_login(author):
-            continue
-        if author == review.reviewer_login:
-            continue
-        counts[(review.reviewer_login, author)] += 1
-
-    edges = [
-        ReviewEdge(reviewer_login=reviewer, author_login=author, count=count)
-        for (reviewer, author), count in counts.items()
-    ]
-    # 同数のときに並びが実行ごとに変わらないよう、ログイン名まで見て決める
-    edges.sort(key=lambda e: (-e.count, e.reviewer_login, e.author_login))
-    return edges
 
 
 def _themes(issues: list[GitHubIssue]) -> list[Theme]:
@@ -225,7 +205,7 @@ def build_dashboard(
     tz_offset_minutes: int = 0,
     synced_at: datetime | None = None,
 ) -> DashboardResponse:
-    """キャッシュ済みGitHubデータをチーム状況パネル4種にまとめる（純粋関数・DBアクセスなし）。
+    """キャッシュ済みGitHubデータをチーム状況パネル3種にまとめる（純粋関数・DBアクセスなし）。
 
     now を引数で受けるのは「レビュー待ち何時間」「担当から何日」が現在時刻に依存するため。
     datetime.now() を内側で呼ぶとテストが時計に依存する。
@@ -240,7 +220,6 @@ def build_dashboard(
         synced_at=synced_at,
         pulse=_pulse(changelog.entries, now, days, tz_offset_minutes),
         attention=_attention(changelog.entries, issues, now),
-        collaboration=_collaboration(prs, reviews),
         themes=_themes(issues),
     )
 
@@ -252,7 +231,7 @@ async def get_dashboard(
     days: int = DEFAULT_PULSE_DAYS,
     tz_offset_minutes: int = 0,
 ) -> DashboardResponse:
-    """TTLに従いGitHubキャッシュを最新化してからパネル4種を組み立てる。"""
+    """TTLに従いGitHubキャッシュを最新化してからパネル3種を組み立てる。"""
     # 戻り値の project を使う。同期を挟んだ場合、引数の project は github_synced_at が
     # 古いままで、レスポンスが「まだ一度も同期していない」と嘘をつく
     project = await ensure_synced(db, project, access_token, fetch_and_store)

@@ -51,14 +51,6 @@ class Attention(BaseModel):
     stalled_issues: list[AttentionIssue]
 
 
-class ReviewEdge(BaseModel):
-    """レビュアー → PR作者 の本数。誰が誰の仕事を見ているかの流れ。"""
-
-    reviewer_login: str
-    author_login: str
-    count: int
-
-
 class Theme(BaseModel):
     """Issueラベル1種の集計。openとclosedを分けるのは「まだ動いている領域」を出すため。"""
 
@@ -68,14 +60,14 @@ class Theme(BaseModel):
 
 
 class DashboardResponse(BaseModel):
-    """チーム状況パネル4種（画面4）。
+    """チーム状況パネル3種（画面4）。
 
     スコアは含まない（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）。
-    4種はいずれも重み付けも順位付けもしない事実の集計で、報酬に接続されていない。
+    3種はいずれも重み付けをせず、報酬の算定式には現れない。
 
-    pulse / collaboration / themes をベアなリストにしているのは、中身が1種類しか
-    ないものに空のラッパーを噛ませないため。attention だけは3種の別リストを持つので
-    オブジェクトにしている。
+    pulse / themes をベアなリストにしているのは、中身が1種類しかないものに空の
+    ラッパーを噛ませないため。attention だけは3種の別リストを持つのでオブジェクトに
+    している。
     """
 
     # いつ時点のキャッシュか。フロントはこれが null なら「初回同期中」と判断でき、
@@ -84,7 +76,5 @@ class DashboardResponse(BaseModel):
     # 古い→新しい順
     pulse: list[PulseDay]
     attention: Attention
-    # count降順
-    collaboration: list[ReviewEdge]
     # 合計（open + closed）降順
     themes: list[Theme]

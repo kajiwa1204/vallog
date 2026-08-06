@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { NeedsAttention } from "@/features/dashboard/NeedsAttention";
-import { ReviewFlow } from "@/features/dashboard/ReviewFlow";
 import { TeamChangeLog } from "@/features/dashboard/TeamChangeLog";
 import { TeamPulse } from "@/features/dashboard/TeamPulse";
 import { Themes } from "@/features/dashboard/Themes";
@@ -20,13 +19,18 @@ import styles from "./page.module.css";
  *
  * 主役はチームの変化ログで、スコアはこの画面に出さない
  * （docs/scoring_design.md「Goodhart対策とスコアの事後開示」。開示は画面7）。
- * 代わりに「チームがいま何を動かしているか」を4つのパネルで示す。
+ * 代わりに「チームがいま何を動かしているか」を3つのパネルで示す。
+ *
+ * レビュー本数の集計（旧 ReviewFlow）は置かない。変化ログが1件ずつに脱集約している
+ * 情報を画面が再集約して序列に戻すことになり、「数字の降格」に反するため。
  */
 export default function DashboardPage() {
   const { id } = useParams<{ id: string }>();
-  // リダイレクトは AppShell 側の useAuth が担う。ここでは認証確定を待つためだけに参照する
-  const { status } = useAuth({ required: false });
+  // リダイレクトは AppShell 側の useAuth が担う。ここでは認証確定を待つことと、
+  // 「自分」の行を見分けるためにログインを参照する
+  const { status, user } = useAuth({ required: false });
   const authed = status === "authenticated";
+  const me = user?.github_login ?? null;
 
   const { project } = useProject(id, authed);
   const {
@@ -92,8 +96,7 @@ export default function DashboardPage() {
         panels && (
           <div className={styles.panels}>
             <div className={styles.column}>
-              <NeedsAttention attention={panels.attention} />
-              <ReviewFlow edges={panels.collaboration} />
+              <NeedsAttention attention={panels.attention} me={me} />
             </div>
             <div className={styles.column}>
               <TeamPulse days={panels.pulse} />
@@ -105,9 +108,9 @@ export default function DashboardPage() {
 
       <div className={styles.changelog}>
         <TeamChangeLog
-          projectId={id}
           entries={changelog.entries}
           roster={roster}
+          me={me}
           selected={selectedMember}
           onSelect={selectMember}
           loading={changelog.loading}

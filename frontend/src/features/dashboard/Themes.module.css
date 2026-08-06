@@ -91,6 +91,10 @@
   color: var(--ink-3);
 }
 
+.period {
+  margin-left: auto;
+}
+
 .swatchOpen,
 .swatchClosed {
   width: 9px;
