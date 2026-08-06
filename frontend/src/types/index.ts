@@ -237,7 +237,7 @@ export type ChangeLogResponse = {
   has_more: boolean;
 };
 
-// チーム状況パネル4種（画面4）。backend/app/schemas/dashboard.py と対応する。
+// チーム状況パネル（画面4）。backend/app/schemas/dashboard.py と対応する。
 // スコアは含まない（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）
 export type PulseDay = {
   // YYYY-MM-DD。バックエンドが tz_offset_minutes を見て畳んだローカル日付
@@ -267,22 +267,50 @@ export type AttentionIssue = {
   stalled_hours: number;
 };
 
+// 修正を求められたまま動いていないPR。review_wanted とは待っている相手が逆で、
+// こちらはPR作者の番
+export type ChangesRequestedPullRequest = {
+  number: number;
+  title: string;
+  author_login: string;
+  html_url: string;
+  reviewer_login: string;
+  requested_at: string;
+  waiting_hours: number;
+};
+
 export type Attention = {
   review_wanted: AttentionPullRequest[];
+  changes_requested: ChangesRequestedPullRequest[];
   drafts: AttentionPullRequest[];
   stalled_issues: AttentionIssue[];
+};
+
+// 片づいたもの1件。attention の裏返しで、人ごとの件数には畳まない
+export type DoneItem = {
+  kind: "pull_request" | "issue";
+  number: number;
+  title: string;
+  actor_login: string;
+  html_url: string;
+  occurred_at: string;
 };
 
 export type Theme = {
   label: string;
   open_count: number;
   closed_count: number;
+  // ラベル名の ":" より前。持たないラベルは null
+  namespace: string | null;
 };
 
 export type DashboardResponse = {
   // null なら初回同期がまだ完了していない
   synced_at: string | null;
   pulse: PulseDay[];
+  // 直前の同じ長さの期間の合計。単独の件数に基準を与えるために添える
+  pulse_previous_total: number;
   attention: Attention;
+  recently_done: DoneItem[];
   themes: Theme[];
 };

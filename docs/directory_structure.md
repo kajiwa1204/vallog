@@ -33,7 +33,7 @@ backend/
 │   │   ├── project.py               # ProjectCreate, ProjectResponse
 │   │   ├── score.py                 # ScoreResponse, MemberScore
 │   │   ├── changelog.py             # ChangeLogEntry, ChangeLogResponse
-│   │   ├── dashboard.py             # DashboardResponse（pulse/attention/themes）
+│   │   ├── dashboard.py             # DashboardResponse（pulse/attention/recently_done/themes）
 │   │   ├── distribution.py          # ProposalCreate, ProposalResponse, ItemUpdate
 │   │   └── summary.py               # SummaryResponse
 │   ├── services/                    # ビジネスロジック
@@ -84,9 +84,10 @@ frontend/
 │   │   ├── dashboard/
 │   │   │   ├── TeamChangeLog.tsx                 # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
 │   │   │   ├── TeamChangeLog.module.css
-│   │   │   ├── TeamPulse.tsx                     # チーム状況: 活動リズム（日次バケット）
-│   │   │   ├── NeedsAttention.tsx                # チーム状況: レビュー待ち・停滞Issue・draft
-│   │   │   ├── Themes.tsx                        # チーム状況: 動いている領域（ラベル集計）
+│   │   │   ├── TeamPulse.tsx                     # チーム状況: 活動リズム（日次バケット＋前期比）
+│   │   │   ├── NeedsAttention.tsx                # チーム状況: 止まっているものを「誰の番か」で畳む
+│   │   │   ├── RecentlyDone.tsx                  # チーム状況: 最近片づいたもの（attentionの裏返し）
+│   │   │   ├── Themes.tsx                        # チーム状況: 動いている領域（ラベル集計・名前空間で束ねる）
 │   │   │   └── useDashboard.ts
 │   │   ├── distribution/
 │   │   │   ├── ChangeLogPanel.tsx               # 主役: ChangeLogList を包む薄いラッパー（全メンバー）

@@ -86,3 +86,9 @@
   font-size: 11.5px;
   color: var(--ink-3);
 }
+
+/* 増減は補助。合計そのものより弱く出す（増えた/減ったを評価に読ませない） */
+.delta {
+  color: var(--ink-4, var(--ink-3));
+  opacity: 0.85;
+}

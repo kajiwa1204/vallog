@@ -9,6 +9,28 @@ import type { DashboardResponse } from "@/types";
 // バックエンドの既定値と揃える（backend/app/services/dashboard.py の DEFAULT_PULSE_DAYS）
 const PULSE_DAYS = 14;
 
+const LAST_SEEN_KEY = (projectId: string) => `vallog:lastSeen:${projectId}`;
+
+/**
+ * 前回このダッシュボードを見た時刻を読み、いまの時刻で上書きする。
+ *
+ * サーバに持たせないのは、「前回いつ見たか」が本質的にクライアントの状態で、
+ * 新規テーブルを足すほどの情報ではないため。端末をまたげないのは承知の上で、
+ * 「毎日開く理由」を作る最小の一手として置く。必要になったらサーバへ移せる。
+ */
+function readAndBumpLastSeen(projectId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const key = LAST_SEEN_KEY(projectId);
+    const previous = window.localStorage.getItem(key);
+    window.localStorage.setItem(key, new Date().toISOString());
+    return previous;
+  } catch {
+    // プライベートモード等で localStorage が使えない場合は印を出さないだけにする
+    return null;
+  }
+}
+
 /**
  * ダッシュボード（画面4）のデータ取得。
  *
@@ -36,6 +58,14 @@ export function useDashboard(projectId: string, enabled = true) {
   const [panels, setPanels] = useState<DashboardResponse | null>(null);
   const [panelsError, setPanelsError] = useState<string | null>(null);
   const [panelsLoading, setPanelsLoading] = useState(true);
+
+  // 初回マウント時に1度だけ読む。再読み込みのたびに更新すると、押した瞬間に
+  // 新着が全部消える
+  const [newSince, setNewSince] = useState<string | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    setNewSince(readAndBumpLastSeen(projectId));
+  }, [projectId, enabled]);
 
   const loadPanels = useCallback(async () => {
     if (!enabled) return;
@@ -97,6 +127,7 @@ export function useDashboard(projectId: string, enabled = true) {
     panelsError,
     panelsLoading,
     changelog,
+    newSince,
     roster,
     selectedMember,
     selectMember: setSelectedMember,

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 from app.services.dashboard import (
     DEFAULT_PULSE_DAYS,
+    RECENTLY_DONE_LIMIT,
     REVIEW_WAITING_HOURS,
     STALLED_ISSUE_DAYS,
     _local_date,
@@ -296,6 +297,147 @@ def test_bot_assignee_is_not_stalled():
     assert result.attention.stalled_issues == []
 
 
+# --- attention: changes requested ----------------------------------------
+
+
+def test_changes_requested_lists_prs_whose_last_review_asked_for_changes():
+    result = _build(
+        prs=[_pr(1, "alice")],
+        reviews=[_review(1, "bob", state="CHANGES_REQUESTED", day=5)],
+    )
+
+    assert [p.number for p in result.attention.changes_requested] == [1]
+    blocked = result.attention.changes_requested[0]
+    assert blocked.author_login == "alice"
+    assert blocked.reviewer_login == "bob"
+    assert blocked.requested_at == _dt(5)
+
+
+def test_changes_requested_pr_is_not_also_listed_as_review_wanted():
+    """レビューが付いている以上 review_wanted の条件からも外れる。二重計上しない。"""
+    result = _build(
+        prs=[_pr(1, "alice")],
+        reviews=[_review(1, "bob", state="CHANGES_REQUESTED", day=5)],
+    )
+
+    assert result.attention.review_wanted == []
+
+
+def test_later_approval_clears_changes_requested():
+    result = _build(
+        prs=[_pr(1, "alice")],
+        reviews=[
+            _review(1, "bob", state="CHANGES_REQUESTED", day=5, github_id=1),
+            _review(1, "bob", state="APPROVED", day=6, github_id=2),
+        ],
+    )
+
+    assert result.attention.changes_requested == []
+
+
+def test_comment_after_changes_requested_does_not_clear_it():
+    """COMMENTED は承認状態を動かさないので、直前の要修正を打ち消さない。"""
+    result = _build(
+        prs=[_pr(1, "alice")],
+        reviews=[
+            _review(1, "bob", state="CHANGES_REQUESTED", day=5, github_id=1),
+            _review(1, "carol", state="COMMENTED", day=6, github_id=2),
+        ],
+    )
+
+    assert [p.number for p in result.attention.changes_requested] == [1]
+
+
+def test_changes_requested_excludes_merged_and_draft_prs():
+    result = _build(
+        prs=[_pr(1, "alice", merged_day=7), _pr(2, "alice", draft=True)],
+        reviews=[
+            _review(1, "bob", state="CHANGES_REQUESTED", day=5, github_id=1),
+            _review(2, "bob", state="CHANGES_REQUESTED", day=5, github_id=2),
+        ],
+    )
+
+    assert result.attention.changes_requested == []
+
+
+def test_changes_requested_sorted_by_longest_wait():
+    result = _build(
+        prs=[_pr(1, "alice"), _pr(2, "alice")],
+        reviews=[
+            _review(1, "bob", state="CHANGES_REQUESTED", day=10, github_id=1),
+            _review(2, "bob", state="CHANGES_REQUESTED", day=3, github_id=2),
+        ],
+    )
+
+    assert [p.number for p in result.attention.changes_requested] == [2, 1]
+
+
+# --- recently done -------------------------------------------------------
+
+
+def test_recently_done_lists_merged_prs_and_closed_issues():
+    result = _build(
+        prs=[_pr(1, "alice", merged_day=10)],
+        issues=[_issue(2, "bob", closed_day=11)],
+    )
+
+    assert {(d.kind, d.number) for d in result.recently_done} == {
+        ("pull_request", 1),
+        ("issue", 2),
+    }
+
+
+def test_recently_done_is_newest_first():
+    result = _build(
+        prs=[_pr(1, "alice", merged_day=5), _pr(2, "alice", merged_day=12)],
+    )
+
+    assert [d.number for d in result.recently_done] == [2, 1]
+
+
+def test_recently_done_excludes_unmerged_closed_prs():
+    """マージされずに閉じたPRは成果ではない。"""
+    result = _build(prs=[_pr(1, "alice", closed_day=10)])
+
+    assert result.recently_done == []
+
+
+def test_recently_done_excludes_issues_closed_as_not_planned():
+    result = _build(
+        issues=[_issue(1, "alice", closed_day=10, state_reason="not_planned")]
+    )
+
+    assert result.recently_done == []
+
+
+def test_recently_done_is_capped():
+    result = _build(
+        prs=[_pr(n, "alice", merged_day=2 + n) for n in range(1, 10)],
+    )
+
+    assert len(result.recently_done) == RECENTLY_DONE_LIMIT
+
+
+# --- pulse: previous period ----------------------------------------------
+
+
+def test_previous_total_counts_the_period_before_the_window():
+    # 直近14日は 1/7〜1/20。その前の14日は 12/24〜1/6 だが、_dt は1月のみ作るので
+    # 1/1〜1/6 に置いた分が前期に入る
+    result = _build(
+        prs=[_pr(1, "alice", created_day=20), _pr(2, "alice", created_day=3)],
+    )
+
+    assert result.pulse[-1].pull_requests == 1
+    assert result.pulse_previous_total == 1
+
+
+def test_previous_total_excludes_the_current_window():
+    result = _build(prs=[_pr(1, "alice", created_day=20)])
+
+    assert result.pulse_previous_total == 0
+
+
 # --- themes --------------------------------------------------------------
 
 
@@ -331,6 +473,26 @@ def test_themes_sorted_by_total_then_label():
     assert [t.label for t in result.themes] == ["c", "a", "b"]
 
 
+def test_themes_expose_the_label_namespace():
+    result = _build(
+        issues=[_issue(1, "alice", labels=["epic:core1", "priority:low", "task"])]
+    )
+
+    namespaces = {t.label: t.namespace for t in result.themes}
+    assert namespaces == {
+        "epic:core1": "epic",
+        "priority:low": "priority",
+        "task": None,
+    }
+
+
+def test_themes_namespace_ignores_malformed_labels():
+    """先頭や末尾が空の "foo:" / ":bar" は名前空間として扱わない。"""
+    result = _build(issues=[_issue(1, "alice", labels=["foo:", ":bar"])])
+
+    assert all(t.namespace is None for t in result.themes)
+
+
 def test_themes_exclude_bot_authored_issues():
     result = _build(issues=[_issue(1, "renovate[bot]", labels=["deps"])])
 
@@ -350,8 +512,11 @@ def test_empty_cache_yields_empty_panels_not_an_error():
     result = _build()
 
     assert len(result.pulse) == DEFAULT_PULSE_DAYS
+    assert result.pulse_previous_total == 0
     assert result.attention.review_wanted == []
+    assert result.attention.changes_requested == []
     assert result.attention.drafts == []
     assert result.attention.stalled_issues == []
+    assert result.recently_done == []
     assert result.themes == []
     assert result.synced_at is None

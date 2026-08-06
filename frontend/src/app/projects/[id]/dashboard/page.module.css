@@ -61,6 +61,29 @@
   min-width: 0;
 }
 
+/* 活動がまだ無いチーム向けの導入。空のパネルが並ぶだけだと、この画面が何をする
+   場所なのか初めて開いた人に伝わらない */
+.intro {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+
+.introLead {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.introBody {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
 .changelog {
   margin-bottom: 24px;
 }

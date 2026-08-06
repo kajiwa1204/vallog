@@ -37,6 +37,23 @@ class AttentionIssue(BaseModel):
     stalled_hours: float
 
 
+class ChangesRequestedPullRequest(BaseModel):
+    """修正を求められたまま動いていないPR。
+
+    review_wanted とは待っている相手が逆で、こちらはPR作者の番。両者を同じリストに
+    入れると「誰が次に動くのか」が読めなくなるため分ける。
+    """
+
+    number: int
+    title: str
+    author_login: str
+    html_url: str
+    # 最後に changes requested を出した人と、その時刻
+    reviewer_login: str
+    requested_at: datetime
+    waiting_hours: float
+
+
 class Attention(BaseModel):
     """止まっているものだけを集める。
 
@@ -46,9 +63,26 @@ class Attention(BaseModel):
 
     # OPEN・非draft・他者レビューなし
     review_wanted: list[AttentionPullRequest]
+    # OPEN・非draft・最終レビューが CHANGES_REQUESTED
+    changes_requested: list[ChangesRequestedPullRequest]
     # OPEN・draft。レビューを求めていないので review_wanted とは別に出す
     drafts: list[AttentionPullRequest]
     stalled_issues: list[AttentionIssue]
+
+
+class DoneItem(BaseModel):
+    """片づいたもの1件（マージされたPR / 完了したIssue）。
+
+    attention の裏返し。人ごとの件数には畳まない（畳むと「誰が多いか」の序列になり、
+    ダッシュボードが出さないと決めた集約になる。docs/scoring_design.md）。
+    """
+
+    kind: str
+    number: int
+    title: str
+    actor_login: str
+    html_url: str
+    occurred_at: datetime
 
 
 class Theme(BaseModel):
@@ -57,6 +91,10 @@ class Theme(BaseModel):
     label: str
     open_count: int
     closed_count: int
+    # ラベル名の ":" より前（epic / priority など）。持たないラベルは None。
+    # 「動いている領域」を読むには、領域を表すラベルとワークフロー用のラベルを
+    # 混ぜずに並べる必要がある
+    namespace: str | None = None
 
 
 class DashboardResponse(BaseModel):
@@ -75,6 +113,11 @@ class DashboardResponse(BaseModel):
     synced_at: datetime | None
     # 古い→新しい順
     pulse: list[PulseDay]
+    # 直前の同じ長さの期間の合計。単独の件数は多いとも少とも言えないため、
+    # 読み手が基準を持てるように前期の値を添える
+    pulse_previous_total: int
     attention: Attention
+    # 新しい→古い順
+    recently_done: list[DoneItem]
     # 合計（open + closed）降順
     themes: list[Theme]

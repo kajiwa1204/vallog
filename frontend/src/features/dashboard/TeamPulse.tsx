@@ -26,9 +26,28 @@ function formatDay(iso: string): string {
  *
  * 変化ログを日付で畳んだものなので、バーの高い日は必ず下の一覧に対応する行がある。
  */
-export function TeamPulse({ days }: { days: PulseDay[] }) {
+/**
+ * 前期からの増減。単独の「合計23」は多いとも少ないとも言えないので、比べる相手を添える。
+ *
+ * 前期が0のときは倍率が出せない。増えたことだけを言う。
+ */
+function formatDelta(total: number, previous: number): string | null {
+  if (previous === 0) return total === 0 ? null : "前期は0件";
+  const diff = total - previous;
+  if (diff === 0) return "前期と同じ";
+  return `前期 ${previous} から ${diff > 0 ? "+" : ""}${diff}`;
+}
+
+export function TeamPulse({
+  days,
+  previousTotal,
+}: {
+  days: PulseDay[];
+  previousTotal: number;
+}) {
   const max = Math.max(...days.map(totalOf), 1);
   const total = days.reduce((sum, d) => sum + totalOf(d), 0);
+  const delta = formatDelta(total, previousTotal);
 
   return (
     <Card
@@ -89,7 +108,10 @@ export function TeamPulse({ days }: { days: PulseDay[] }) {
                 {kind.label}
               </span>
             ))}
-            <span className={`num ${styles.total}`}>合計 {total}</span>
+            <span className={`num ${styles.total}`}>
+              合計 {total}
+              {delta && <span className={styles.delta}>（{delta}）</span>}
+            </span>
           </div>
         </>
       )}

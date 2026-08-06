@@ -3,20 +3,56 @@
   color: var(--ink-3);
 }
 
+.subtitle {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin: 0 0 4px;
+}
+
 .empty {
   font-size: 12.5px;
   color: var(--ink-3);
   padding: 12px 0;
 }
 
+/* 止まっているものは際限なく増えうるので、主役の変化ログを画面外へ押し出さないよう
+   表示だけ畳む（件数はヘッダで打ち切らずに出す）。
+
+   上限は「10件前後までは畳まずに出す」高さ。ここを切り詰めすぎると、数件しか
+   溢れていないのに sticky の見出しの裏に行が隠れ、畳む意味がないのに読めない行だけが
+   増える。実際 560px では8件の一覧が61px（ちょうど1行）はみ出していた */
+.scroll {
+  max-height: 740px;
+  overflow-y: auto;
+}
+
 .list {
   list-style: none;
   margin: 0;
   padding: 0;
-  /* 止まっているものは際限なく増えうる。伸ばすと隣のパネルとの間に空白ができ、
-     主役の変化ログが画面外に押し出される。件数（ヘッダ）は打ち切らず表示だけ畳む */
-  max-height: 336px;
-  overflow-y: auto;
+}
+
+/* 群の見出し。スクロールで流れると、いま読んでいる行が自分向けなのか
+   チーム全体なのか分からなくなるため貼り付ける */
+.heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 0 5px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface);
+}
+
+.headingCount {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
 }
 
 .list > li + li {
@@ -72,16 +108,4 @@
 .elapsed {
   font-size: 11px;
   color: var(--ink-3);
-}
-
-/* 「自分が動かせるもの」の目印。順位ではないので強い色は使わない */
-.mine {
-  font-size: 10px;
-  line-height: 1;
-  padding: 3px 6px;
-  border-radius: 999px;
-  color: var(--ink-2);
-  background: var(--surface-dim);
-  border: 1px solid var(--line);
-  margin-left: -4px;
 }

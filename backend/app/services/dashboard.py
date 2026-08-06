@@ -33,7 +33,9 @@ from app.schemas.dashboard import (
     Attention,
     AttentionIssue,
     AttentionPullRequest,
+    ChangesRequestedPullRequest,
     DashboardResponse,
+    DoneItem,
     PulseDay,
     Theme,
 )
@@ -42,6 +44,11 @@ from app.services.github import ensure_synced, fetch_and_store
 
 DEFAULT_PULSE_DAYS = 14
 STALLED_ISSUE_DAYS = 7
+# 「片づいたもの」に出す件数。詰まりが無いチームでも画面が空にならない程度で、
+# 変化ログ（主役）と読み比べる量にはしない
+RECENTLY_DONE_LIMIT = 6
+# 承認状態を動かすレビュー。COMMENTED / DISMISSED は直前の判断を覆さないので含めない
+_DECISIVE_REVIEW_STATES = {"APPROVED", "CHANGES_REQUESTED"}
 # レビュー待ちとして挙げるまでの猶予。開いた直後のPRは「気にかけること」ではないため、
 # 停滞Issue（STALLED_ISSUE_DAYS）と同じく足切りする。draft には適用しない（draftは
 # レビューを待っているのではなく、まだ出していない状態で、しきい値の意味が違う）
@@ -116,8 +123,43 @@ def _attention_pr(entry: ChangeLogEntry, now: datetime) -> AttentionPullRequest:
     )
 
 
+def _last_changes_requested(
+    reviews: list[GitHubReview],
+) -> dict[int, GitHubReview]:
+    """PR番号 → 最終レビューが CHANGES_REQUESTED ならそのレビュー。
+
+    「レビューが1件でも付いたか」だけを見ると、修正を求められたまま止まっているPRが
+    attention から丸ごと落ちる。有志チームで最も多い停滞がそれなので、最後のレビューの
+    状態まで見る。
+
+    再度Approveされていれば最終レビューは APPROVED になり、ここには現れない。
+    ただしキャッシュにpushの時刻が無いため、「作者が直したがまだ再レビューされていない」
+    区別は付かない。その場合もここに残るが、再レビューを促す先が作者であることに
+    変わりはないので実害は小さい。
+    """
+    latest: dict[int, GitHubReview] = {}
+    for review in reviews:
+        if review.submitted_at is None or is_excluded_login(review.reviewer_login):
+            continue
+        # COMMENTED は状態を表明していない（GitHubも承認状態を変えない）ので、
+        # 直前の CHANGES_REQUESTED を打ち消さないよう最終レビューの判定から外す
+        if review.state.upper() not in _DECISIVE_REVIEW_STATES:
+            continue
+        current = latest.get(review.pr_number)
+        if current is None or review.submitted_at > current.submitted_at:
+            latest[review.pr_number] = review
+    return {
+        number: review
+        for number, review in latest.items()
+        if review.state.upper() == "CHANGES_REQUESTED"
+    }
+
+
 def _attention(
-    entries: list[ChangeLogEntry], issues: list[GitHubIssue], now: datetime
+    entries: list[ChangeLogEntry],
+    issues: list[GitHubIssue],
+    reviews: list[GitHubReview],
+    now: datetime,
 ) -> Attention:
     """止まっているものを集める。
 
@@ -127,12 +169,28 @@ def _attention(
     """
     review_wanted: list[AttentionPullRequest] = []
     drafts: list[AttentionPullRequest] = []
+    changes_requested: list[ChangesRequestedPullRequest] = []
+    blocked = _last_changes_requested(reviews)
 
     for entry in entries:
         if entry.kind != "pull_request" or entry.state != "open":
             continue
         if entry.notes.draft:
             drafts.append(_attention_pr(entry, now))
+            continue
+        blocking = blocked.get(entry.number)
+        if blocking is not None:
+            changes_requested.append(
+                ChangesRequestedPullRequest(
+                    number=entry.number,
+                    title=entry.title,
+                    author_login=entry.actor_login,
+                    html_url=entry.html_url,
+                    reviewer_login=blocking.reviewer_login,
+                    requested_at=blocking.submitted_at,
+                    waiting_hours=_hours_since(blocking.submitted_at, now),
+                )
+            )
         elif entry.notes.reviewed_by_others is False:
             pr = _attention_pr(entry, now)
             if pr.waiting_hours >= REVIEW_WAITING_HOURS:
@@ -162,9 +220,80 @@ def _attention(
             )
 
     review_wanted.sort(key=lambda p: p.waiting_hours, reverse=True)
+    changes_requested.sort(key=lambda p: p.waiting_hours, reverse=True)
     drafts.sort(key=lambda p: p.waiting_hours, reverse=True)
     stalled.sort(key=lambda i: i.stalled_hours, reverse=True)
-    return Attention(review_wanted=review_wanted, drafts=drafts, stalled_issues=stalled)
+    return Attention(
+        review_wanted=review_wanted,
+        changes_requested=changes_requested,
+        drafts=drafts,
+        stalled_issues=stalled,
+    )
+
+
+def _recently_done(entries: list[ChangeLogEntry], limit: int) -> list[DoneItem]:
+    """片づいたものを新しい順に。
+
+    attention が「止まっているもの」しか出さないため、この画面は放っておくと負の情報
+    だけを毎日見せる面になる。無給の有志チームでは進んだ実感が継続の燃料なので、
+    同じデータの裏返しを並べて釣り合いを取る。
+
+    人ごとの件数には畳まない。畳んだ瞬間に「誰が多いか」の序列になり、この画面が
+    出さないと決めた集約に戻る（docs/scoring_design.md「数字の降格」）。
+
+    closed のPR（マージされずに閉じたもの）は成果ではないので採らない。Issueの
+    not_planned は changelog が別状態として持つのでここには入ってこない。
+    """
+    done = [
+        entry
+        for entry in entries
+        if (entry.kind == "pull_request" and entry.state == "merged")
+        or (entry.kind == "issue" and entry.state == "closed")
+    ]
+    done.sort(key=lambda e: e.occurred_at, reverse=True)
+    return [
+        DoneItem(
+            kind=entry.kind,
+            number=entry.number,
+            title=entry.title,
+            actor_login=entry.actor_login,
+            html_url=entry.html_url,
+            occurred_at=entry.occurred_at,
+        )
+        for entry in done[:limit]
+    ]
+
+
+def _previous_total(
+    entries: list[ChangeLogEntry], now: datetime, days: int, tz_offset_minutes: int
+) -> int:
+    """直前の同じ長さの期間の件数。
+
+    「直近14日で23件」だけでは、それが多いのか少ないのかを読み手が判断できない。
+    比べる相手を1つ添えるだけで、同じ数字が増減の情報になる。
+    """
+    today = _local_date(now, tz_offset_minutes)
+    start = today - timedelta(days=days * 2 - 1)
+    end = today - timedelta(days=days)
+    return sum(
+        1
+        for entry in entries
+        if start <= _local_date(entry.occurred_at, tz_offset_minutes) <= end
+    )
+
+
+def _namespace_of(label: str) -> str | None:
+    """ラベルの名前空間（"epic:core1" → "epic"）。
+
+    「動いている領域」に task / priority:low / triage が混ざると、上位を占めるのは
+    ワークフロー用のラベルばかりになり、領域が読めない。名前空間で分けておけば、
+    フロントが領域らしい群を独立して並べられる。除外リストを持たないのは、
+    どの接頭辞が領域かはチームのラベル運用ごとに違うため。
+    """
+    head, sep, rest = label.partition(":")
+    if not sep or not head.strip() or not rest.strip():
+        return None
+    return head.strip()
 
 
 def _themes(issues: list[GitHubIssue]) -> list[Theme]:
@@ -189,6 +318,7 @@ def _themes(issues: list[GitHubIssue]) -> list[Theme]:
             label=label,
             open_count=open_counts.get(label, 0),
             closed_count=closed_counts.get(label, 0),
+            namespace=_namespace_of(label),
         )
         for label in set(open_counts) | set(closed_counts)
     ]
@@ -219,7 +349,11 @@ def build_dashboard(
     return DashboardResponse(
         synced_at=synced_at,
         pulse=_pulse(changelog.entries, now, days, tz_offset_minutes),
-        attention=_attention(changelog.entries, issues, now),
+        pulse_previous_total=_previous_total(
+            changelog.entries, now, days, tz_offset_minutes
+        ),
+        attention=_attention(changelog.entries, issues, reviews, now),
+        recently_done=_recently_done(changelog.entries, RECENTLY_DONE_LIMIT),
         themes=_themes(issues),
     )
 

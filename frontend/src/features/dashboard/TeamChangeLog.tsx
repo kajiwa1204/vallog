@@ -17,6 +17,8 @@ type Props = {
   loading: boolean;
   error: string | null;
   hasMore: boolean;
+  // 前回このダッシュボードを開いた時刻。これより後の変化に印を付ける
+  newSince: string | null;
   onLoadMore: () => void;
   // 初回同期がまだ終わっていない。0件を「変化がない」と言い切らないために区別する
   syncing: boolean;
@@ -37,6 +39,7 @@ export function TeamChangeLog({
   loading,
   error,
   hasMore,
+  newSince,
   onLoadMore,
   syncing,
 }: Props) {
@@ -108,6 +111,7 @@ export function TeamChangeLog({
                 : "まだ変化がありません"
           }
           hasMore={hasMore}
+          newSince={newSince}
           loadingMore={loading}
           onLoadMore={onLoadMore}
         />

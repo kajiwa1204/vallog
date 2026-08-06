@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { NeedsAttention } from "@/features/dashboard/NeedsAttention";
+import { RecentlyDone } from "@/features/dashboard/RecentlyDone";
 import { TeamChangeLog } from "@/features/dashboard/TeamChangeLog";
 import { TeamPulse } from "@/features/dashboard/TeamPulse";
 import { Themes } from "@/features/dashboard/Themes";
@@ -38,12 +39,21 @@ export default function DashboardPage() {
     panelsError,
     panelsLoading,
     changelog,
+    newSince,
     roster,
     selectedMember,
     selectMember,
     syncing,
     reload,
   } = useDashboard(id, authed);
+
+  // 同期は終わっているのにデータが1件も無い＝活動がまだ無いチーム。初めて開いた人には
+  // 空のパネルが並ぶだけになるので、この画面が何をする場所なのかを言う
+  const isFresh =
+    panels !== null &&
+    !syncing &&
+    changelog.entries.length === 0 &&
+    !changelog.loading;
 
   return (
     <AppShell projectId={id} projectName={project?.name}>
@@ -84,6 +94,18 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {isFresh && (
+        <div className={styles.intro}>
+          <p className={styles.introLead}>
+            この画面は、チームがいま何を動かしているかをGitHubのPR・Issue・レビューから映します。
+          </p>
+          <p className={styles.introBody}>
+            リポジトリで最初のPRやIssueが動くと、止まっているもの・片づいたもの・活動のリズムがここに出ます。
+            記録された変化は、そのまま分配を話し合うときの材料になります。順位や点数は出しません。
+          </p>
+        </div>
+      )}
+
       {panelsError ? (
         <Card>
           <p className={styles.error}>{panelsError}</p>
@@ -95,11 +117,18 @@ export default function DashboardPage() {
       ) : (
         panels && (
           <div className={styles.panels}>
+            {/* 上段に「止まっているもの」と「片づいたもの」を左右に並べる。互いの
+                裏返しなので、横に置くと詰まりと流れが一目で比べられる。下段は
+                どちらも集計（リズムと領域）で揃える */}
             <div className={styles.column}>
               <NeedsAttention attention={panels.attention} me={me} />
+              <TeamPulse
+                days={panels.pulse}
+                previousTotal={panels.pulse_previous_total}
+              />
             </div>
             <div className={styles.column}>
-              <TeamPulse days={panels.pulse} />
+              <RecentlyDone items={panels.recently_done} />
               <Themes themes={panels.themes} />
             </div>
           </div>
@@ -109,6 +138,7 @@ export default function DashboardPage() {
       <div className={styles.changelog}>
         <TeamChangeLog
           entries={changelog.entries}
+          newSince={newSince}
           roster={roster}
           me={me}
           selected={selectedMember}
