@@ -236,3 +236,60 @@ export type ChangeLogResponse = {
   entries: ChangeLogEntry[];
   has_more: boolean;
 };
+
+// チーム状況パネル4種（画面4）。backend/app/schemas/dashboard.py と対応する。
+// スコアは含まない（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）
+export type PulseDay = {
+  // YYYY-MM-DD。バックエンドが tz_offset_minutes を見て畳んだローカル日付
+  date: string;
+  pull_requests: number;
+  issues: number;
+  reviews: number;
+};
+
+export type AttentionPullRequest = {
+  number: number;
+  title: string;
+  author_login: string;
+  html_url: string;
+  opened_at: string;
+  // 作成から現在まで（＝まだ止まっている時間）
+  waiting_hours: number;
+  draft: boolean;
+};
+
+export type AttentionIssue = {
+  number: number;
+  title: string;
+  html_url: string;
+  assignee_login: string;
+  assigned_at: string;
+  stalled_hours: number;
+};
+
+export type Attention = {
+  review_wanted: AttentionPullRequest[];
+  drafts: AttentionPullRequest[];
+  stalled_issues: AttentionIssue[];
+};
+
+export type ReviewEdge = {
+  reviewer_login: string;
+  author_login: string;
+  count: number;
+};
+
+export type Theme = {
+  label: string;
+  open_count: number;
+  closed_count: number;
+};
+
+export type DashboardResponse = {
+  // null なら初回同期がまだ完了していない
+  synced_at: string | null;
+  pulse: PulseDay[];
+  attention: Attention;
+  collaboration: ReviewEdge[];
+  themes: Theme[];
+};

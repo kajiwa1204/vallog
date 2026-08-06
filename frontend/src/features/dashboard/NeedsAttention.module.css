@@ -1,0 +1,75 @@
+.count {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  padding: 12px 0;
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  /* 止まっているものは際限なく増えうる。伸ばすと隣のパネルとの間に空白ができ、
+     主役の変化ログが画面外に押し出される。件数（ヘッダ）は打ち切らず表示だけ畳む */
+  max-height: 336px;
+  overflow-y: auto;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.item {
+  display: block;
+  padding: 9px 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius-s);
+  transition: background 0.12s ease;
+}
+
+.item:hover {
+  background: var(--surface-dim);
+}
+
+.item:hover .title {
+  color: var(--green);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.number {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.title {
+  font-size: 13px;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 3px;
+  padding-left: 2px;
+}
+
+.who,
+.elapsed {
+  font-size: 11px;
+  color: var(--ink-3);
+}
