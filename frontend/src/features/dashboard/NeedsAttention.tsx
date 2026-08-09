@@ -145,13 +145,17 @@ export function NeedsAttention({
     <Card
       title="気にかけること"
       actions={
-        // 総件数だけだと「8件」が誰の8件か分からない。読み手が知りたいのは
-        // 自分の分なので、そちらを先に出す。用事が無いときは .clear が
-        // 同じことを言うので件数は出さない
+        // 総件数だけだと「9件」が誰の9件か分からない。読み手が知りたいのは
+        // 自分の分なので、そちらを先に出す。
+        // 「あなたの番です」と「あなたがレビューできます」の合計なので、
+        // 義務に寄せた語（要対応など）は使わない。レビューは必要ではなく可能で、
+        // 群の順序もその整理で決めている。用事が無いときは .clear が同じことを
+        // 言うので件数は出さない
         rows.length > 0 &&
         (hasOwnBusiness ? (
-          <span className={`num ${styles.count}`}>
-            あなた {ownRows.length} / 全 {rows.length}
+          <span className={styles.count}>
+            あなたが動かせる <span className="num">{ownRows.length}</span> / 全{" "}
+            <span className="num">{rows.length}</span>
           </span>
         ) : null)
       }

@@ -10,10 +10,15 @@
  */
 const FRACTIONAL_DAYS_LIMIT = 10;
 
+/** 末尾の .0 を落とす。「7.0日」の .0 は精度ではなく雑音 */
+function trim(value: string): string {
+  return value.replace(/\.0$/, "");
+}
+
 export function formatElapsed(hours: number): string {
   if (hours < 1) return `${Math.round(hours * 60)}分`;
-  if (hours < 24) return `${hours.toFixed(1)}時間`;
+  if (hours < 24) return `${trim(hours.toFixed(1))}時間`;
   const days = hours / 24;
-  if (days < FRACTIONAL_DAYS_LIMIT) return `${days.toFixed(1)}日`;
+  if (days < FRACTIONAL_DAYS_LIMIT) return `${trim(days.toFixed(1))}日`;
   return `${Math.round(days)}日`;
 }
