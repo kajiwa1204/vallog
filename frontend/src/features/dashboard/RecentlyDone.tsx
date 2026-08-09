@@ -22,7 +22,15 @@ function formatDate(iso: string): string {
  */
 export function RecentlyDone({ items }: { items: DoneItem[] }) {
   return (
-    <Card title="最近片づいたもの">
+    <Card
+      title="最近片づいたもの"
+      // 打ち切りを明示する。件数が出ないと「これで全部」と読める
+      actions={
+        items.length > 0 && (
+          <span className={`num ${styles.count}`}>直近 {items.length} 件</span>
+        )
+      }
+    >
       {items.length === 0 ? (
         <p className={styles.empty}>
           マージされたPRや完了したIssueがここに出ます
@@ -38,8 +46,10 @@ export function RecentlyDone({ items }: { items: DoneItem[] }) {
                 rel="noreferrer"
               >
                 <div className={styles.head}>
+                  {/* 語は ChangeLogList（共有プリミティブ）に合わせる。
+                      同じ出来事が同じ画面で別の言葉になるのを避ける */}
                   <Badge tone="green">
-                    {item.kind === "pull_request" ? "マージ" : "完了"}
+                    {item.kind === "pull_request" ? "マージ済み" : "クローズ"}
                   </Badge>
                   <span className={`num ${styles.number}`}>#{item.number}</span>
                   <span className={styles.title}>{item.title}</span>

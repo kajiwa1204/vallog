@@ -2,7 +2,11 @@
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-m);
-  overflow: hidden;
+  /* hidden ではなく clip。hidden はスクロールコンテナを作るため、中の
+     position:sticky がページスクロールではなくこのカードを基準にしてしまい、
+     見出しが貼り付かずに流れて消える（変化ログの日付見出しがこれで死んでいた）。
+     clip は角丸のはみ出しだけを切り、スクロールコンテナを作らない */
+  overflow: clip;
 }
 
 .header {

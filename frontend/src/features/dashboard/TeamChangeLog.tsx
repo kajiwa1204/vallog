@@ -65,8 +65,11 @@ export function TeamChangeLog({
     >
       {roster.length > 0 && (
         <div className={styles.filters} role="group" aria-label="メンバーで絞り込む">
+          {/* 選択状態を色だけで示すと、読み上げでも色覚特性でも届かない。
+              押下状態を持つボタンとして宣言する */}
           <button
             type="button"
+            aria-pressed={selected === null}
             className={`${styles.chip} ${selected === null ? styles.active : ""}`}
             onClick={() => onSelect(null)}
           >
@@ -76,6 +79,7 @@ export function TeamChangeLog({
             <button
               key={login}
               type="button"
+              aria-pressed={selected === login}
               className={`${styles.chip} ${selected === login ? styles.active : ""}`}
               onClick={() => onSelect(selected === login ? null : login)}
             >

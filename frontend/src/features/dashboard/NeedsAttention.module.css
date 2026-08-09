@@ -9,14 +9,16 @@
   margin: 0 0 4px;
 }
 
-/* 「自分に用事はない」ことを読まずに分かるようにする。安心を伝える情報なので
-   警告色は使わず、チームの行が続くことが分かる程度の存在感に留める */
+/* 「自分に用事はない」ことを読まずに分かるようにする。この画面が最初に答える
+   結論なので、副題（11.5px）より大きく、本文と同等の重みで出す。安心を伝える
+   情報なので警告色は使わず、チームの行が続くことは色の淡さで示す */
 .clear {
-  font-size: 12.5px;
-  color: var(--ink-2);
-  margin: 6px 0 2px;
-  padding: 8px 10px;
-  background: var(--green-tint, var(--surface-dim));
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  background: var(--green-tint);
   border-radius: var(--radius-s);
 }
 
@@ -115,7 +117,13 @@
   padding-left: 2px;
 }
 
-.who,
+/* 誰に声をかけるかを担う要素なので、経過時間より一段強く出す
+   （プロダクト方針レビューで「名前は落とさない」と決めた箇所） */
+.who {
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
 .elapsed {
   font-size: 11px;
   color: var(--ink-3);

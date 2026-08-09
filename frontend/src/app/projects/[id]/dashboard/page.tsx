@@ -49,11 +49,15 @@ export default function DashboardPage() {
 
   // 同期は終わっているのにデータが1件も無い＝活動がまだ無いチーム。初めて開いた人には
   // 空のパネルが並ぶだけになるので、この画面が何をする場所なのかを言う
+  // 0件には「まだ活動が無い」以外の原因もある。取得失敗と絞り込みの結果を
+  // 除かないと、データで埋まった画面に「まだ活動がありません」の導入が出る
   const isFresh =
     panels !== null &&
     !syncing &&
     changelog.entries.length === 0 &&
-    !changelog.loading;
+    !changelog.loading &&
+    changelog.error === null &&
+    selectedMember === null;
 
   return (
     <AppShell projectId={id} projectName={project?.name}>
@@ -72,10 +76,14 @@ export default function DashboardPage() {
           )}
         </div>
         <div className={styles.headerActions}>
+          {/* 取得に失敗しただけのときに「未同期」と出すと、本文のエラーとは
+              別の（誤った）原因を主張することになる。原因を語れないときは黙る */}
           <span className={`num ${styles.synced}`}>
-            {panels?.synced_at
-              ? `同期 ${new Date(panels.synced_at).toLocaleString("ja-JP")}`
-              : "未同期"}
+            {panelsError
+              ? ""
+              : panels?.synced_at
+                ? `同期 ${new Date(panels.synced_at).toLocaleString("ja-JP")}`
+                : "未同期"}
           </span>
           <Button
             variant="secondary"

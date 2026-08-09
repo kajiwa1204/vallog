@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/Badge";
+import { formatElapsed } from "@/lib/duration";
 import type { ChangeKind, ChangeLogEntry } from "@/types";
 import styles from "./ChangeLogList.module.css";
 
@@ -32,12 +33,6 @@ const STATE_LABEL: Record<string, string> = {
   commented: "コメント",
   dismissed: "棄却",
 };
-
-function formatElapsed(hours: number): string {
-  if (hours < 1) return `${Math.round(hours * 60)}分`;
-  if (hours < 24) return `${hours.toFixed(1)}時間`;
-  return `${(hours / 24).toFixed(1)}日`;
-}
 
 // 数字に潰す前の事実だけを並べる（docs/scoring_design.md「Goodhart対策」）。
 // 評価や良し悪しは書かず、GitHub上で確認できることだけを出す
@@ -140,12 +135,14 @@ export function ChangeLogList({
     <div>
       {groups.map((group) => (
         <section key={group.key} className={styles.day}>
-          <h4 className={styles.dayHeading}>
+          {/* Card のタイトルが h2 なので、その直下の区切りは h3。
+              気にかけること・動いている領域の群見出しと規則を揃える */}
+          <h3 className={styles.dayHeading}>
             {group.heading}
             <span className={`num ${styles.dayCount}`}>
               {group.entries.length}
             </span>
-          </h4>
+          </h3>
           <ul className={styles.list}>
             {group.entries.map((entry) => {
               const facts = factsOf(entry);
@@ -159,11 +156,16 @@ export function ChangeLogList({
                     rel="noreferrer"
                   >
                     <div className={styles.head}>
+                      {/* ロールを持たない空の span に aria-label を付けても
+                          アクセシブルネームにならず読まれない。視覚的に隠した
+                          テキストにして、親リンクの読み上げに自然に混ぜる */}
                       {isNew && (
-                        <span
-                          className={styles.new}
-                          aria-label="前回見たとき以降の変化"
-                        />
+                        <>
+                          <span className={styles.new} aria-hidden="true" />
+                          <span className="visually-hidden">
+                            前回見たとき以降の変化
+                          </span>
+                        </>
                       )}
                       <span className={styles.kind}>
                         {KIND_LABEL[entry.kind]}

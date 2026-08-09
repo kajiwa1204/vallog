@@ -31,5 +31,5 @@
 
 .red {
   background: var(--red-tint);
-  color: var(--red);
+  color: var(--red-strong);
 }

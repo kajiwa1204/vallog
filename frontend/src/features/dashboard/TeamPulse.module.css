@@ -52,9 +52,18 @@
 }
 
 .tick {
-  font-size: 9.5px;
+  font-size: 10.5px;
   color: var(--ink-3);
   white-space: nowrap;
+}
+
+/* 14本が狭い幅に詰まると 10.5px でも読めなくなる。目盛りは1日おきに間引く
+   （バー自体は全日そのまま。読めない文字を並べるより、間隔の基準が分かる
+   ほうが形を追える） */
+@media (max-width: 760px) {
+  .column:nth-child(even) .tick {
+    visibility: hidden;
+  }
 }
 
 .legend {
@@ -87,8 +96,8 @@
   color: var(--ink-3);
 }
 
-/* 増減は補助。合計そのものより弱く出す（増えた/減ったを評価に読ませない） */
+/* 増減は補助。合計そのものより弱く出す（増えた/減ったを評価に読ませない）。
+   opacity で更に薄めるとコントラストがAAを割るので、色は --ink-3 のまま */
 .delta {
-  color: var(--ink-4, var(--ink-3));
-  opacity: 0.85;
+  color: var(--ink-3);
 }

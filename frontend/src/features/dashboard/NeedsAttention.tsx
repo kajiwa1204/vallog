@@ -2,16 +2,9 @@
 
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import { formatElapsed } from "@/lib/duration";
 import type { Attention } from "@/types";
 import styles from "./NeedsAttention.module.css";
-
-// ChangeLogList にも同じ整形があるが、あちらは #77 のレビュー中のため取り込まない。
-// 集約するなら両PRがマージされてから
-function formatElapsed(hours: number): string {
-  if (hours < 1) return `${Math.round(hours * 60)}分`;
-  if (hours < 24) return `${hours.toFixed(1)}時間`;
-  return `${Math.round(hours / 24)}日`;
-}
 
 type Row = {
   key: string;
@@ -107,19 +100,24 @@ export function NeedsAttention({
     me === null
       ? [{ key: "all", heading: "", rows }]
       : [
-          // 他人のレビュー待ちPR。GitHubの requested_reviewers ではないので「依頼された」
-          // ではなく「手を挙げられる」。文言もそれ以上を約束しない
-          {
-            key: "reviewable",
-            heading: "あなたがレビューできます",
-            rows: rows.filter((row) => row.kind === "review" && !row.mine),
-          },
+          // 順序は「やる必要があるか」で決める。この画面が答えると決めた問いが
+          // 「自分は今日、何かする必要があるか」なので、義務（自分の番）が先で、
+          // 機会（レビューできる）が後。どちらも自分で動かせる点では同じなので、
+          // 「動かせる順」では並び順を決められない
+          //
           // 「あなたの番」と呼ぶのは自分の手で進められるものだけ。修正待ち（レビューで
           // 指摘を受けた自分のPR）・停滞Issue・draftが該当する
           {
             key: "yours",
             heading: "あなたの番です",
             rows: rows.filter((row) => row.mine && row.kind !== "review"),
+          },
+          // 他人のレビュー待ちPR。GitHubの requested_reviewers ではないので「依頼された」
+          // ではなく「手を挙げられる」。文言もそれ以上を約束しない
+          {
+            key: "reviewable",
+            heading: "あなたがレビューできます",
+            rows: rows.filter((row) => row.kind === "review" && !row.mine),
           },
           // 自分のPRのレビュー待ちは別に置く。動かせるのはレビュアーであって、作者にできるのは
           // 声をかけることだけ。「あなたの番」に混ぜると、他人が着手していないことを
@@ -136,33 +134,40 @@ export function NeedsAttention({
           },
         ].filter((group) => group.rows.length > 0);
 
-  // 自分が動かせるもの（レビューできる／自分の番）があるか。他人待ちの
+  // 自分が動かせるもの（レビューできる／自分の番）。他人待ちの
   // 「あなたのPRが待っています」は自分では動かせないので用事に数えない
-  const hasOwnBusiness = rows.some(
+  const ownRows = rows.filter(
     (row) => (row.kind === "review" && !row.mine) || (row.mine && row.kind !== "review"),
   );
+  const hasOwnBusiness = ownRows.length > 0;
 
   return (
     <Card
       title="気にかけること"
       actions={
-        rows.length > 0 && (
-          <span className={`num ${styles.count}`}>{rows.length}件</span>
-        )
+        // 総件数だけだと「8件」が誰の8件か分からない。読み手が知りたいのは
+        // 自分の分なので、そちらを先に出す。用事が無いときは .clear が
+        // 同じことを言うので件数は出さない
+        rows.length > 0 &&
+        (hasOwnBusiness ? (
+          <span className={`num ${styles.count}`}>
+            あなた {ownRows.length} / 全 {rows.length}
+          </span>
+        ) : null)
       }
     >
+      {/* 日常の入口として最初に答えるべきは「自分は今日、何かする必要があるか」
+          （docs/screen_design.md 画面4）。答えを副題より前に置く。GitHub側で
+          何を見ているかの説明が結論の上に立つと、結論に辿り着くのが遅れる */}
+      {rows.length > 0 && me !== null && !hasOwnBusiness && (
+        <p className={styles.clear}>いま自分がやることはありません</p>
+      )}
+
       {/* パネル名だけでは中身が推測できない。GitHub側で何を見ているのかを言う
           （群の見出しは行動の言葉なので、外側との段差をここで埋める） */}
       <p className={styles.subtitle}>
         レビュー待ち・修正待ち・担当のまま止まっているIssue
       </p>
-
-      {/* 日常の入口として最初に答えるべきは「自分は今日、何かする必要があるか」
-          （docs/screen_design.md 画面4）。自分向けの群が消えるだけだと、用事が
-          無いことを確かめるのに残りを読ませることになる */}
-      {rows.length > 0 && me !== null && !hasOwnBusiness && (
-        <p className={styles.clear}>いま自分がやることはありません</p>
-      )}
 
       {rows.length === 0 ? (
         <p className={styles.empty}>止まっているものはありません</p>

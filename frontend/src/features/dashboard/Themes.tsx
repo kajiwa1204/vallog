@@ -10,7 +10,10 @@ const VISIBLE_PER_GROUP = 5;
 
 type Group = {
   key: string;
-  heading: string | null;
+  heading: string;
+  // 見出しがラベルの接頭辞そのものか。接頭辞は等幅で出し、日本語の
+  // 補助見出し（接頭辞なし）とは書体で区別する
+  isNamespace: boolean;
   themes: Theme[];
 };
 
@@ -46,14 +49,22 @@ function groupByNamespace(themes: Theme[]): Group[] {
     .map(([namespace, list]) => ({
       key: namespace,
       heading: namespace,
+      isNamespace: true,
       themes: list,
     }))
     .sort((a, b) => totalOf(b.themes) - totalOf(a.themes));
 
   // 名前空間を持たないラベルは最後。接頭辞の付いたラベルのほうが領域を表している
-  // 可能性が高く、先に読ませたい
+  // 可能性が高く、先に読ませたい。
+  // 見出しを省くと直前の群の続きに見え、存在しない所属関係（priority:task など）が
+  // 読めてしまうため、必ず見出しを付ける
   if (ungrouped.length > 0) {
-    groups.push({ key: "__other", heading: null, themes: ungrouped });
+    groups.push({
+      key: "__other",
+      heading: "接頭辞なし",
+      isNamespace: false,
+      themes: ungrouped,
+    });
   }
   return groups;
 }
@@ -81,9 +92,11 @@ export function Themes({ themes }: { themes: Theme[] }) {
       ) : (
         shown.map((group) => (
           <section key={group.key} className={styles.group}>
-            {group.heading && (
-              <h3 className={`num ${styles.groupHeading}`}>{group.heading}</h3>
-            )}
+            <h3
+              className={`${group.isNamespace ? "num " : ""}${styles.groupHeading}`}
+            >
+              {group.heading}
+            </h3>
             <ul className={styles.list}>
               {group.themes.map((theme) => {
                 const total = theme.open_count + theme.closed_count;
