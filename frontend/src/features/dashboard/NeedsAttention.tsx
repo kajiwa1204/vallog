@@ -163,8 +163,10 @@ export function NeedsAttention({
       {/* 日常の入口として最初に答えるべきは「自分は今日、何かする必要があるか」
           （docs/screen_design.md 画面4）。答えを副題より前に置く。GitHub側で
           何を見ているかの説明が結論の上に立つと、結論に辿り着くのが遅れる */}
+      {/* 語はヘッダの「あなたが動かせる」と揃える。同じ hasOwnBusiness の裏表なので、
+          別の言葉にすると「あなたのPRが待っています」が直下に並んだとき矛盾に読める */}
       {rows.length > 0 && me !== null && !hasOwnBusiness && (
-        <p className={styles.clear}>いま自分がやることはありません</p>
+        <p className={styles.clear}>いま自分が動かせるものはありません</p>
       )}
 
       {/* パネル名だけでは中身が推測できない。GitHub側で何を見ているのかを言う
