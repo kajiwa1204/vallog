@@ -39,6 +39,7 @@ export function NewProjectModal({ open, onClose }: Props) {
     setProjectName("");
     setSubmitError(null);
     setReposError(null);
+    setPrivateAccess(true);
 
     setReposLoading(true);
     api
@@ -122,7 +123,7 @@ export function NewProjectModal({ open, onClose }: Props) {
           id="repo-search"
         />
 
-        {!reposLoading && !privateAccess && (
+        {!reposLoading && !reposError && !privateAccess && (
           <div className={styles.notice} role="status">
             <p>
               privateリポジトリは表示されていません。表示するにはGitHubでの再認可が必要です。承認画面には「Full control of private repositories」と表示されますが、Vallogが読むのはPR・Issue・コミットのみで、リポジトリへの書き込みは一切行いません。

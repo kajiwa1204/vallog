@@ -122,19 +122,18 @@ def _response(headers: dict) -> MagicMock:
 
 
 async def test_get_granted_scopes_parses_header():
-    client = GitHubClient("token")
     res = _response({"X-OAuth-Scopes": "read:user, repo"})
 
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=res):
-        scopes = await client.get_granted_scopes()
+    async with GitHubClient("token") as client:
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=res):
+            scopes = await client.get_granted_scopes()
 
     assert scopes == {"read:user", "repo"}
 
 
 async def test_get_granted_scopes_is_empty_when_header_absent():
-    client = GitHubClient("token")
-
-    with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=_response({})):
-        scopes = await client.get_granted_scopes()
+    async with GitHubClient("token") as client:
+        with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=_response({})):
+            scopes = await client.get_granted_scopes()
 
     assert scopes == set()
