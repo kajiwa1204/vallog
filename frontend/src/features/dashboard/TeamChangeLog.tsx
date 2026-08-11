@@ -1,13 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
 import { ChangeLogList } from "@/components/ChangeLogList";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import type { ChangeLogEntry } from "@/types";
 import styles from "./TeamChangeLog.module.css";
 
 type Props = {
+  projectId: string;
   entries: ChangeLogEntry[];
   roster: string[];
   // ログイン中のユーザー。チップの先頭に固定して「自分の記録」に辿り着けるようにする
@@ -20,6 +23,9 @@ type Props = {
   // 前回このダッシュボードを開いた時刻。これより後の変化に印を付ける
   newSince: string | null;
   onLoadMore: () => void;
+  // エラーの出た場所で取り直せるようにする。ヘッダの再読み込みは画面最上部にあり、
+  // 変化ログのエラーは最下部に出るので導線として遠い
+  onRetry: () => void;
   // 初回同期がまだ終わっていない。0件を「変化がない」と言い切らないために区別する
   syncing: boolean;
 };
@@ -31,6 +37,7 @@ type Props = {
  * 「取得中/同期中/空」の出し分けだけを持つ。
  */
 export function TeamChangeLog({
+  projectId,
   entries,
   roster,
   me,
@@ -41,6 +48,7 @@ export function TeamChangeLog({
   hasMore,
   newSince,
   onLoadMore,
+  onRetry,
   syncing,
 }: Props) {
   // 追加読み込みは limit を増やして取り直すため loading が立つ。既に行が見えている間は
@@ -97,11 +105,19 @@ export function TeamChangeLog({
             <span className={`num ${styles.selectedLogin}`}>{selected}</span>{" "}
             の変化だけを表示中
           </span>
+          {/* 絞り込みは「この人の分だけ見る」で、詳細は「この人の記録を数と推移まで
+              辿る」。同じ関心の続きなので、絞り込んだその場から飛べるようにする */}
+          <Link
+            className={styles.detailLink}
+            href={`/projects/${projectId}/members/${encodeURIComponent(selected)}`}
+          >
+            メンバー詳細 →
+          </Link>
         </div>
       )}
 
       {error ? (
-        <p className={styles.error}>{error}</p>
+        <ErrorState message={error} onRetry={onRetry} retrying={loading} />
       ) : initialLoading ? (
         <Spinner label="GitHubから変化ログを読み込んでいます…" />
       ) : (

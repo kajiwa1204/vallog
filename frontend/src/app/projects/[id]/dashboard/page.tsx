@@ -4,6 +4,7 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import { NeedsAttention } from "@/features/dashboard/NeedsAttention";
 import { RecentlyDone } from "@/features/dashboard/RecentlyDone";
@@ -115,8 +116,14 @@ export default function DashboardPage() {
       )}
 
       {panelsError ? (
-        <Card>
-          <p className={styles.error}>{panelsError}</p>
+        // タイトルを残すのは、赤い1行だけのカードだと「そこに何があるはずだったか」が
+        // 読み手に伝わらないため（#13 のデザインレビューからの申し送り）
+        <Card title="チームの状況">
+          <ErrorState
+            message={panelsError}
+            onRetry={reload}
+            retrying={panelsLoading}
+          />
         </Card>
       ) : panelsLoading && panels === null ? (
         <Card>
@@ -142,6 +149,7 @@ export default function DashboardPage() {
 
       <div className={styles.changelog}>
         <TeamChangeLog
+          projectId={id}
           entries={changelog.entries}
           newSince={newSince}
           roster={roster}
@@ -152,6 +160,7 @@ export default function DashboardPage() {
           error={changelog.error}
           hasMore={changelog.hasMore}
           onLoadMore={changelog.loadMore}
+          onRetry={changelog.reload}
           syncing={syncing}
         />
       </div>
