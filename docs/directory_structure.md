@@ -78,6 +78,8 @@ frontend/
 │   │       ├── Button.module.css
 │   │       ├── Modal.tsx
 │   │       ├── Modal.module.css
+│   │       ├── ErrorState.tsx                    # カード内エラー（タイトルを残し、その場に再試行）
+│   │       ├── ErrorState.module.css
 │   │       ├── Input.tsx
 │   │       └── Input.module.css
 │   ├── features/                                 # 機能別コンポーネント（画面内フラット）
@@ -102,8 +104,11 @@ frontend/
 │   │   ├── members/
 │   │   │   ├── ChangeLog.tsx                     # 主軸: ChangeLogList を包む薄いラッパー（単一メンバー）
 │   │   │   ├── ChangeLog.module.css
-│   │   │   ├── ContributionSummary.tsx           # 第2層: 変化ログの詳細（AIサマリー）
-│   │   │   ├── ContributionSummary.module.css
+│   │   │   ├── ContributionFacts.tsx             # 各指標の生データ（表示中の変化ログを数えた値）
+│   │   │   ├── ActivityChart.tsx                 # 活動量の推移（週次バケット）
+│   │   │   ├── MemberSwitcher.tsx                # 人を切り替える導線
+│   │   │   ├── activity.ts                       # 集計の純粋関数（Reactに依存しない・テスト可能）
+│   │   │   ├── ContributionSummary.tsx           # 第2層: 変化ログの詳細（AIサマリー・#16）
 │   │   │   └── useMemberDetail.ts
 │   │   └── projects/
 │   │       ├── ProjectCard.tsx
