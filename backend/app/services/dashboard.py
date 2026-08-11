@@ -129,36 +129,34 @@ def _attention_pr(entry: ChangeLogEntry, now: datetime) -> AttentionPullRequest:
     )
 
 
-def _last_changes_requested(
+def _latest_decisive_review(
     reviews: list[GitHubReview],
 ) -> dict[int, GitHubReview]:
-    """PR番号 → 最終レビューが CHANGES_REQUESTED ならそのレビュー。
+    """PR番号 → 最後に承認状態を動かしたレビュー（APPROVED / CHANGES_REQUESTED）。
 
-    「レビューが1件でも付いたか」だけを見ると、修正を求められたまま止まっているPRが
-    attention から丸ごと落ちる。有志チームで最も多い停滞がそれなので、最後のレビューの
-    状態まで見る。
+    COMMENTED を数に入れないのが要点。インラインコメントは GitHub 上 COMMENTED の
+    レビューになるが、これは「見た」以上のことを表明していない。実際のチームでは
+    レビューの過半がこれになるため、「レビューが1件でも付いたか」で判定すると、
 
-    再度Approveされていれば最終レビューは APPROVED になり、ここには現れない。
-    ただしキャッシュにpushの時刻が無いため、「作者が直したがまだ再レビューされていない」
-    区別は付かない。その場合もここに残るが、再レビューを促す先が作者であることに
-    変わりはないので実害は小さい。
+    - 修正を求められたまま止まっているPR（最後が CHANGES_REQUESTED）
+    - コメントだけ付いて承認されていないPR
+
+    の両方が attention から落ちる。前者は有志チームで最も多い停滞で、後者は
+    「見られてはいるが終わっていない」状態のまま誰の目にも入らなくなる。
+
+    キャッシュにpushの時刻が無いため「作者が直したがまだ再レビューされていない」区別は
+    付かない。ここで判定できるのは承認状態だけで、誰の番かは判定していない。
     """
     latest: dict[int, GitHubReview] = {}
     for review in reviews:
         if review.submitted_at is None or is_excluded_login(review.reviewer_login):
             continue
-        # COMMENTED は状態を表明していない（GitHubも承認状態を変えない）ので、
-        # 直前の CHANGES_REQUESTED を打ち消さないよう最終レビューの判定から外す
         if review.state.upper() not in _DECISIVE_REVIEW_STATES:
             continue
         current = latest.get(review.pr_number)
         if current is None or review.submitted_at > current.submitted_at:
             latest[review.pr_number] = review
-    return {
-        number: review
-        for number, review in latest.items()
-        if review.state.upper() == "CHANGES_REQUESTED"
-    }
+    return latest
 
 
 def _attention(
@@ -169,14 +167,27 @@ def _attention(
 ) -> Attention:
     """止まっているものを集める。
 
-    PR側を変化ログのエントリから作るのは、「他者レビューがない」の判定を1箇所に保つため。
-    同じ述語を書き直すと、変化ログが「他者レビューなし」と注記しているPRがこのパネルに
-    出てこない、という食い違いが起きうる。
+    PR側を変化ログのエントリから作るのは、行と注記の食い違いを避けるため。除外規則
+    （bot・unknown）や時刻の採用がそちらと自動的に揃う。
+
+    OPEN なPRの振り分けは、最後に承認状態を動かしたレビューだけで決める。
+
+    - CHANGES_REQUESTED → 修正待ち
+    - APPROVED          → 出さない（終わっている）
+    - どちらも無い      → レビュー待ち（無レビューでも、コメントだけでも）
+
+    「レビューが1件でもあるか」では判定しない。インラインコメントは COMMENTED の
+    レビューになり、実際のチームではレビューの過半を占める。それを「レビュー済み」と
+    数えると、コメントが付いただけのPRがどの群にも入らず画面から消える。
+
+    ここで判定しているのは承認状態であって「誰の番か」ではない。コメントが質問なら
+    待っているのは作者だが、pushの時刻を持たないため区別できない。だから作者側の
+    見出しは「あなたのPRが止まっています」という事実の言い方にしてある。
     """
     review_wanted: list[AttentionPullRequest] = []
     drafts: list[AttentionPullRequest] = []
     changes_requested: list[ChangesRequestedPullRequest] = []
-    blocked = _last_changes_requested(reviews)
+    latest_review = _latest_decisive_review(reviews)
 
     for entry in entries:
         if entry.kind != "pull_request" or entry.state != "open":
@@ -184,20 +195,20 @@ def _attention(
         if entry.notes.draft:
             drafts.append(_attention_pr(entry, now))
             continue
-        blocking = blocked.get(entry.number)
-        if blocking is not None:
+        decisive = latest_review.get(entry.number)
+        if decisive is not None and decisive.state.upper() == "CHANGES_REQUESTED":
             changes_requested.append(
                 ChangesRequestedPullRequest(
                     number=entry.number,
                     title=entry.title,
                     author_login=entry.actor_login,
                     html_url=entry.html_url,
-                    reviewer_login=blocking.reviewer_login,
-                    requested_at=blocking.submitted_at,
-                    waiting_hours=_hours_since(blocking.submitted_at, now),
+                    reviewer_login=decisive.reviewer_login,
+                    requested_at=decisive.submitted_at,
+                    waiting_hours=_hours_since(decisive.submitted_at, now),
                 )
             )
-        elif entry.notes.reviewed_by_others is False:
+        elif decisive is None:
             pr = _attention_pr(entry, now)
             if pr.waiting_hours >= REVIEW_WAITING_HOURS:
                 review_wanted.append(pr)

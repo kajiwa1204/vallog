@@ -203,13 +203,27 @@ def test_draft_is_listed_regardless_of_the_review_grace_period():
     assert [p.number for p in result.attention.drafts] == [1]
 
 
-def test_review_wanted_excludes_prs_already_reviewed_by_others():
+def test_review_wanted_excludes_approved_prs():
+    """承認されたPRは終わっている。"""
     result = _build(
         prs=[_pr(1, "alice", created_day=18)],
-        reviews=[_review(1, "bob", day=19)],
+        reviews=[_review(1, "bob", state="APPROVED", day=19)],
     )
 
     assert result.attention.review_wanted == []
+
+
+def test_inline_comments_alone_do_not_clear_review_wanted():
+    """インラインコメントは COMMENTED のレビューになる。実際のチームではこれが
+    レビューの過半を占めるので、「レビューが1件でもあるか」で判定すると、
+    コメントが付いただけのPRがどの群にも入らず画面から消える。"""
+    result = _build(
+        prs=[_pr(1, "alice", created_day=18)],
+        reviews=[_review(1, "bob", state="COMMENTED", day=19)],
+    )
+
+    assert [p.number for p in result.attention.review_wanted] == [1]
+    assert result.attention.changes_requested == []
 
 
 def test_self_review_does_not_clear_review_wanted():
@@ -220,6 +234,20 @@ def test_self_review_does_not_clear_review_wanted():
     )
 
     assert [p.number for p in result.attention.review_wanted] == [1]
+
+
+def test_comment_after_approval_keeps_the_pr_out():
+    """COMMENTED は承認状態を動かさない。承認後のコメントで蒸し返さない。"""
+    result = _build(
+        prs=[_pr(1, "alice", created_day=18)],
+        reviews=[
+            _review(1, "bob", state="APPROVED", day=19, github_id=1),
+            _review(1, "carol", state="COMMENTED", day=20, github_id=2),
+        ],
+    )
+
+    assert result.attention.review_wanted == []
+    assert result.attention.changes_requested == []
 
 
 def test_drafts_are_separated_from_review_wanted():
