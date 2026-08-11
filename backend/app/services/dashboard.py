@@ -1,8 +1,8 @@
-"""チーム状況パネル3種（第1層・AIなし）を組み立てる。
+"""チーム状況パネル4種（第1層・AIなし）を組み立てる。
 
 ダッシュボード（画面4）にスコアは載せない（docs/scoring_design.md
 「Goodhart対策とスコアの事後開示」。スコアの開示は分配画面が担う）。代わりにこのモジュールが
-「チームがいま何を動かしているか」を3通りに畳んで返す。3種はいずれも重み付けをせず、
+「チームがいま何を動かしているか」を4通りに畳んで返す。4種はいずれも重み付けをせず、
 報酬の算定式には現れない。
 
 ただし attention の停滞時間は、Issueがクローズされた時点でスピードカテゴリの経過時間
@@ -47,7 +47,13 @@ STALLED_ISSUE_DAYS = 7
 # 「片づいたもの」に出す件数。詰まりが無いチームでも画面が空にならない程度で、
 # 変化ログ（主役）と読み比べる量にはしない
 RECENTLY_DONE_LIMIT = 6
-# 承認状態を動かすレビュー。COMMENTED / DISMISSED は直前の判断を覆さないので含めない
+# 最終レビューの判定に使う状態。
+# COMMENTED は承認状態を表明していないので含めない。
+# DISMISSED を含めないのは「覆さないから」ではなく逆で、dismiss は判断の取り消しそのもの。
+# GitHubは dismiss しても新しいレビューを作らず、元のレビュー行の state を
+# CHANGES_REQUESTED から DISMISSED に書き換える。したがってここから外しておけば、
+# そのPRは latest に載らなくなり修正待ちから正しく消える。
+# 「DISMISSED も決定的だから含めよう」と足すと、取り消し済みの指摘で止まったままになる
 _DECISIVE_REVIEW_STATES = {"APPROVED", "CHANGES_REQUESTED"}
 # レビュー待ちとして挙げるまでの猶予。開いた直後のPRは「気にかけること」ではないため、
 # 停滞Issue（STALLED_ISSUE_DAYS）と同じく足切りする。draft には適用しない（draftは
@@ -293,7 +299,10 @@ def _namespace_of(label: str) -> str | None:
     head, sep, rest = label.partition(":")
     if not sep or not head.strip() or not rest.strip():
         return None
-    return head.strip()
+    # strip した値は返さない。フロントは namespace の長さでラベルを切って残りを
+    # 表示するので、ここで長さが変わると（"epic :core1" のような空白入りラベルで）
+    # 切り出し位置がずれる。namespace は「":" より前の生の文字列」で通す
+    return head
 
 
 def _themes(issues: list[GitHubIssue]) -> list[Theme]:
@@ -335,7 +344,7 @@ def build_dashboard(
     tz_offset_minutes: int = 0,
     synced_at: datetime | None = None,
 ) -> DashboardResponse:
-    """キャッシュ済みGitHubデータをチーム状況パネル3種にまとめる（純粋関数・DBアクセスなし）。
+    """キャッシュ済みGitHubデータをチーム状況パネル4種にまとめる（純粋関数・DBアクセスなし）。
 
     now を引数で受けるのは「レビュー待ち何時間」「担当から何日」が現在時刻に依存するため。
     datetime.now() を内側で呼ぶとテストが時計に依存する。
@@ -365,7 +374,7 @@ async def get_dashboard(
     days: int = DEFAULT_PULSE_DAYS,
     tz_offset_minutes: int = 0,
 ) -> DashboardResponse:
-    """TTLに従いGitHubキャッシュを最新化してからパネル3種を組み立てる。"""
+    """TTLに従いGitHubキャッシュを最新化してからパネル4種を組み立てる。"""
     # 戻り値の project を使う。同期を挟んだ場合、引数の project は github_synced_at が
     # 古いままで、レスポンスが「まだ一度も同期していない」と嘘をつく
     project = await ensure_synced(db, project, access_token, fetch_and_store)

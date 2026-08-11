@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useChangeLog } from "@/hooks/useChangeLog";
 import { api } from "@/lib/api";
 import { messageForError } from "@/lib/errorMessages";
@@ -44,9 +44,18 @@ function readAndBumpLastSeen(projectId: string): string | null {
  */
 export function useDashboard(projectId: string, enabled = true) {
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
+
+  // パネルの取得が済むまで変化ログを止める。両方が ensure_synced を通るため、
+  // 並列に投げると TTL 切れの回に「ロックを取れた側は新しいキャッシュ、取れなかった
+  // 側は古いキャッシュ」という別世代の同居が起きる。活動リズムのバーが今日3件と
+  // 言っているのに一覧に今日の行が無い、という読めない画面がこれ。
+  // GitHubがエラーを返す回も、どちらの領域がエラー表示になるかがレースで決まって
+  // 再現しなくなる。
+  // 直列にしても待ち時間はほとんど増えない。2本目は1本目が温めたキャッシュを引くため。
+  const [panelsSettled, setPanelsSettled] = useState(false);
   const changelog = useChangeLog(projectId, {
     member: selectedMember ?? undefined,
-    enabled,
+    enabled: enabled && panelsSettled,
   });
 
   // 絞り込みチップに出す顔ぶれ。絞り込み中は変化ログが1人分に減るので、そこから毎回
@@ -59,13 +68,24 @@ export function useDashboard(projectId: string, enabled = true) {
   const [panelsError, setPanelsError] = useState<string | null>(null);
   const [panelsLoading, setPanelsLoading] = useState(true);
 
-  // 初回マウント時に1度だけ読む。再読み込みのたびに更新すると、押した瞬間に
-  // 新着が全部消える
+  // 初回に1度だけ読む。再読み込みのたびに更新すると、押した瞬間に新着が全部消える。
+  //
+  // bump は「変化ログの取得に成功した回」に限る。取得の成否と無関係に走らせると、
+  // エラー画面を1度見ただけで、それまで溜まっていた新着の印が永久に消える。
+  //
+  // ref で番をするのは、この関数が「読んでから同じキーを上書きする」ため冪等でなく、
+  // 2回走ると2回目が「たった今書いた値」を読んで新着が0件になるから。いまは
+  // useAuth が非同期で enabled が mount 時に false のため StrictMode の二重実行を
+  // 免れているが、認証がContext化なりで同期的に解決するようになった瞬間に壊れる。
+  // しかも開発時にしか出ず、「前回から何も起きていない」と見分けが付かない
   const [newSince, setNewSince] = useState<string | null>(null);
+  const bumpedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || changelog.loading || changelog.error !== null) return;
+    if (bumpedFor.current === projectId) return;
+    bumpedFor.current = projectId;
     setNewSince(readAndBumpLastSeen(projectId));
-  }, [projectId, enabled]);
+  }, [projectId, enabled, changelog.loading, changelog.error]);
 
   const loadPanels = useCallback(async () => {
     if (!enabled) return;
@@ -97,6 +117,9 @@ export function useDashboard(projectId: string, enabled = true) {
       );
     } finally {
       setPanelsLoading(false);
+      // 失敗しても立てる。同期を試みた事実は同じなので、変化ログは後続で
+      // 同じ結果（成功なら温まったキャッシュ、失敗なら同じエラー）を受ける
+      setPanelsSettled(true);
     }
   }, [projectId, enabled]);
 

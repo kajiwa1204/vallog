@@ -1,4 +1,4 @@
-"""services/dashboard.py のチーム状況パネル3種のユニットテスト。
+"""services/dashboard.py のチーム状況パネル4種のユニットテスト。
 
 キャッシュ済みGitHubデータ（ORMオブジェクト）を SimpleNamespace で模して渡す。DBは使わない。
 現在時刻は build_dashboard の引数で渡すため、実行時の時計に依存しない。
@@ -484,6 +484,16 @@ def test_themes_expose_the_label_namespace():
         "priority:low": "priority",
         "task": None,
     }
+
+
+def test_themes_namespace_keeps_raw_prefix_including_spaces():
+    """namespace は ":" より前の生の文字列。フロントが長さでラベルを切るため、
+    ここで strip すると切り出し位置がずれる。"""
+    result = _build(issues=[_issue(1, "alice", labels=["epic :core1"])])
+
+    theme = result.themes[0]
+    assert theme.namespace == "epic "
+    assert theme.label[len(theme.namespace) + 1 :] == "core1"
 
 
 def test_themes_namespace_ignores_malformed_labels():

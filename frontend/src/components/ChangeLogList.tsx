@@ -79,7 +79,13 @@ type DayGroup = {
   entries: ChangeLogEntry[];
 };
 
-/** 同じ日のエントリを束ねる。entries は新しい順に並んでいる前提 */
+/**
+ * 同じ日のエントリを束ねる。**entries が occurred_at の降順である前提**で、
+ * 隣り合うものだけを比較する。
+ *
+ * 順序が崩れると同じ日付の群が非連続に複数でき、`key` が重複する。呼び出し側で
+ * 並べ替える場合は降順を保つこと（型では表せないので Props にも明記してある）。
+ */
 function groupByDay(entries: ChangeLogEntry[], today: Date): DayGroup[] {
   const groups: DayGroup[] = [];
   for (const entry of entries) {
@@ -97,6 +103,7 @@ function groupByDay(entries: ChangeLogEntry[], today: Date): DayGroup[] {
 }
 
 type Props = {
+  /** occurred_at の降順であること（日付でまとめる際に隣接比較している） */
   entries: ChangeLogEntry[];
   emptyText?: string;
   hasMore?: boolean;
@@ -127,14 +134,20 @@ export function ChangeLogList({
   // 日付でまとめるのは、フラットに並ぶと「今日何があったか」が読み取れないため。
   // 日付は各行にも出ていたが、行の属性であって構造ではなかった
   const groups = groupByDay(entries, new Date());
-  const newCount = newSince
-    ? entries.filter((e) => e.occurred_at > newSince).length
-    : 0;
+  // 文字列のまま比べると、サーバのシリアライズ形式（"...Z" か "+00:00" か、
+  // 秒未満の桁数）に結果が依存する。形式が変わった日に全件が誤判定に倒れるので、
+  // 時刻値で比べる
+  const newSinceAt = newSince !== null ? new Date(newSince).getTime() : null;
+  const isNewEntry = (entry: ChangeLogEntry) =>
+    newSinceAt !== null && new Date(entry.occurred_at).getTime() > newSinceAt;
+  const newCount = entries.filter(isNewEntry).length;
 
   return (
     <div>
-      {groups.map((group) => (
-        <section key={group.key} className={styles.day}>
+      {/* key に index を混ぜるのは、降順前提が破れて同じ日付の群が2つできても
+          key の重複にせず「見た目が変」で止めるため */}
+      {groups.map((group, i) => (
+        <section key={`${group.key}:${i}`} className={styles.day}>
           {/* Card のタイトルが h2 なので、その直下の区切りは h3。
               気にかけること・動いている領域の群見出しと規則を揃える */}
           <h3 className={styles.dayHeading}>
@@ -146,7 +159,7 @@ export function ChangeLogList({
           <ul className={styles.list}>
             {group.entries.map((entry) => {
               const facts = factsOf(entry);
-              const isNew = newSince !== null && entry.occurred_at > newSince;
+              const isNew = isNewEntry(entry);
               return (
                 <li key={entry.id}>
                   <a

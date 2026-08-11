@@ -1,6 +1,11 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel
+
+# 片づいたものはPRのマージとIssueの完了だけ。レビューは「片づく」対象ではないので、
+# changelog の ChangeKind（3値）は再利用しない
+DoneKind = Literal["pull_request", "issue"]
 
 
 class PulseDay(BaseModel):
@@ -17,6 +22,14 @@ class PulseDay(BaseModel):
 
 
 class AttentionPullRequest(BaseModel):
+    """レビューを待っているPR。
+
+    タイムスタンプがあるのに経過時間も返すのは、足切り（REVIEW_WAITING_HOURS）が
+    サーバ判定のため。表示とフィルタが同じ now を使っていないと、「24時間で切ったのに
+    23.9時間と表示される」ような説明できないズレが出る。
+    画面を開いたまま放置すると数字が固まるのは承知の上。
+    """
+
     number: int
     title: str
     author_login: str
@@ -77,7 +90,7 @@ class DoneItem(BaseModel):
     ダッシュボードが出さないと決めた集約になる。docs/scoring_design.md）。
     """
 
-    kind: str
+    kind: DoneKind
     number: int
     title: str
     actor_login: str
@@ -98,7 +111,7 @@ class Theme(BaseModel):
 
 
 class DashboardResponse(BaseModel):
-    """チーム状況パネル3種（画面4）。
+    """チーム状況パネル4種（画面4）。
 
     スコアは含まない（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）。
     3種はいずれも重み付けをせず、報酬の算定式には現れない。
