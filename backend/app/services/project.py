@@ -100,8 +100,8 @@ async def get_valid_invitation(db: AsyncSession, token: str) -> InvitationLink:
 async def list_selectable_repos(user: User) -> RepoOptionList:
     """登録フォーム用のリポジトリ一覧。"""
     async with GitHubClient(user.github_access_token) as client:
-        scopes = await client.get_granted_scopes()
-        repos = await client.list_viewer_repos()
+        repos, truncated = await client.list_viewer_repos()
+        scopes = client.granted_scopes
 
     options = [
         RepoOption(
@@ -118,7 +118,11 @@ async def list_selectable_repos(user: User) -> RepoOptionList:
     # （sort は安定なので fork 内では pushed 順が保たれる）
     options.sort(key=lambda o: o.fork)
 
-    return RepoOptionList(repos=options, private_access="repo" in scopes)
+    return RepoOptionList(
+        repos=options,
+        private_access=None if scopes is None else "repo" in scopes,
+        truncated=truncated,
+    )
 
 
 async def join_via_invitation(db: AsyncSession, token: str, user: User) -> Project:

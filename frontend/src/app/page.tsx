@@ -7,6 +7,7 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Wordmark } from "@/components/ui/AppShell";
 import { useAuth } from "@/hooks/useAuth";
 import { startGitHubLogin } from "@/lib/auth";
+import { REPO_SCOPE_NOTICE } from "@/lib/githubAccess";
 import styles from "./page.module.css";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -95,12 +96,7 @@ function LoginContent() {
             <p className={styles.note}>
               ログインすることで、GitHubのリポジトリ情報（privateを含む）の読み取りを許可します。
             </p>
-            {/* GitHubの承認画面の文言はスコープから自動生成され、こちらでは変更できない。
-                「Full control」の表示で驚かせないよう、遷移前に実際の文字列を先出しする */}
-            {/* JSXの改行は半角スペースになるため、日本語の文は改行せず1行で書く */}
-            <p className={styles.noteDetail}>
-              GitHubの承認画面には「Full control of private repositories」と表示されます。GitHubにprivateを読み取るだけの権限が用意されていないためで、Vallogが読むのはPR・Issue・コミットのみです。リポジトリへの書き込みは一切行いません。
-            </p>
+            <p className={styles.noteDetail}>{REPO_SCOPE_NOTICE}</p>
           </div>
         </div>
       </div>

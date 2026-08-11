@@ -59,8 +59,11 @@ class RepoOption(BaseModel):
 class RepoOptionList(BaseModel):
     repos: list[RepoOption]
     # トークンに repo スコープがあるか。false の場合 privateリポジトリは一覧に
-    # 含まれないため、フロントは再ログインを促す
-    private_access: bool
+    # 含まれないため、フロントは再ログインを促す。null は判定不能で、この場合は
+    # 導線を出さない（GitHubClient.granted_scopes を参照）
+    private_access: bool | None
+    # ページ上限に達して打ち切ったか。true ならリポジトリが全件揃っていない
+    truncated: bool
 
 
 class MemberResponse(BaseModel):
