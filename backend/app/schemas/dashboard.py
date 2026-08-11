@@ -21,6 +21,29 @@ class PulseDay(BaseModel):
     reviews: int
 
 
+class Pulse(BaseModel):
+    """活動リズム。
+
+    日次バケットに付随する値をここにまとめる。トップレベルに pulse_* を並べると
+    付随情報が増えるたびに接頭辞付きのフィールドが生えていくため。
+
+    total と previous_total をサーバが返すのは、フロントが days から復元すると
+    「どの範囲を合計したか」の定義が2箇所に散るため。前期は days に含まれないので
+    そもそも復元できない。
+    """
+
+    # 古い→新しい順
+    days: list[PulseDay]
+    total: int
+    # 直前の同じ長さの期間の合計。単独の件数は多いとも少とも言えないため、
+    # 読み手が基準を持てるように添える
+    previous_total: int
+    # サーバがどのオフセットで日付を畳んだか。フロントは変化ログの日付見出しを
+    # ブラウザのローカル日付で作っており、基準がずれていないかを突き合わせられる
+    # ようにエコーバックする
+    tz_offset_minutes: int
+
+
 class AttentionPullRequest(BaseModel):
     """レビューを待っているPR。
 
@@ -110,27 +133,38 @@ class Theme(BaseModel):
     namespace: str | None = None
 
 
+class Themes(BaseModel):
+    """動いている領域。
+
+    ラベルはリポジトリによって数百になりうるので、サーバで打ち切って total を添える。
+    「17種のうち8種」と言えないと、画面は打ち切ったことすら伝えられない。
+
+    attention には上限を置かない。あちらは詰まっている総量そのものが情報で、
+    「10件で切りました」と言われても読み手にできることが無いため。
+    """
+
+    # 合計（open + closed）降順
+    items: list[Theme]
+    # 打ち切る前の種類数
+    total: int
+
+
 class DashboardResponse(BaseModel):
     """チーム状況パネル4種（画面4）。
 
     スコアは含まない（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）。
     3種はいずれも重み付けをせず、報酬の算定式には現れない。
 
-    pulse / themes をベアなリストにしているのは、中身が1種類しかないものに空の
-    ラッパーを噛ませないため。attention だけは3種の別リストを持つのでオブジェクトに
-    している。
+    recently_done だけベアなリストにしているのは、サーバが件数を決め打ちしていて
+    「打ち切った」と言う必要が無いため（全部で6件、が仕様）。他は付随する値を持つので
+    オブジェクトにしている。
     """
 
     # いつ時点のキャッシュか。フロントはこれが null なら「初回同期中」と判断でき、
     # GET /projects/{id} の応答を待たずにローディング表現を決められる
     synced_at: datetime | None
-    # 古い→新しい順
-    pulse: list[PulseDay]
-    # 直前の同じ長さの期間の合計。単独の件数は多いとも少とも言えないため、
-    # 読み手が基準を持てるように前期の値を添える
-    pulse_previous_total: int
+    pulse: Pulse
     attention: Attention
     # 新しい→古い順
     recently_done: list[DoneItem]
-    # 合計（open + closed）降順
-    themes: list[Theme]
+    themes: Themes

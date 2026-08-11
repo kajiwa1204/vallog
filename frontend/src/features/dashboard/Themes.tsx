@@ -1,7 +1,7 @@
 "use client";
 
 import { Card } from "@/components/ui/Card";
-import type { Theme } from "@/types";
+import type { Theme, Themes as ThemesResponse } from "@/types";
 import styles from "./Themes.module.css";
 
 // 名前空間ごとの表示上限。全体で8件に切ると、件数の多いワークフロー用ラベル
@@ -69,8 +69,11 @@ function groupByNamespace(themes: Theme[]): Group[] {
   return groups;
 }
 
-export function Themes({ themes }: { themes: Theme[] }) {
-  const groups = groupByNamespace(themes);
+export function Themes({ themes }: { themes: ThemesResponse }) {
+  // サーバが既に打ち切っている。ここでの「ほかN種」は群ごとの打ち切りで、
+  // サーバ側の打ち切りとは別（合計はカードのヘッダで示す）
+  const items = themes.items;
+  const groups = groupByNamespace(items);
   const shown = groups.map((group) => ({
     ...group,
     hidden: Math.max(group.themes.length - VISIBLE_PER_GROUP, 0),
@@ -78,10 +81,18 @@ export function Themes({ themes }: { themes: Theme[] }) {
   }));
   // バーの長さは全体の最大値で揃える。群ごとに正規化すると、件数の少ない群の
   // バーが不当に長く見えて群をまたいだ比較ができなくなる
-  const max = Math.max(...themes.map((t) => t.open_count + t.closed_count), 1);
+  const max = Math.max(...items.map((t) => t.open_count + t.closed_count), 1);
 
   return (
-    <Card title="動いている領域">
+    <Card
+      title="動いている領域"
+      // サーバが打ち切った場合に「これで全部」と読まれないよう総数を出す
+      actions={
+        themes.total > items.length && (
+          <span className={`num ${styles.more}`}>全 {themes.total} 種</span>
+        )
+      }
+    >
       {/* 「領域」だけでは何を数えたのか分からない。出所を言う */}
       <p className={styles.subtitle}>Issueに付いたラベルごとの件数</p>
 

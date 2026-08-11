@@ -12,6 +12,7 @@ from app.services.dashboard import (
     RECENTLY_DONE_LIMIT,
     REVIEW_WAITING_HOURS,
     STALLED_ISSUE_DAYS,
+    THEMES_LIMIT,
     _local_date,
     build_dashboard,
 )
@@ -104,11 +105,11 @@ def _build(prs=(), issues=(), reviews=(), **kwargs):
 def test_pulse_fills_quiet_days_with_zero():
     result = _build(prs=[_pr(1, "alice", created_day=20)])
 
-    assert len(result.pulse) == DEFAULT_PULSE_DAYS
+    assert len(result.pulse.days) == DEFAULT_PULSE_DAYS
     # 古い→新しい順で、末尾が「今日」
-    assert result.pulse[-1].date == NOW.date()
-    assert result.pulse[-1].pull_requests == 1
-    assert all(d.pull_requests == 0 for d in result.pulse[:-1])
+    assert result.pulse.days[-1].date == NOW.date()
+    assert result.pulse.days[-1].pull_requests == 1
+    assert all(d.pull_requests == 0 for d in result.pulse.days[:-1])
 
 
 def test_pulse_counts_each_kind_separately():
@@ -118,7 +119,7 @@ def test_pulse_counts_each_kind_separately():
         reviews=[_review(1, "bob", day=20)],
     )
 
-    today = result.pulse[-1]
+    today = result.pulse.days[-1]
     assert (today.pull_requests, today.issues, today.reviews) == (1, 1, 1)
 
 
@@ -127,7 +128,7 @@ def test_pulse_uses_latest_state_change_not_creation():
     # 作成・マージともに14日窓（1/7〜1/20）の内側に置き、どちらの日で数えたかを見る
     result = _build(prs=[_pr(1, "alice", created_day=8, merged_day=20)])
 
-    by_date = {d.date: d for d in result.pulse}
+    by_date = {d.date: d for d in result.pulse.days}
     assert by_date[_dt(20).date()].pull_requests == 1
     assert by_date[_dt(8).date()].pull_requests == 0
 
@@ -135,8 +136,8 @@ def test_pulse_uses_latest_state_change_not_creation():
 def test_pulse_drops_activity_outside_the_window():
     result = _build(prs=[_pr(1, "alice", created_day=1)], days=5)
 
-    assert len(result.pulse) == 5
-    assert sum(d.pull_requests for d in result.pulse) == 0
+    assert len(result.pulse.days) == 5
+    assert sum(d.pull_requests for d in result.pulse.days) == 0
 
 
 def test_pulse_buckets_by_local_date_when_offset_given():
@@ -146,8 +147,20 @@ def test_pulse_buckets_by_local_date_when_offset_given():
     utc = _build(prs=late_utc)
     jst = _build(prs=late_utc, tz_offset_minutes=540)
 
-    assert next(d for d in utc.pulse if d.date == _dt(19).date()).pull_requests == 1
-    assert next(d for d in jst.pulse if d.date == _dt(20).date()).pull_requests == 1
+    assert next(d for d in utc.pulse.days if d.date == _dt(19).date()).pull_requests == 1
+    assert next(d for d in jst.pulse.days if d.date == _dt(20).date()).pull_requests == 1
+
+
+def test_pulse_carries_its_own_total_and_offset():
+    """days から復元させない。合計の定義が2箇所に散るのを避ける。"""
+    result = _build(
+        prs=[_pr(1, "alice", created_day=20)],
+        issues=[_issue(2, "bob", created_day=19)],
+        tz_offset_minutes=540,
+    )
+
+    assert result.pulse.total == 2
+    assert result.pulse.tz_offset_minutes == 540
 
 
 def test_local_date_shifts_across_midnight():
@@ -158,7 +171,7 @@ def test_local_date_shifts_across_midnight():
 def test_pulse_excludes_bots():
     result = _build(prs=[_pr(1, "dependabot[bot]", created_day=20)])
 
-    assert sum(d.pull_requests for d in result.pulse) == 0
+    assert sum(d.pull_requests for d in result.pulse.days) == 0
 
 
 # --- attention -----------------------------------------------------------
@@ -456,14 +469,14 @@ def test_previous_total_counts_the_period_before_the_window():
         prs=[_pr(1, "alice", created_day=20), _pr(2, "alice", created_day=3)],
     )
 
-    assert result.pulse[-1].pull_requests == 1
-    assert result.pulse_previous_total == 1
+    assert result.pulse.days[-1].pull_requests == 1
+    assert result.pulse.previous_total == 1
 
 
 def test_previous_total_excludes_the_current_window():
     result = _build(prs=[_pr(1, "alice", created_day=20)])
 
-    assert result.pulse_previous_total == 0
+    assert result.pulse.previous_total == 0
 
 
 # --- themes --------------------------------------------------------------
@@ -478,7 +491,7 @@ def test_themes_split_open_and_closed():
         ]
     )
 
-    by_label = {t.label: t for t in result.themes}
+    by_label = {t.label: t for t in result.themes.items}
     assert (by_label["backend"].open_count, by_label["backend"].closed_count) == (1, 1)
     assert (by_label["frontend"].open_count, by_label["frontend"].closed_count) == (1, 0)
 
@@ -486,7 +499,7 @@ def test_themes_split_open_and_closed():
 def test_themes_exclude_sp_labels():
     result = _build(issues=[_issue(1, "alice", labels=["SP:3", "sp:5", "backend"])])
 
-    assert [t.label for t in result.themes] == ["backend"]
+    assert [t.label for t in result.themes.items] == ["backend"]
 
 
 def test_themes_sorted_by_total_then_label():
@@ -498,7 +511,7 @@ def test_themes_sorted_by_total_then_label():
         ]
     )
 
-    assert [t.label for t in result.themes] == ["c", "a", "b"]
+    assert [t.label for t in result.themes.items] == ["c", "a", "b"]
 
 
 def test_themes_expose_the_label_namespace():
@@ -506,7 +519,7 @@ def test_themes_expose_the_label_namespace():
         issues=[_issue(1, "alice", labels=["epic:core1", "priority:low", "task"])]
     )
 
-    namespaces = {t.label: t.namespace for t in result.themes}
+    namespaces = {t.label: t.namespace for t in result.themes.items}
     assert namespaces == {
         "epic:core1": "epic",
         "priority:low": "priority",
@@ -519,7 +532,7 @@ def test_themes_namespace_keeps_raw_prefix_including_spaces():
     ここで strip すると切り出し位置がずれる。"""
     result = _build(issues=[_issue(1, "alice", labels=["epic :core1"])])
 
-    theme = result.themes[0]
+    theme = result.themes.items[0]
     assert theme.namespace == "epic "
     assert theme.label[len(theme.namespace) + 1 :] == "core1"
 
@@ -528,13 +541,22 @@ def test_themes_namespace_ignores_malformed_labels():
     """先頭や末尾が空の "foo:" / ":bar" は名前空間として扱わない。"""
     result = _build(issues=[_issue(1, "alice", labels=["foo:", ":bar"])])
 
-    assert all(t.namespace is None for t in result.themes)
+    assert all(t.namespace is None for t in result.themes.items)
 
 
 def test_themes_exclude_bot_authored_issues():
     result = _build(issues=[_issue(1, "renovate[bot]", labels=["deps"])])
 
-    assert result.themes == []
+    assert result.themes.items == []
+
+
+def test_themes_are_capped_and_report_the_full_count():
+    """打ち切ったことを画面が言えるように、切る前の種類数を返す。"""
+    many = [_issue(n, "alice", labels=[f"label{n:03d}"]) for n in range(THEMES_LIMIT + 5)]
+    result = _build(issues=many)
+
+    assert len(result.themes.items) == THEMES_LIMIT
+    assert result.themes.total == THEMES_LIMIT + 5
 
 
 # --- response ------------------------------------------------------------
@@ -549,12 +571,12 @@ def test_synced_at_is_passed_through():
 def test_empty_cache_yields_empty_panels_not_an_error():
     result = _build()
 
-    assert len(result.pulse) == DEFAULT_PULSE_DAYS
-    assert result.pulse_previous_total == 0
+    assert len(result.pulse.days) == DEFAULT_PULSE_DAYS
+    assert result.pulse.previous_total == 0
     assert result.attention.review_wanted == []
     assert result.attention.changes_requested == []
     assert result.attention.drafts == []
     assert result.attention.stalled_issues == []
     assert result.recently_done == []
-    assert result.themes == []
+    assert result.themes.items == []
     assert result.synced_at is None

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card } from "@/components/ui/Card";
-import type { PulseDay } from "@/types";
+import type { Pulse, PulseDay } from "@/types";
 import styles from "./TeamPulse.module.css";
 
 const KINDS = [
@@ -38,16 +38,12 @@ function formatDelta(total: number, previous: number): string | null {
   return `前期 ${previous} から ${diff > 0 ? "+" : ""}${diff}`;
 }
 
-export function TeamPulse({
-  days,
-  previousTotal,
-}: {
-  days: PulseDay[];
-  previousTotal: number;
-}) {
+export function TeamPulse({ pulse }: { pulse: Pulse }) {
+  // 合計はサーバの値を使う。days から足し直すと「何を合計とするか」の定義が
+  // 2箇所に散り、前期（days に含まれない）とも揃わなくなる
+  const { days, total } = pulse;
   const max = Math.max(...days.map(totalOf), 1);
-  const total = days.reduce((sum, d) => sum + totalOf(d), 0);
-  const delta = formatDelta(total, previousTotal);
+  const delta = formatDelta(total, pulse.previous_total);
 
   return (
     <Card

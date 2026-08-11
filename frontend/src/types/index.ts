@@ -296,6 +296,16 @@ export type DoneItem = {
   occurred_at: string;
 };
 
+export type Pulse = {
+  // 古い→新しい順
+  days: PulseDay[];
+  total: number;
+  // 直前の同じ長さの期間の合計。単独の件数に基準を与えるために添えられる
+  previous_total: number;
+  // サーバがどのオフセットで日付を畳んだか
+  tz_offset_minutes: number;
+};
+
 export type Theme = {
   label: string;
   open_count: number;
@@ -304,13 +314,18 @@ export type Theme = {
   namespace: string | null;
 };
 
+export type Themes = {
+  // 合計（open + closed）降順。サーバで打ち切り済み
+  items: Theme[];
+  // 打ち切る前の種類数
+  total: number;
+};
+
 export type DashboardResponse = {
   // null なら初回同期がまだ完了していない
   synced_at: string | null;
-  pulse: PulseDay[];
-  // 直前の同じ長さの期間の合計。単独の件数に基準を与えるために添える
-  pulse_previous_total: number;
+  pulse: Pulse;
   attention: Attention;
   recently_done: DoneItem[];
-  themes: Theme[];
+  themes: Themes;
 };

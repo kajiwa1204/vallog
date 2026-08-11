@@ -36,8 +36,10 @@ from app.schemas.dashboard import (
     ChangesRequestedPullRequest,
     DashboardResponse,
     DoneItem,
+    Pulse,
     PulseDay,
     Theme,
+    Themes,
 )
 from app.services.changelog import build_changelog, is_excluded_login
 from app.services.github import ensure_synced, fetch_and_store
@@ -47,6 +49,10 @@ STALLED_ISSUE_DAYS = 7
 # 「片づいたもの」に出す件数。詰まりが無いチームでも画面が空にならない程度で、
 # 変化ログ（主役）と読み比べる量にはしない
 RECENTLY_DONE_LIMIT = 6
+# ラベルの種類はリポジトリによって数百になりうる。フロントは名前空間ごとに5件で
+# 畳んで見せるが、畳む前の全件をペイロードに載せる理由が無いのでサーバでも切る。
+# 群分けが成立する程度には残す
+THEMES_LIMIT = 30
 # 最終レビューの判定に使う状態。
 # COMMENTED は承認状態を表明していないので含めない。
 # DISMISSED を含めないのは「覆さないから」ではなく逆で、dismiss は判断の取り消しそのもの。
@@ -88,7 +94,7 @@ def _hours_since(start: datetime, now: datetime) -> float:
 
 def _pulse(
     entries: list[ChangeLogEntry], now: datetime, days: int, tz_offset_minutes: int
-) -> list[PulseDay]:
+) -> Pulse:
     today = _local_date(now, tz_offset_minutes)
     start = today - timedelta(days=days - 1)
 
@@ -103,7 +109,7 @@ def _pulse(
             continue
         bucket[entry.kind] += 1
 
-    return [
+    buckets = [
         PulseDay(
             date=day,
             pull_requests=bucket["pull_request"],
@@ -112,6 +118,12 @@ def _pulse(
         )
         for day, bucket in sorted(counts.items())
     ]
+    return Pulse(
+        days=buckets,
+        total=sum(d.pull_requests + d.issues + d.reviews for d in buckets),
+        previous_total=_previous_total(entries, now, days, tz_offset_minutes),
+        tz_offset_minutes=tz_offset_minutes,
+    )
 
 
 def _attention_pr(entry: ChangeLogEntry, now: datetime) -> AttentionPullRequest:
@@ -316,7 +328,7 @@ def _namespace_of(label: str) -> str | None:
     return head
 
 
-def _themes(issues: list[GitHubIssue]) -> list[Theme]:
+def _themes(issues: list[GitHubIssue], limit: int) -> Themes:
     open_counts: dict[str, int] = defaultdict(int)
     closed_counts: dict[str, int] = defaultdict(int)
 
@@ -333,7 +345,7 @@ def _themes(issues: list[GitHubIssue]) -> list[Theme]:
             else:
                 closed_counts[label] += 1
 
-    themes = [
+    items = [
         Theme(
             label=label,
             open_count=open_counts.get(label, 0),
@@ -342,8 +354,8 @@ def _themes(issues: list[GitHubIssue]) -> list[Theme]:
         )
         for label in set(open_counts) | set(closed_counts)
     ]
-    themes.sort(key=lambda t: (-(t.open_count + t.closed_count), t.label))
-    return themes
+    items.sort(key=lambda t: (-(t.open_count + t.closed_count), t.label))
+    return Themes(items=items[:limit], total=len(items))
 
 
 def build_dashboard(
@@ -369,12 +381,9 @@ def build_dashboard(
     return DashboardResponse(
         synced_at=synced_at,
         pulse=_pulse(changelog.entries, now, days, tz_offset_minutes),
-        pulse_previous_total=_previous_total(
-            changelog.entries, now, days, tz_offset_minutes
-        ),
         attention=_attention(changelog.entries, issues, reviews, now),
         recently_done=_recently_done(changelog.entries, RECENTLY_DONE_LIMIT),
-        themes=_themes(issues),
+        themes=_themes(issues, THEMES_LIMIT),
     )
 
 

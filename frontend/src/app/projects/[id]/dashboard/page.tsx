@@ -130,10 +130,7 @@ export default function DashboardPage() {
                 どちらも集計（リズムと領域）で揃える */}
             <div className={styles.column}>
               <NeedsAttention attention={panels.attention} me={me} />
-              <TeamPulse
-                days={panels.pulse}
-                previousTotal={panels.pulse_previous_total}
-              />
+              <TeamPulse pulse={panels.pulse} />
             </div>
             <div className={styles.column}>
               <RecentlyDone items={panels.recently_done} />
