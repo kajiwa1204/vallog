@@ -3,7 +3,7 @@
 import { ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import { formatElapsed } from "@/lib/duration";
-import type { ContributionFacts as Facts } from "./activity";
+import type { Breakdown, ContributionFacts as Facts } from "./activity";
 import styles from "./ContributionFacts.module.css";
 
 type Props = {
@@ -32,10 +32,10 @@ function Stat({
   );
 }
 
-/** 内訳の1項目。0 のものは並べない（0が並ぶと読む項目が埋もれる） */
-function breakdown(parts: [string, number][]): string | null {
-  const shown = parts.filter(([, n]) => n > 0).map(([label, n]) => `${label} ${n}`);
-  return shown.length > 0 ? shown.join(" ・ ") : null;
+/** 排他な内訳を並べる。和は必ず合計に一致する（activity.ts の breakdownOf を参照） */
+function formatBreakdown(parts: Breakdown[]): string | null {
+  if (parts.length === 0) return null;
+  return parts.map((p) => `${p.label} ${p.count}`).join(" ・ ");
 }
 
 /**
@@ -55,32 +55,25 @@ export function ContributionFacts({
   countedEntries,
   truncated,
 }: Props) {
-  const prDetail = breakdown([
-    ["マージ済み", facts.prsMerged],
-    ["オープン", facts.prsOpen],
-    ["draft", facts.prsDraft],
-  ]);
-  const issueDetail = breakdown([
-    ["完了", facts.issuesCompleted],
-    ["見送り", facts.issuesNotPlanned],
-  ]);
-  const reviewDetail = breakdown([
-    ["承認", facts.approvals],
-    ["要修正", facts.changesRequested],
-    ["コメント", facts.reviewComments],
-  ]);
-
   return (
     <Card title="記録されている数">
       <div className={styles.grid}>
-        <Stat label="出したPR" value={facts.prsOpened} detail={prDetail} />
+        <Stat
+          label="出したPR"
+          value={facts.prsOpened}
+          detail={formatBreakdown(facts.prBreakdown)}
+        />
         <Stat
           // 変化ログは起票と担当を区別せずに1人分へ寄せるので、数え方をそのまま名前にする
           label="Issue（起票・担当）"
           value={facts.issues}
-          detail={issueDetail}
+          detail={formatBreakdown(facts.issueBreakdown)}
         />
-        <Stat label="出したレビュー" value={facts.reviews} detail={reviewDetail} />
+        <Stat
+          label="出したレビュー"
+          value={facts.reviews}
+          detail={formatBreakdown(facts.reviewBreakdown)}
+        />
         <Stat
           label="完了IssueのSP"
           value={facts.storyPointsCompleted ?? "—"}
@@ -97,7 +90,7 @@ export function ContributionFacts({
               ? "—"
               : formatElapsed(facts.medianResponseHours)
           }
-          detail="中央値・PR作成から"
+          detail="中央値・PRごとの初回・PR作成から"
         />
         <Stat
           label={isMe ? "あなたのPRに初レビューが付くまで" : "PRに初レビューが付くまで"}
@@ -120,8 +113,11 @@ export function ContributionFacts({
       <p className={styles.source}>
         {truncated ? "下に並ぶ直近 " : "下に並ぶ "}
         <span className="num">{countedEntries}</span> 件の記録を数えた値です。
-        {truncated &&
-          "これより古い記録は数に入っていません（一覧の「もっと見る」で読み込めます）。"}
+        {/* 「もっと見る」で続きが読めるとは言えない。1リクエストの上限は
+            バックエンドが200件で、そこに達したらこの画面からは取りに行けない */}
+        {truncated && "これより古い記録は数に入っていません。"}
+        {facts.issues > 0 &&
+          "担当として関わったIssueは、GitHubの記録上その起票者の名前で一覧に並びます。"}
       </p>
     </Card>
   );
