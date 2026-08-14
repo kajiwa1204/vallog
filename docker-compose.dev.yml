@@ -26,6 +26,8 @@ services:
       - "8000:8000"
     environment:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # localhost は http なので Secure Cookie はブラウザに送信されない
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
 
   db:
     ports:

@@ -51,9 +51,23 @@ async function doRefresh(): Promise<TokenResponse | null> {
 // 複数のリクエストが同時に401になっても、リフレッシュは1回に束ねる
 let refreshPromise: Promise<TokenResponse | null> | null = null;
 
+// タブ間の直列化。リフレッシュCookieはタブ間で共有されるため、束ねを上の
+// タブ内変数だけに閉じると複数タブが同じ旧トークンを送り、サーバの再利用検知が
+// 誤爆して全セッションが失効する。navigator.locks はオリジン単位で排他できる。
+// リフレッシュトークンは HttpOnly Cookie なので、ロック解放後に投げる
+// リクエストにはブラウザが自動で新しいトークンを付ける。
+// secure context（https / localhost）が必須。非対応環境ではタブ内の束ねだけに戻る
+function withCrossTabLock<T>(fn: () => Promise<T>): Promise<T> {
+  if (typeof navigator === "undefined" || !navigator.locks) return fn();
+  // lib.dom の LockGrantedCallback<T> は「T を返す関数」型で、コールバックが
+  // Promise を返した場合の unwrap が反映されていない（Promise<Promise<T>> になる）。
+  // 実行時はロック解放前に解決を待つ仕様なので Promise<T> に潰して扱う
+  return navigator.locks.request("vallog:auth-refresh", fn) as unknown as Promise<T>;
+}
+
 export function refreshSession(): Promise<TokenResponse | null> {
   if (!refreshPromise) {
-    refreshPromise = doRefresh().finally(() => {
+    refreshPromise = withCrossTabLock(doRefresh).finally(() => {
       refreshPromise = null;
     });
   }

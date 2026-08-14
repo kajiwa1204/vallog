@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     fastapi_root_path: str = ""
     github_cache_ttl_seconds: int = 300
 
+    # 認証Cookieの Secure 属性。未指定なら FRONTEND_URL のスキームから推定する
+    # （localhost では Secure Cookie が送信されないため）。HTTPS 終端が
+    # リバースプロキシ側にある構成では明示的に true を指定する。
+    cookie_secure: bool | None = None
+    # 認証Cookieを送る対象パス。ブラウザから見たパスなので Next の rewrites
+    # (`/api/:path*` → backend `/:path*`) を通した後の値を指定する
+    auth_cookie_path: str = "/api/auth"
+
     # LLM provider selection
     summary_provider: Literal["claude", "openai", "ollama"] = "claude"
     # PR diffの1リクエストあたりの最大文字数（Tier1サマリーの入力上限 = コスト上限）
