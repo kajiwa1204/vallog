@@ -19,7 +19,10 @@ _OAUTH_STATE_COOKIE = "github_oauth_state"
 _OAUTH_STATE_MAX_AGE = 60 * 10
 _REFRESH_MAX_AGE = 60 * 60 * 24 * REFRESH_TOKEN_EXPIRE_DAYS
 _GITHUB_AUTHORIZE_URL = "https://github.com/login/oauth/authorize"
-_GITHUB_SCOPES = "read:user"
+# privateリポジトリの読み取りには repo が必要。Classic OAuth App には
+# 「privateの読み取りのみ」のスコープが存在しないため書き込み権限も含まれる
+# （最小権限にするには GitHub App への移行が必要）
+_GITHUB_SCOPES = "read:user repo"
 
 
 def _cookie_secure() -> bool:

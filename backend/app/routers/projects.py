@@ -8,10 +8,9 @@ from app.schemas.project import (
     ProjectListItem,
     ProjectResponse,
     ProjectUpdate,
-    RepoOption,
+    RepoOptionList,
 )
 from app.services import project as project_service
-from app.services.github import GitHubClient
 
 router = APIRouter(tags=["projects"])
 
@@ -67,18 +66,7 @@ async def update_project(payload: ProjectUpdate, project: MemberProject, db: DB)
     return _to_response(project, count)
 
 
-@router.get("/github/repos", response_model=list[RepoOption])
+@router.get("/github/repos", response_model=RepoOptionList)
 async def list_github_repos(user: CurrentUser):
     """プロジェクト作成画面でリポジトリを選択するためのエンドポイント。"""
-    async with GitHubClient(user.github_access_token) as client:
-        repos = await client.list_viewer_repos()
-    return [
-        RepoOption(
-            owner=r["owner"]["login"],
-            name=r["name"],
-            full_name=r["full_name"],
-            private=r["private"],
-            description=r.get("description"),
-        )
-        for r in repos
-    ]
+    return await project_service.list_selectable_repos(user)

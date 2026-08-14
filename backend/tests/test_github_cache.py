@@ -25,11 +25,13 @@ from app.services.github import (
 )
 
 
-def _mock_response(json_body, status_code: int = 200) -> MagicMock:
+def _mock_response(json_body, status_code: int = 200, headers: dict | None = None) -> MagicMock:
     res = MagicMock()
     res.status_code = status_code
     res.json.return_value = json_body
     res.raise_for_status = MagicMock()
+    # _request が X-OAuth-Scopes を読むため、実物同様に添字アクセスできる dict を渡す
+    res.headers = headers or {}
     return res
 
 
@@ -282,9 +284,10 @@ async def test_list_viewer_repos_uses_paginated():
     page = _mock_response([{"id": 1, "full_name": "owner/repo"}])
 
     with patch("httpx.AsyncClient.get", new_callable=AsyncMock, return_value=page):
-        repos = await client.list_viewer_repos()
+        repos, truncated = await client.list_viewer_repos()
 
     assert repos == [{"id": 1, "full_name": "owner/repo"}]
+    assert truncated is False
 
 
 @pytest.mark.asyncio

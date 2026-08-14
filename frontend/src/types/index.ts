@@ -43,7 +43,17 @@ export type RepoOption = {
   name: string;
   full_name: string;
   private: boolean;
+  fork: boolean;
   description: string | null;
+};
+
+export type RepoOptionList = {
+  repos: RepoOption[];
+  // false の場合、トークンに repo スコープがなく privateリポジトリが含まれない。
+  // null は判定不能で、再認可しても直らないため導線は出さない
+  private_access: boolean | null;
+  // true の場合、ページ上限で打ち切られておりリポジトリが全件揃っていない
+  truncated: boolean;
 };
 
 export type Member = {
