@@ -7,8 +7,8 @@ import styles from "./MemberSwitcher.module.css";
 
 type Props = {
   projectId: string;
+  // null なら顔ぶれを引けなかった。切り替え欄ごと出さない（useMemberDetail 参照）
   members: Member[] | null;
-  membersError: string | null;
   current: string;
   me: string | null;
 };
@@ -21,19 +21,19 @@ type Props = {
  * 活動量順に並べ替えると、この画面が出さないと決めた序列がここに現れる。
  * 自分の定位置が誰の画面でも先頭なのは序列にならない。
  */
-export function MemberSwitcher({
-  projectId,
-  members,
-  membersError,
-  current,
-  me,
-}: Props) {
+export function MemberSwitcher({ projectId, members, current, me }: Props) {
+  // 顔ぶれを引けていない、または自分1人しか居ない（＝切り替え先が無い）ときは
+  // 何も出さない。切り替え先の無い切り替え欄は、置くだけで「壊れている」に見える
+  if (members === null) return null;
+
   // contributors APIはコミットのある人しか返さないので、レビューだけのメンバーを
   // 開いていると一覧に本人が居ない。いま見ている人は必ず並べる
   const logins = Array.from(
-    new Set([...(members ?? []).map((m) => m.github_login), current]),
+    new Set([...members.map((m) => m.github_login), current]),
   );
-  const avatars = new Map((members ?? []).map((m) => [m.github_login, m.avatar_url]));
+  if (logins.length < 2) return null;
+
+  const avatars = new Map(members.map((m) => [m.github_login, m.avatar_url]));
 
   const ordered =
     me !== null && logins.includes(me)
@@ -72,8 +72,6 @@ export function MemberSwitcher({
           );
         })}
       </div>
-      {/* 顔ぶれが引けなくても主軸（記録）は出せているので、赤いカードにはしない */}
-      {membersError && <p className={styles.error}>{membersError}</p>}
     </div>
   );
 }

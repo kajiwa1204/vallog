@@ -19,6 +19,8 @@ function formatWeek(weekStart: string): string {
 type Props = {
   weeks: ActivityWeek[];
   truncated: boolean;
+  // weeks が空のとき、記録そのものがいつのものかを言うために使う
+  latestAt: string | null;
 };
 
 /**
@@ -26,13 +28,17 @@ type Props = {
  *
  * ダッシュボードの活動リズム（TeamPulse）が日次なのに対して週次にしているのは、
  * 個人の活動がチームより疎で、日次だと大半が空バーになりリズムが読めないため。
- * 同じ見え方を共有するが、片方はサーバが畳んだ日次バケット、こちらはクライアントが
- * 変化ログから畳んだ週次バケットで出所が違うので、コンポーネントは分けてある。
+ *
+ * 描画は TeamPulse とほぼ同型で、CSSを含めて実質的に重複している。統合していないのは
+ * 未マージPRを7本抱えた状態で #13 のファイルに触ると衝突面が広がるという**運用上の
+ * 都合**であって、設計上の理由ではない。取得層（サーバ畳み込みの日次／クライアント
+ * 畳み込みの週次）が違うだけで描画層に違いは無いので、スタックが解消したら
+ * `{label, segments}[]` を受ける表示コンポーネント1つに寄せること。
  *
  * 高さは件数そのもの。他のメンバーと並べず、順位も出さない
  * （docs/scoring_design.md「Goodhart対策とスコアの事後開示」）。
  */
-export function ActivityChart({ weeks, truncated }: Props) {
+export function ActivityChart({ weeks, truncated, latestAt }: Props) {
   const max = Math.max(...weeks.map(weekTotal), 1);
   const total = weeks.reduce((sum, week) => sum + weekTotal(week), 0);
 
@@ -49,7 +55,17 @@ export function ActivityChart({ weeks, truncated }: Props) {
       }
     >
       {weeks.length === 0 ? (
-        <p className={styles.empty}>まだ記録がありません</p>
+        // 0のバーを12本並べて「直近12週で0件」と言うと、その真横で「N件を数えた」と
+        // 言っているカードと矛盾した印象になる。記録がいつのものかを言って畳む
+        <p className={styles.empty}>
+          直近12週にこの人の記録はありません。
+          {latestAt !== null &&
+            `最新の記録は ${new Date(latestAt).toLocaleDateString("ja-JP", {
+              year: "numeric",
+              month: "numeric",
+              day: "numeric",
+            })} です。`}
+        </p>
       ) : (
         <>
           <div
