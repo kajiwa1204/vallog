@@ -29,9 +29,13 @@ export function useChangeLog(projectId: string, { member, enabled = true }: Opti
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // member が変わったら別の一覧になるので、広げた limit を持ち越さない
+  // member が変わったら別の一覧になるので、広げた limit を持ち越さない。
+  // entries も捨てる。残すと取得が終わるまで前のメンバーの行が並んだままになり、
+  // 呼び出し側が「◯◯の変化だけを表示中」と出している最中に別人の行が見える
   useEffect(() => {
     setLimit(PAGE_SIZE);
+    setEntries([]);
+    setHasMore(false);
   }, [member]);
 
   const load = useCallback(async () => {

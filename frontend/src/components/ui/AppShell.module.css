@@ -150,6 +150,9 @@
     flex-direction: column;
   }
 
+  /* 横一列に並べ、入りきらない分は横スクロールで逃がす。
+     子は縮めない（既定の flex-shrink:1 のままだと、幅が足りないときに
+     各項目が最小内容幅まで潰れ、日本語ラベルが1文字ずつ縦に折り返される） */
   .sidebar {
     position: static;
     height: auto;
@@ -159,6 +162,12 @@
     gap: 8px;
     padding: 10px 14px;
     overflow-x: auto;
+    /* iOSで慣性スクロールを効かせ、スクロールできることを触って分かるようにする */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sidebar > * {
+    flex-shrink: 0;
   }
 
   .brand {
@@ -169,6 +178,17 @@
 
   .nav {
     flex-direction: row;
+    flex-shrink: 0;
+  }
+
+  .navItem {
+    white-space: nowrap;
+  }
+
+  /* 縦並びのときは下端にユーザー情報を寄せるための余白。横並びでは
+     残り幅を食ってナビを圧迫するだけなので畳む */
+  .spacer {
+    display: none;
   }
 
   .projectName {

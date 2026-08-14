@@ -6,6 +6,7 @@ from app.core.errors import AppError, app_error_handler
 from app.routers import (
     auth,
     changelog,
+    dashboard,
     distribution,
     invitations,
     members,
@@ -34,6 +35,7 @@ app.include_router(projects.router)
 app.include_router(members.router)
 app.include_router(scores.router)
 app.include_router(changelog.router)
+app.include_router(dashboard.router)
 app.include_router(invitations.router)
 app.include_router(summaries.router)
 app.include_router(distribution.router)

@@ -236,3 +236,96 @@ export type ChangeLogResponse = {
   entries: ChangeLogEntry[];
   has_more: boolean;
 };
+
+// チーム状況パネル（画面4）。backend/app/schemas/dashboard.py と対応する。
+// スコアは含まない（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）
+export type PulseDay = {
+  // YYYY-MM-DD。バックエンドが tz_offset_minutes を見て畳んだローカル日付
+  date: string;
+  pull_requests: number;
+  issues: number;
+  reviews: number;
+};
+
+export type AttentionPullRequest = {
+  number: number;
+  title: string;
+  author_login: string;
+  html_url: string;
+  opened_at: string;
+  // 作成から現在まで（＝まだ止まっている時間）
+  waiting_hours: number;
+  draft: boolean;
+};
+
+export type AttentionIssue = {
+  number: number;
+  title: string;
+  html_url: string;
+  assignee_login: string;
+  assigned_at: string;
+  stalled_hours: number;
+};
+
+// 修正を求められたまま動いていないPR。review_wanted とは待っている相手が逆で、
+// こちらはPR作者の番
+export type ChangesRequestedPullRequest = {
+  number: number;
+  title: string;
+  author_login: string;
+  html_url: string;
+  reviewer_login: string;
+  requested_at: string;
+  waiting_hours: number;
+};
+
+export type Attention = {
+  review_wanted: AttentionPullRequest[];
+  changes_requested: ChangesRequestedPullRequest[];
+  drafts: AttentionPullRequest[];
+  stalled_issues: AttentionIssue[];
+};
+
+// 片づいたもの1件。attention の裏返しで、人ごとの件数には畳まない
+export type DoneItem = {
+  kind: "pull_request" | "issue";
+  number: number;
+  title: string;
+  actor_login: string;
+  html_url: string;
+  occurred_at: string;
+};
+
+export type Pulse = {
+  // 古い→新しい順
+  days: PulseDay[];
+  total: number;
+  // 直前の同じ長さの期間の合計。単独の件数に基準を与えるために添えられる
+  previous_total: number;
+  // サーバがどのオフセットで日付を畳んだか
+  tz_offset_minutes: number;
+};
+
+export type Theme = {
+  label: string;
+  open_count: number;
+  closed_count: number;
+  // ラベル名の ":" より前。持たないラベルは null
+  namespace: string | null;
+};
+
+export type Themes = {
+  // 合計（open + closed）降順。サーバで打ち切り済み
+  items: Theme[];
+  // 打ち切る前の種類数
+  total: number;
+};
+
+export type DashboardResponse = {
+  // null なら初回同期がまだ完了していない
+  synced_at: string | null;
+  pulse: Pulse;
+  attention: Attention;
+  recently_done: DoneItem[];
+  themes: Themes;
+};

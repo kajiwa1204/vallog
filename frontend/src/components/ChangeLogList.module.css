@@ -14,6 +14,48 @@
   padding: 12px 0;
 }
 
+.day + .day {
+  margin-top: 6px;
+}
+
+/* 日付の見出し。スクロールしても「いつの話か」を見失わないよう貼り付ける */
+.dayHeading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 0 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface);
+}
+
+.dayCount {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+/* 前回見たとき以降の印。件数ではなく有無だけを示すので、控えめな点にする */
+.new {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--green);
+  flex-shrink: 0;
+  margin-left: -2px;
+}
+
+.newSummary {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin: 10px 0 0;
+}
+
 .item {
   display: block;
   padding: 10px 8px;

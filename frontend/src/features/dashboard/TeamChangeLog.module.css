@@ -1,0 +1,91 @@
+.note {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-bottom: 14px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+/* アバターを持たない「すべて」だけ左右の余白を揃える */
+.chip:first-child {
+  padding-left: 10px;
+}
+
+.chip:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-dim);
+}
+
+.chip.active {
+  color: var(--green-strong);
+  background: var(--green-tint);
+  border-color: var(--green);
+}
+
+/* 自分のチップの目印。序列ではなく居場所を示すだけなので彩度を上げない */
+.chipMine {
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: var(--ink-3);
+  background: var(--surface-dim);
+}
+
+.chip.active .chipMine {
+  color: var(--green-strong);
+  background: var(--surface);
+}
+
+.chipLogin {
+  font-size: 11.5px;
+}
+
+.selectedBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  background: var(--green-tint);
+  border-radius: var(--radius-s);
+}
+
+.selectedText {
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.selectedLogin {
+  font-size: 12px;
+  color: var(--green-strong);
+  font-weight: 600;
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--red);
+  padding: 12px 0;
+}
