@@ -11,6 +11,7 @@ import { ContributionFacts } from "@/features/members/ContributionFacts";
 import { MemberSwitcher } from "@/features/members/MemberSwitcher";
 import { useMemberDetail } from "@/features/members/useMemberDetail";
 import { useAuth } from "@/hooks/useAuth";
+import { isRetryableChangeLogError } from "@/hooks/useChangeLog";
 import { useProject } from "@/hooks/useProject";
 import styles from "./page.module.css";
 
@@ -43,10 +44,11 @@ export default function MemberDetailPage() {
     changelog,
     facts,
     weeks,
+    latestAt,
     countedEntries,
     truncated,
     members,
-    membersError,
+    knownMember,
   } = useMemberDetail(id, login, authed);
 
   // 記録が1件も無いときに0が並んだ集計とバーの無いグラフを出しても読むものがない。
@@ -94,13 +96,7 @@ export default function MemberDetailPage() {
         {"GitHubに残っている記録をそのまま並べています。点数も順位も出しません（分配を話し合うときに画面7でまとめて開きます）。"}
       </p>
 
-      <MemberSwitcher
-        projectId={id}
-        members={members}
-        membersError={membersError}
-        current={login}
-        me={me}
-      />
+      <MemberSwitcher projectId={id} members={members} current={login} me={me} />
 
       {hasRecords && (
         <div className={styles.overview}>
@@ -110,19 +106,26 @@ export default function MemberDetailPage() {
             countedEntries={countedEntries}
             truncated={truncated}
           />
-          <ActivityChart weeks={weeks} truncated={truncated} />
+          <ActivityChart weeks={weeks} truncated={truncated} latestAt={latestAt} />
         </div>
       )}
 
       <MemberChangeLog
         login={login}
         isMe={isMe}
+        knownMember={knownMember}
         entries={changelog.entries}
         loading={changelog.loading}
         error={changelog.error}
         hasMore={changelog.hasMore}
         onLoadMore={changelog.loadMore}
-        onRetry={changelog.reload}
+        // 利用上限に当たっているときは再試行を出さない。押すと ensure_synced 経由で
+        // またGitHubを叩き、状況を悪化させるだけになる
+        onRetry={
+          isRetryableChangeLogError(changelog.errorCode)
+            ? changelog.reload
+            : undefined
+        }
       />
     </AppShell>
   );

@@ -16,7 +16,15 @@ type Props = {
   error: string | null;
   hasMore: boolean;
   onLoadMore: () => void;
-  onRetry: () => void;
+  // 押しても状況を悪くするだけのエラー（利用上限など）のときは渡ってこない
+  onRetry?: () => void;
+  /**
+   * このログインがプロジェクトの顔ぶれに居るか。null は顔ぶれを引けず不明。
+   *
+   * false のときの0件は「まだ記録が無い」ではなく「そんな人は居ない」なので、
+   * 空文言を分ける。検算が用途の画面で、この2つを混同させるのがいちばん困る
+   */
+  knownMember: boolean | null;
 };
 
 /**
@@ -37,6 +45,7 @@ export function MemberChangeLog({
   hasMore,
   onLoadMore,
   onRetry,
+  knownMember,
 }: Props) {
   // 追加読み込み中は全体をスピナーに差し替えない（既に読めている行を消さない）
   const initialLoading = loading && entries.length === 0;
@@ -56,9 +65,11 @@ export function MemberChangeLog({
         <ChangeLogList
           entries={entries}
           emptyText={
-            isMe
-              ? "この期間にあなたの記録はまだありません"
-              : `この期間に ${login} の記録はありません`
+            knownMember === false
+              ? `このプロジェクトに ${login} は見つかりません。ユーザー名の綴り（大文字・小文字を含む）を確認してください。`
+              : isMe
+                ? "この期間にあなたの記録はまだありません"
+                : `この期間に ${login} の記録はありません`
           }
           hasMore={hasMore}
           loadingMore={loading}

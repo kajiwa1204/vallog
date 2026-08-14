@@ -13,6 +13,7 @@ import { TeamPulse } from "@/features/dashboard/TeamPulse";
 import { Themes } from "@/features/dashboard/Themes";
 import { useDashboard } from "@/features/dashboard/useDashboard";
 import { useAuth } from "@/hooks/useAuth";
+import { isRetryableChangeLogError } from "@/hooks/useChangeLog";
 import { useProject } from "@/hooks/useProject";
 import styles from "./page.module.css";
 
@@ -160,7 +161,13 @@ export default function DashboardPage() {
           error={changelog.error}
           hasMore={changelog.hasMore}
           onLoadMore={changelog.loadMore}
-          onRetry={changelog.reload}
+          // 利用上限に当たっているときは再試行を出さない。押すと ensure_synced 経由で
+          // またGitHubを叩き、状況を悪化させるだけになる
+          onRetry={
+            isRetryableChangeLogError(changelog.errorCode)
+              ? changelog.reload
+              : undefined
+          }
           syncing={syncing}
         />
       </div>
