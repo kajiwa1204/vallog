@@ -12,6 +12,16 @@ const PULSE_DAYS = 14;
 const LAST_SEEN_KEY = (projectId: string) => `vallog:lastSeen:${projectId}`;
 
 /**
+ * このタブでこのプロジェクトの新着基準を既に確定したか。
+ *
+ * sessionStorage に置くのは、ref がページ遷移でアンマウントされると失われるため。
+ * #14 でダッシュボード⇄メンバー詳細の往復が主要動線になり、戻ってくるたびに
+ * readAndBumpLastSeen が走って「たった今書いた値」を読み、新着の印が全部消えていた。
+ * 確定した基準そのものを持ち回れば、往復しても同じ印が出続ける。
+ */
+const NEW_SINCE_KEY = (projectId: string) => `vallog:newSince:${projectId}`;
+
+/**
  * 前回このダッシュボードを見た時刻を読み、いまの時刻で上書きする。
  *
  * サーバに持たせないのは、「前回いつ見たか」が本質的にクライアントの状態で、
@@ -21,12 +31,21 @@ const LAST_SEEN_KEY = (projectId: string) => `vallog:lastSeen:${projectId}`;
 function readAndBumpLastSeen(projectId: string): string | null {
   if (typeof window === "undefined") return null;
   try {
+    // このタブで既に確定済みなら、その基準を返すだけにして上書きしない。
+    // 上書きすると往復のたびに基準が「今」になり、新着の印が消える
+    const settled = window.sessionStorage.getItem(NEW_SINCE_KEY(projectId));
+    if (settled !== null) return JSON.parse(settled) as string | null;
+
     const key = LAST_SEEN_KEY(projectId);
     const previous = window.localStorage.getItem(key);
     window.localStorage.setItem(key, new Date().toISOString());
+    window.sessionStorage.setItem(
+      NEW_SINCE_KEY(projectId),
+      JSON.stringify(previous),
+    );
     return previous;
   } catch {
-    // プライベートモード等で localStorage が使えない場合は印を出さないだけにする
+    // プライベートモード等でストレージが使えない場合は印を出さないだけにする
     return null;
   }
 }
