@@ -13,12 +13,16 @@
 設定値そのものは画面3の重み編集が参照するため書き換えない。
 """
 
+import uuid
 from collections.abc import Iterable
 
+from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import AppError, ErrorCode
 from app.models.github_cache import GitHubIssue, GitHubPullRequest, GitHubReview
 from app.models.project import Project
+from app.repositories.distribution import DistributionRepository
 from app.repositories.github_cache import GitHubCacheRepository
 from app.repositories.project import ProjectRepository
 from app.schemas.project import CategoryWeights
@@ -326,3 +330,47 @@ async def get_project_scores(
         registered_logins=[u.github_login for u in members],
         weights=weights,
     )
+
+
+async def can_disclose_scores(db: AsyncSession, project_id: uuid.UUID) -> bool:
+    """スコアをクライアントに開示してよい状態か（#100）。
+
+    「振り返りのとき」を、未確定の分配案が存在することで判定する。
+
+        案が0件          → 非開示（作業期間中）
+        未確定の案がある → 開示（分配を議論している最中）
+        全部確定済み     → 非開示（議論が終わった）
+
+    新しいテーブルもフェーズ状態も持たないのは、分配案の作成をトリガーにすると
+    「変化ログを読む → 議論する → 案を作る → 初めてスコアが見える」という順序まで
+    構造で強制できるため（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）。
+    フェーズ状態は単なるスイッチで、この順序までは担保しない。
+
+    確定済みに戻して非開示にしても情報は失われない。確定した案は DistributionItem に
+    当時の数値を保持しており、隠れるのはライブのスコアだけ。
+    """
+    return await DistributionRepository(db).exists_unfinalized(project_id)
+
+
+async def get_scores_for_disclosure(
+    db: AsyncSession, project: Project, access_token: str
+) -> ScoreResponse:
+    """クライアントへ返すスコア。開示条件を満たさなければ 403 で拒否する。
+
+    ゲートを get_project_scores() の中ではなくこの関数に置くのが要点。
+    services/distribution.py が案の作成・重み変更時に get_project_scores() を呼んで
+    初期比率を作っているため、そこまで塞ぐと鶏卵問題になる（案を作れないので
+    スコアが見えず、スコアが見えないので案が作れない）。制限するのは**クライアントへの
+    開示**であって、サーバ内部の計算ではない。
+
+    誰でも分配案を作れるので、ダミーの案を作ればスコアは見られる。これは技術的な壁では
+    なく、受け入れた制約（#100）。created_by が記録され編集履歴は全員に公開されるため、
+    見えるかたちで意図的な行為をする必要がある、という社会的抑止で担保する。
+    """
+    if not await can_disclose_scores(db, project.id):
+        raise AppError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.SCORES_NOT_DISCLOSED,
+            "Scores are disclosed only while an unfinalized distribution proposal exists",
+        )
+    return await get_project_scores(db, project, access_token)

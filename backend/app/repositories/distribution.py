@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -44,6 +44,19 @@ class DistributionRepository:
             .where(DistributionProposal.id == proposal_id)
             .options(*self._DETAIL_LOADS)
             .execution_options(populate_existing=True)
+        )
+
+    async def exists_unfinalized(self, project_id: uuid.UUID) -> bool:
+        """未確定の分配案が1件でもあるか。スコアの開示判定に使う（#100）。"""
+        return bool(
+            await self.db.scalar(
+                select(
+                    exists().where(
+                        DistributionProposal.project_id == project_id,
+                        DistributionProposal.finalized.is_(False),
+                    )
+                )
+            )
         )
 
     async def count_proposals(self, project_id: uuid.UUID) -> int:

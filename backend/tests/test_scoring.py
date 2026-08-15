@@ -3,11 +3,14 @@
 キャッシュ済みGitHubデータ（ORMオブジェクト）を SimpleNamespace で模して渡す。DBは使わない。
 """
 
+import uuid
 from datetime import datetime, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.core.errors import AppError, ErrorCode
 from app.services.scoring import (
     _activity_relative,
     _collect_logins,
@@ -16,7 +19,9 @@ from app.services.scoring import (
     _shares,
     _speed_values,
     _turnaround_values,
+    can_disclose_scores,
     compute_scores,
+    get_scores_for_disclosure,
 )
 
 
@@ -360,3 +365,74 @@ def test_compute_scores_only_activity_has_data():
     result = compute_scores(_project(), prs, [], [])
     assert all(m.categories.speed == 0.0 and m.categories.quality == 0.0 for m in result.members)
     assert sum(m.total for m in result.members) == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# スコアの事後開示ゲート（#100）
+# ---------------------------------------------------------------------------
+
+def _disclosure_repo(exists_unfinalized: bool) -> MagicMock:
+    repo = MagicMock()
+    repo.exists_unfinalized = AsyncMock(return_value=exists_unfinalized)
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_can_disclose_scores_is_false_without_any_proposal():
+    """作業期間中（案が0件）。③事前既知を折るため非開示。"""
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(False),
+    ):
+        assert await can_disclose_scores(MagicMock(), uuid.uuid4()) is False
+
+
+@pytest.mark.asyncio
+async def test_can_disclose_scores_is_true_while_a_proposal_is_open():
+    """分配を議論している最中だけ開示する。"""
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(True),
+    ):
+        assert await can_disclose_scores(MagicMock(), uuid.uuid4()) is True
+
+
+@pytest.mark.asyncio
+async def test_can_disclose_scores_is_false_when_all_proposals_are_finalized():
+    """議論が終わったら非開示に戻る。1回目の分配以降ずっと見えたままにすると、
+    2回目の作業期間中に③が折れない。"""
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(False),
+    ):
+        assert await can_disclose_scores(MagicMock(), uuid.uuid4()) is False
+
+
+@pytest.mark.asyncio
+async def test_get_scores_for_disclosure_rejects_when_not_disclosable():
+    project = SimpleNamespace(id=uuid.uuid4())
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(False),
+    ), patch("app.services.scoring.get_project_scores", new=AsyncMock()) as compute:
+        with pytest.raises(AppError) as e:
+            await get_scores_for_disclosure(MagicMock(), project, "token")
+
+    assert e.value.status_code == 403
+    assert e.value.code is ErrorCode.SCORES_NOT_DISCLOSED
+    # 拒否するときはGitHub同期もスコア計算も走らせない
+    compute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_scores_for_disclosure_returns_scores_when_disclosable():
+    project = SimpleNamespace(id=uuid.uuid4())
+    expected = object()
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(True),
+    ), patch(
+        "app.services.scoring.get_project_scores",
+        new=AsyncMock(return_value=expected),
+    ):
+        assert await get_scores_for_disclosure(MagicMock(), project, "token") is expected
