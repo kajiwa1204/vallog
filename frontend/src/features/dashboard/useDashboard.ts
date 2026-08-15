@@ -12,14 +12,20 @@ const PULSE_DAYS = 14;
 const LAST_SEEN_KEY = (projectId: string) => `vallog:lastSeen:${projectId}`;
 
 /**
- * このタブでこのプロジェクトの新着基準を既に確定したか。
+ * この「訪問」で確定した新着基準（projectId → newSince）。
  *
- * sessionStorage に置くのは、ref がページ遷移でアンマウントされると失われるため。
- * #14 でダッシュボード⇄メンバー詳細の往復が主要動線になり、戻ってくるたびに
- * readAndBumpLastSeen が走って「たった今書いた値」を読み、新着の印が全部消えていた。
- * 確定した基準そのものを持ち回れば、往復しても同じ印が出続ける。
+ * **モジュール変数なのが要点。** 保持したい寿命が「1回の訪問」だから。
+ *
+ * - フック内の ref だと、ページ遷移でアンマウントされた時点で失われる。
+ *   ダッシュボード⇄メンバー詳細の往復（#14 で主要動線になった）で戻るたびに
+ *   基準が「今」に更新され、新着の印が全部消えていた
+ * - かといって sessionStorage に置くと、今度は**リロードしても生き残る**ので
+ *   何度読み直しても印が消えなくなる（振り切りすぎ）
+ *
+ * モジュール変数は SPA 内の遷移では生き、ページの再読み込みと別タブでは消える。
+ * これがちょうど「1回の訪問」の粒度になる。
  */
-const NEW_SINCE_KEY = (projectId: string) => `vallog:newSince:${projectId}`;
+const settledNewSince = new Map<string, string | null>();
 
 /**
  * 前回このダッシュボードを見た時刻を読み、いまの時刻で上書きする。
@@ -30,22 +36,23 @@ const NEW_SINCE_KEY = (projectId: string) => `vallog:newSince:${projectId}`;
  */
 function readAndBumpLastSeen(projectId: string): string | null {
   if (typeof window === "undefined") return null;
-  try {
-    // このタブで既に確定済みなら、その基準を返すだけにして上書きしない。
-    // 上書きすると往復のたびに基準が「今」になり、新着の印が消える
-    const settled = window.sessionStorage.getItem(NEW_SINCE_KEY(projectId));
-    if (settled !== null) return JSON.parse(settled) as string | null;
 
+  // この訪問で確定済みなら、その基準を返すだけにして上書きしない。
+  // 上書きすると往復のたびに基準が「今」になり、新着の印が消える
+  if (settledNewSince.has(projectId)) {
+    return settledNewSince.get(projectId) ?? null;
+  }
+
+  try {
     const key = LAST_SEEN_KEY(projectId);
     const previous = window.localStorage.getItem(key);
     window.localStorage.setItem(key, new Date().toISOString());
-    window.sessionStorage.setItem(
-      NEW_SINCE_KEY(projectId),
-      JSON.stringify(previous),
-    );
+    settledNewSince.set(projectId, previous);
     return previous;
   } catch {
-    // プライベートモード等でストレージが使えない場合は印を出さないだけにする
+    // プライベートモード等でストレージが使えない場合は印を出さないだけにする。
+    // 確定済みとして記録し、遷移のたびに例外を踏み直さない
+    settledNewSince.set(projectId, null);
     return null;
   }
 }
