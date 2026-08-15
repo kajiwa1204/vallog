@@ -76,11 +76,11 @@ export function ContributionFacts({
           detail={formatBreakdown(facts.reviewBreakdown)}
         />
         <Stat
-          label="完了IssueのSP"
+          label="担当した完了IssueのSP"
           value={facts.storyPointsCompleted ?? "—"}
           detail={
             facts.storyPointsCompleted === null
-              ? "SPラベルの付いた完了Issueなし"
+              ? "SPラベルの付いた担当Issueなし"
               : "ラベルの値の合計"
           }
         />

@@ -33,28 +33,37 @@
   background: var(--surface-dim);
 }
 
-.links {
-  display: flex;
+/* 戻る導線。人の属性（GitHubリンク）と同じ見た目にしない。
+   --ink-3 は補足情報の色で操作には弱いので --ink-2 まで濃くし、下線を常時出して
+   「押せる」ことを形で示す。
+   ピル型（枠＋背景）にはしない。すぐ下のメンバー切替チップと同じ見た目になり、
+   今度は「チップの一種」に見えてしまうため。パンくずはパンくずの形にする */
+.back {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 5px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
 }
 
-.back,
+.back:hover {
+  color: var(--green-strong);
+  text-decoration-color: var(--green);
+}
+
+/* GitHubは外部への移動。押せるが、この画面の操作ではないので控えめに置く */
 .profile {
   font-size: 12px;
   color: var(--ink-3);
 }
 
-.back:hover,
 .profile:hover {
   color: var(--green);
-}
-
-.intro {
-  margin-bottom: 16px;
-  font-size: 12.5px;
-  line-height: 1.7;
-  color: var(--ink-3);
+  text-decoration: underline;
 }
 
 .overview {

@@ -44,8 +44,16 @@ export type ContributionFacts = {
   // Issue（起票または担当）。変化ログはこの2つを区別しないので、まとめて数える
   issues: number;
   issueBreakdown: Breakdown[];
-  // 完了IssueのSPラベルの合計。SPラベルの付いた完了Issueが1つも無ければ null
-  // （「SP 0」と「SPを運用していない」を区別する）
+  // 自分が**担当した**完了IssueのSPラベルの合計。SPラベルの付いた該当Issueが1つも
+  // 無ければ null（「SP 0」と「SPを運用していない」を区別する）。
+  //
+  // 上の issues（起票∪担当）と母集合が違う唯一の指標。起票しただけのIssueを含めない
+  // のは、SPが「そのIssueを完了させた仕事量」を表す値で、起票の労力ではないため。
+  // services/scoring.py も担当者にしか配らないので定義が揃う（実データで、起票分を
+  // 含めると 67、担当分だけだと 17 になった）。
+  //
+  // 担当分に絞っても検算はできる。一覧の各行が「起票 ◯◯ ・ 担当 ◯◯」を出しているので、
+  // 自分が担当のクローズ行のSPを足せば一致する（この表示が無かった頃は絞れなかった）。
   storyPointsCompleted: number | null;
   // レビュー（本人が出した行）
   reviews: number;
@@ -127,13 +135,24 @@ function prState(entry: ChangeLogEntry): (typeof PR_STATES)[number] {
   return "other";
 }
 
-export function summarizeContribution(entries: ChangeLogEntry[]): ContributionFacts {
+/**
+ * @param login 誰の記録として数えるか。SPの帰属（担当かどうか）の判定にだけ使う
+ */
+export function summarizeContribution(
+  entries: ChangeLogEntry[],
+  login: string,
+): ContributionFacts {
   const prs = entries.filter((e) => e.kind === "pull_request");
   const issues = entries.filter((e) => e.kind === "issue");
   const reviews = entries.filter((e) => e.kind === "review");
 
+  // 担当している完了Issueだけ。起票しただけのものは含めない（ContributionFacts の
+  // storyPointsCompleted のコメント参照）
   const sp = issues
-    .filter((e) => e.state === "closed")
+    .filter(
+      (e) =>
+        e.state === "closed" && (e.notes.assignee_logins ?? []).includes(login),
+    )
     .map((e) => e.notes.story_points)
     .filter((v): v is number => v !== null);
 

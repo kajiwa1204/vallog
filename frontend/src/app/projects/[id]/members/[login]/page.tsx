@@ -59,6 +59,13 @@ export default function MemberDetailPage() {
 
   return (
     <AppShell projectId={id} projectName={project?.name}>
+      {/* 戻る導線は識別情報の外に出す。中に入れると、アプリ内の移動とその人の
+          GitHubリンクが同じ「名前の下の補足」として並び、どちらも押せるものだと
+          気づけない。パンくずの定位置に、押せる見た目で置く */}
+      <Link className={styles.back} href={`/projects/${id}/dashboard`}>
+        <span aria-hidden="true">←</span> ダッシュボードに戻る
+      </Link>
+
       <header className={styles.header}>
         <div className={styles.identity}>
           <Avatar login={login} size={40} />
@@ -67,19 +74,14 @@ export default function MemberDetailPage() {
               <span className="num">{login}</span>
               {isMe && <span className={styles.mine}>あなた</span>}
             </h1>
-            <div className={styles.links}>
-              <Link className={styles.back} href={`/projects/${id}/dashboard`}>
-                ← ダッシュボード
-              </Link>
-              <a
-                className={`num ${styles.profile}`}
-                href={`https://github.com/${encodeURIComponent(login)}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                GitHub ↗
-              </a>
-            </div>
+            <a
+              className={`num ${styles.profile}`}
+              href={`https://github.com/${encodeURIComponent(login)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub ↗
+            </a>
           </div>
         </div>
         <Button
@@ -91,10 +93,6 @@ export default function MemberDetailPage() {
           再読み込み
         </Button>
       </header>
-
-      <p className={styles.intro}>
-        {"GitHubに残っている記録をそのまま並べています。点数も順位も出しません（分配を話し合うときに画面7でまとめて開きます）。"}
-      </p>
 
       <MemberSwitcher projectId={id} members={members} current={login} me={me} />
 

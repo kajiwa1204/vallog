@@ -64,7 +64,10 @@ export function useMemberDetail(projectId: string, login: string, enabled = true
   // 「数えた範囲が全部ではない」ことに変わりはないので、まとめて打ち切り扱いにする
   const truncated = changelog.hasMore || changelog.atLimit;
 
-  const facts = useMemo(() => summarizeContribution(entries), [entries]);
+  const facts = useMemo(
+    () => summarizeContribution(entries, login),
+    [entries, login],
+  );
 
   const weeks = useMemo(
     () =>
