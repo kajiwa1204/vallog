@@ -64,7 +64,8 @@ export function ContributionFacts({
           detail={formatBreakdown(facts.prBreakdown)}
         />
         <Stat
-          // 変化ログは起票と担当を区別せずに1人分へ寄せるので、数え方をそのまま名前にする
+          // 絞り込みが起票者∪担当者なので、この数もその両方を含む。数え方をそのまま
+          // 名前にする。どちらで関わったかは一覧の各行が「起票 ◯◯ ・ 担当 ◯◯」で示す
           label="Issue（起票・担当）"
           value={facts.issues}
           detail={formatBreakdown(facts.issueBreakdown)}
@@ -116,8 +117,6 @@ export function ContributionFacts({
         {/* 「もっと見る」で続きが読めるとは言えない。1リクエストの上限は
             バックエンドが200件で、そこに達したらこの画面からは取りに行けない */}
         {truncated && "これより古い記録は数に入っていません。"}
-        {facts.issues > 0 &&
-          "担当として関わったIssueは、GitHubの記録上その起票者の名前で一覧に並びます。"}
       </p>
     </Card>
   );
