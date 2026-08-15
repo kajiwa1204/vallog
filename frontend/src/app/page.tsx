@@ -7,11 +7,14 @@ import { Spinner } from "@/components/ui/Spinner";
 import { Wordmark } from "@/components/ui/AppShell";
 import { useAuth } from "@/hooks/useAuth";
 import { startGitHubLogin } from "@/lib/auth";
+import { REPO_SCOPE_NOTICE } from "@/lib/githubAccess";
 import styles from "./page.module.css";
 
 const ERROR_MESSAGES: Record<string, string> = {
   auth_denied: "GitHub認証がキャンセルされました。もう一度お試しください。",
   auth_failed: "ログインに失敗しました。もう一度お試しください。",
+  auth_state_mismatch:
+    "認証リクエストを検証できませんでした。お手数ですが、この画面からもう一度ログインしてください。",
 };
 
 function LoginContent() {
@@ -89,9 +92,12 @@ function LoginContent() {
             GitHubでログイン
           </button>
 
-          <p className={styles.note}>
-            ログインすることで、GitHubの公開・所属リポジトリ情報の読み取りを許可します
-          </p>
+          <div className={styles.noteGroup}>
+            <p className={styles.note}>
+              ログインすることで、GitHubのリポジトリ情報（privateを含む）の読み取りを許可します。
+            </p>
+            <p className={styles.noteDetail}>{REPO_SCOPE_NOTICE}</p>
+          </div>
         </div>
       </div>
     </div>

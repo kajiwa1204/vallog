@@ -65,8 +65,10 @@ export default function InvitePage() {
         setJoinError(
           messageForError(e, {
             codes: {
+              // privateリポジトリの場合、参加者のトークンに repo スコープがないと
+              // アクセス権があっても見えず、ここへ落ちる（再ログインで解消する）
               REPO_ACCESS_DENIED:
-                "このプロジェクトのリポジトリへのアクセス権がないため参加できません。",
+                "このプロジェクトのリポジトリへのアクセス権がないため参加できません。アクセス権があるはずの場合は、一度ログインし直してからお試しください。",
               INVITATION_EXPIRED: "この招待リンクは有効期限が切れています。",
               INVITATION_NOT_FOUND: "この招待リンクは無効です。",
             },

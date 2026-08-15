@@ -32,6 +32,10 @@ services:
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - FRONTEND_URL=${FRONTEND_URL}
       - FASTAPI_ROOT_PATH=/api
+      # 空文字は bool | None のパースに失敗するため、必ず既定値付きで渡す。
+      # 本番は FRONTEND_URL の設定ミスで平文Cookieになるのを防ぐため true に倒す
+      - COOKIE_SECURE=${COOKIE_SECURE:-true}
+      - AUTH_COOKIE_PATH=${AUTH_COOKIE_PATH:-/api/auth}
       - GITHUB_CACHE_TTL_SECONDS=${GITHUB_CACHE_TTL_SECONDS:-300}
     depends_on:
       db:
