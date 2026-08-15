@@ -51,6 +51,30 @@ function factsOf(entry: ChangeLogEntry): string[] {
   return facts;
 }
 
+/**
+ * 行に出す「誰の何か」。
+ *
+ * actor_login は kind ごとに指す人が違う（PR=作成者、Issue=起票者、レビュー=レビュアー）。
+ * PRとレビューは左のバッジで役割が読めるので裸のログインで足りるが、**Issueだけは
+ * 絞り込みの対象が起票者∪担当者**なので、名前を裸で置くと誰の何なのか読めない。
+ * 担当しかしていない人で絞ると、その人の一覧に起票者の名前だけが並び、行に動詞も
+ * 無いため「その人が起票した」と読めてしまう。
+ *
+ * そこでIssue行にだけ役割を明示する。担当者は notes に入っている事実なので、
+ * 絞っていない状態でも「いま誰が持っている仕事か」が読めるようになる。
+ */
+function actorOf(entry: ChangeLogEntry): string {
+  if (entry.kind !== "issue") return entry.actor_login;
+
+  const assignees = entry.notes.assignee_logins ?? [];
+  if (assignees.length === 0) return `起票 ${entry.actor_login}`;
+  // 起票者が自分で持っている（最も多い形）。同じ名前を2回並べても情報は増えない
+  if (assignees.length === 1 && assignees[0] === entry.actor_login)
+    return `起票・担当 ${entry.actor_login}`;
+
+  return `起票 ${entry.actor_login} ・ 担当 ${assignees.join(", ")}`;
+}
+
 /** 日付の見出し。今日・昨日だけ相対にする（それ以上は相対にすると数える手間が増える） */
 function formatDayHeading(iso: string, today: Date): string {
   const d = new Date(iso);
@@ -193,7 +217,7 @@ export function ChangeLogList({
                       </Badge>
                     </div>
                     <div className={styles.meta}>
-                      <span className={styles.actor}>{entry.actor_login}</span>
+                      <span className={styles.actor}>{actorOf(entry)}</span>
                       {facts.length > 0 && (
                         <span className={styles.facts}>
                           {facts.join(" ・ ")}

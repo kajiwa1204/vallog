@@ -126,7 +126,13 @@ def _issue_entry(issue: GitHubIssue) -> ChangeLogEntry:
         state=_issue_state(issue),
         occurred_at=issue.closed_at or issue.gh_created_at,
         html_url=issue.html_url,
-        notes=ChangeLogNotes(story_points=issue.story_points),
+        notes=ChangeLogNotes(
+            story_points=issue.story_points,
+            # botを除かないのは、これが「そのIssueに誰が付いているか」というGitHub上で
+            # そのまま確認できる事実だからで、絞り込みの候補（roster_logins）とは役割が
+            # 違う。除くと画面の「担当」がGitHubの表示と食い違う
+            assignee_logins=sorted(a.login for a in issue.assignees),
+        ),
     )
 
 

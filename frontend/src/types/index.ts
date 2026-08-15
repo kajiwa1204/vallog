@@ -225,6 +225,8 @@ export type ChangeLogNotes = {
   reviewed_by_others: boolean | null;
   reopened_count: number | null;
   draft: boolean | null;
+  // Issue行のみ: 担当者。担当なしは空リスト、Issue以外は null（非適用）
+  assignee_logins: string[] | null;
 };
 
 export type ChangeLogEntry = {
