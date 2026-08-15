@@ -225,6 +225,8 @@ export type ChangeLogNotes = {
   reviewed_by_others: boolean | null;
   reopened_count: number | null;
   draft: boolean | null;
+  // Issue行のみ: 担当者。担当なしは空リスト、Issue以外は null（非適用）
+  assignee_logins: string[] | null;
 };
 
 export type ChangeLogEntry = {
@@ -334,6 +336,9 @@ export type Themes = {
 export type DashboardResponse = {
   // null なら初回同期がまだ完了していない
   synced_at: string | null;
+  // 変化ログを絞り込める顔ぶれ（大文字小文字を無視した辞書順）。
+  // サーバがキャッシュ全件から作るので、読み込み済みの件数に左右されない（#109）
+  roster: string[];
   pulse: Pulse;
   attention: Attention;
   recently_done: DoneItem[];

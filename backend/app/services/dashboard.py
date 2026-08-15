@@ -41,7 +41,7 @@ from app.schemas.dashboard import (
     Theme,
     Themes,
 )
-from app.services.changelog import build_changelog, is_excluded_login
+from app.services.changelog import build_changelog, is_excluded_login, roster_logins
 from app.services.github import ensure_synced, fetch_and_store
 
 DEFAULT_PULSE_DAYS = 14
@@ -380,6 +380,9 @@ def build_dashboard(
 
     return DashboardResponse(
         synced_at=synced_at,
+        # エントリからではなくキャッシュ全件から作る。エントリ由来だと担当しか
+        # していない人が落ちる（roster_logins のdocstring参照）
+        roster=roster_logins(prs, issues, reviews),
         pulse=_pulse(changelog.entries, now, days, tz_offset_minutes),
         attention=_attention(changelog.entries, issues, reviews, now),
         recently_done=_recently_done(changelog.entries, RECENTLY_DONE_LIMIT),

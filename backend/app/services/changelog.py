@@ -126,7 +126,13 @@ def _issue_entry(issue: GitHubIssue) -> ChangeLogEntry:
         state=_issue_state(issue),
         occurred_at=issue.closed_at or issue.gh_created_at,
         html_url=issue.html_url,
-        notes=ChangeLogNotes(story_points=issue.story_points),
+        notes=ChangeLogNotes(
+            story_points=issue.story_points,
+            # botを除かないのは、これが「そのIssueに誰が付いているか」というGitHub上で
+            # そのまま確認できる事実だからで、絞り込みの候補（roster_logins）とは役割が
+            # 違う。除くと画面の「担当」がGitHubの表示と食い違う
+            assignee_logins=sorted(a.login for a in issue.assignees),
+        ),
     )
 
 
@@ -219,6 +225,55 @@ def build_changelog(
     # 全件読んでから切れるのは、キャッシュ自体が同期側で頭打ちになっているため
     # （services/github.py の MAX_LIST_PAGES 参照）
     return ChangeLogResponse(entries=entries[:limit], has_more=len(entries) > limit)
+
+
+def roster_logins(
+    prs: list[GitHubPullRequest],
+    issues: list[GitHubIssue],
+    reviews: list[GitHubReview],
+) -> list[str]:
+    """変化ログを絞り込める顔ぶれ（純粋関数・DBアクセスなし）。
+
+    **`build_changelog(member=X)` が1件以上返す X だけを載せる**、が満たすべき性質。
+    絞ったのに0件になるチップは、押した人に「自分の記録が消えた」と読ませる。
+    だから上の build_changelog と同じ判定を使い、同じファイルに隣接して置く
+    （離すと片方だけ直されて静かにずれる）。
+
+    Issueの担当者を含めるのが要点。エントリの actor_login は常に起票者なので、
+    担当しかしていない人はログの行のどこにも名前が出ないが、その人で絞れば行は返る。
+    エントリから顔ぶれを作ると、この人たちが丸ごと落ちる。
+
+    並びは大文字小文字を無視した辞書順。活動量順にしないのは、ダッシュボードが
+    出さないと決めた序列がチップに現れるため（docs/screen_design.md 画面4）。
+    """
+    pr_by_number = {pr.number: pr for pr in prs}
+    logins: set[str] = set()
+
+    for pr in prs:
+        if is_excluded_login(pr.author_login):
+            continue
+        logins.add(pr.author_login)
+
+    for issue in issues:
+        if is_excluded_login(issue.author_login):
+            continue
+        logins.update(
+            login for login in _issue_logins(issue) if not is_excluded_login(login)
+        )
+
+    for review in reviews:
+        if review.submitted_at is None:
+            continue
+        if is_excluded_login(review.reviewer_login):
+            continue
+        pr = pr_by_number.get(review.pr_number)
+        if pr is None:
+            continue
+        if review.reviewer_login == pr.author_login:
+            continue
+        logins.add(review.reviewer_login)
+
+    return sorted(logins, key=str.lower)
 
 
 async def get_changelog(

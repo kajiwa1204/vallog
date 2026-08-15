@@ -359,3 +359,61 @@ def test_has_more_is_false_when_the_result_fits_exactly():
     prs = [_pr(n, "alice", created_day=n) for n in range(1, 4)]
     res = build_changelog(prs, [], [], limit=3)
     assert (len(res.entries), res.has_more) == (3, False)
+
+
+# --- Issue行の担当者 -------------------------------------------------------
+
+
+def test_issue_entry_carries_its_assignees():
+    result = build_changelog([], [_issue(1, "alice", assignees=["bob", "carol"])], [])
+
+    assert result.entries[0].notes.assignee_logins == ["bob", "carol"]
+
+
+def test_issue_assignees_are_sorted_for_a_stable_display():
+    result = build_changelog([], [_issue(1, "alice", assignees=["zoe", "bob"])], [])
+
+    assert result.entries[0].notes.assignee_logins == ["bob", "zoe"]
+
+
+def test_issue_without_assignees_reports_an_empty_list_not_none():
+    """「誰も持っていない」は意味のある事実なので、非適用(None)とは区別する。"""
+    result = build_changelog([], [_issue(1, "alice")], [])
+
+    assert result.entries[0].notes.assignee_logins == []
+
+
+def test_pr_and_review_rows_have_no_assignee_field():
+    """Issue以外には担当の概念を適用しない（0や空リストを入れると事実として偽になる）。"""
+    prs = [_pr(1, "alice")]
+    reviews = [_review(1, "bob")]
+
+    result = build_changelog(prs, [], reviews)
+
+    for entry in result.entries:
+        assert entry.notes.assignee_logins is None
+
+
+def test_assignee_only_member_can_tell_why_the_row_is_in_their_list():
+    """担当しか関わっていない人で絞ったとき、行が「誰の何か」を持っている。
+
+    修正前は actor_login（起票者）しか無く、samunail で絞ると SHOU6439 の名前だけが
+    並んで「その人が起票した」と読めていた。
+    """
+    issues = [_issue(1, "SHOU6439", assignees=["samunail"])]
+
+    result = build_changelog([], issues, [], member="samunail")
+
+    entry = result.entries[0]
+    assert entry.actor_login == "SHOU6439"
+    assert entry.notes.assignee_logins == ["samunail"]
+
+
+def test_bot_assignees_are_kept_as_a_fact():
+    """担当は「GitHub上でそのIssueに誰が付いているか」の事実。
+
+    除くと画面の「担当」がGitHubの表示と食い違う。絞り込みの候補（roster）とは役割が違う。
+    """
+    result = build_changelog([], [_issue(1, "alice", assignees=["copilot[bot]"])], [])
+
+    assert result.entries[0].notes.assignee_logins == ["copilot[bot]"]
