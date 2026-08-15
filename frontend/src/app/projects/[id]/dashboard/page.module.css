@@ -1,0 +1,100 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.repo {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.repo:hover {
+  color: var(--green);
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.synced {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.banner {
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--ochre-tint);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+
+/* パネルは2列。変化ログが主役なので、パネル側は画面上部に収まる高さに留める。
+   grid のセルに1枚ずつ置くと、背の低いカード（活動リズム）の下に行の高さぶんの穴が
+   空く。列そのものを縦積みのコンテナにして、各列が自分の中身の高さで詰まるようにする */
+.panels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* 活動がまだ無いチーム向けの導入。空のパネルが並ぶだけだと、この画面が何をする
+   場所なのか初めて開いた人に伝わらない */
+.intro {
+  padding: 16px 18px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+
+.introLead {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.introBody {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+.changelog {
+  margin-bottom: 24px;
+}
+
+.error {
+  font-size: 12.5px;
+  color: var(--red);
+}
+
+@media (max-width: 900px) {
+  .panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

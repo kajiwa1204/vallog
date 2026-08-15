@@ -10,7 +10,11 @@
   --surface-dim: #f1f2ee;
   --ink: #15211c;
   --ink-2: #5a6b62;
-  --ink-3: #8a978f;
+  /* 補助情報にも作者名・経過時間のような「行動に要る事実」を載せているため、
+     装飾扱いにせずAA（4.5:1）を満たす明度にしてある。
+     行のホバーで背景が --surface-dim に変わるので、白（5.13:1）だけでなく
+     そちら（4.56:1）でも満たす値にしている */
+  --ink-3: #637169;
   --line: #e2e5df;
   --line-strong: #c8cdc4;
 
@@ -29,6 +33,9 @@
 
   --red: #c2402a;
   --red-tint: #faeae6;
+  /* --red は tint 上だと 4.43:1 でAAにわずかに届かない。バッジのように
+     tint を背景に敷く箇所はこちらを使う（同じ背景で 5.66:1） */
+  --red-strong: #a83420;
 
   /* ダークサイドバー（墨緑） */
   --shell-bg: #122019;
@@ -91,6 +98,20 @@ button {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
+}
+
+/* 目には出さないが読み上げには渡す。色や位置だけで示している情報に
+   言葉での手掛かりを足すために使う */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 :focus-visible {

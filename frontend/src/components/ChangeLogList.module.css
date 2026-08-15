@@ -1,0 +1,154 @@
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  padding: 12px 0;
+}
+
+.day + .day {
+  margin-top: 6px;
+}
+
+/* 日付の見出し。スクロールしても「いつの話か」を見失わないよう貼り付ける */
+.dayHeading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 0 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface);
+}
+
+.dayCount {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+}
+
+/* 前回見たとき以降の印。件数ではなく有無だけを示すので、控えめな点にする */
+.new {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--green);
+  flex-shrink: 0;
+  margin-left: -2px;
+}
+
+.newSummary {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin: 10px 0 0;
+}
+
+.item {
+  display: block;
+  padding: 10px 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius-s);
+  transition: background 0.12s ease;
+}
+
+.item:hover {
+  background: var(--surface-dim);
+}
+
+.item:hover .title {
+  color: var(--green);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.kind {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface-dim);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.number {
+  font-size: 12px;
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.title {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 3px;
+  /* .kind のバッジ幅ぶん字下げして、事実注記が見出しにぶら下がって見えるようにする */
+  padding-left: 34px;
+}
+
+.actor {
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.date {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.facts {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.more {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.more:hover:not(:disabled) {
+  background: var(--surface-dim);
+}
+
+.more:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}

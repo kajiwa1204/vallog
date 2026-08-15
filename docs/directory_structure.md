@@ -19,6 +19,7 @@ backend/
 │   │   ├── members.py               # GET /projects/{id}/members
 │   │   ├── scores.py                # GET /projects/{id}/scores
 │   │   ├── changelog.py             # GET /projects/{id}/changelog（変化ログ・第1層・AIなし）
+│   │   ├── dashboard.py             # GET /projects/{id}/dashboard（チーム状況パネル4種）
 │   │   ├── distribution.py          # GET/POST /projects/{id}/distributions
 │   │   └── summaries.py             # POST /projects/{id}/summaries
 │   ├── models/                      # SQLAlchemyモデル（エンティティ対応）
@@ -32,12 +33,14 @@ backend/
 │   │   ├── project.py               # ProjectCreate, ProjectResponse
 │   │   ├── score.py                 # ScoreResponse, MemberScore
 │   │   ├── changelog.py             # ChangeLogEntry, ChangeLogResponse
+│   │   ├── dashboard.py             # DashboardResponse（pulse/attention/recently_done/themes）
 │   │   ├── distribution.py          # ProposalCreate, ProposalResponse, ItemUpdate
 │   │   └── summary.py               # SummaryResponse
 │   ├── services/                    # ビジネスロジック
 │   │   ├── github.py                # GitHub APIクライアント・TTLキャッシュ管理
 │   │   ├── scoring.py               # スコア計算ロジック
 │   │   ├── changelog.py             # 変化ログ整形（PR/Issue/レビューを時系列マージ・既存キャッシュから読み取り）
+│   │   ├── dashboard.py             # チーム状況パネル4種の集計（既存キャッシュから読み取り）
 │   │   └── claude.py                # 貢献サマリー生成（Claude API）
 │   └── repositories/                # DBアクセス層
 │       ├── project.py               # ProjectRepository
@@ -81,10 +84,10 @@ frontend/
 │   │   ├── dashboard/
 │   │   │   ├── TeamChangeLog.tsx                 # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
 │   │   │   ├── TeamChangeLog.module.css
-│   │   │   ├── MemberCard.tsx                    # 副次: スコアサマリー
-│   │   │   ├── MemberCard.module.css
-│   │   │   ├── ScoreChart.tsx                    # 副次: スコア棒/円グラフ
-│   │   │   ├── ScoreChart.module.css
+│   │   │   ├── TeamPulse.tsx                     # チーム状況: 活動リズム（日次バケット＋前期比）
+│   │   │   ├── NeedsAttention.tsx                # チーム状況: 止まっているものを「誰の番か」で畳む
+│   │   │   ├── RecentlyDone.tsx                  # チーム状況: 最近片づいたもの（attentionの裏返し）
+│   │   │   ├── Themes.tsx                        # チーム状況: 動いている領域（ラベル集計・名前空間で束ねる）
 │   │   │   └── useDashboard.ts
 │   │   ├── distribution/
 │   │   │   ├── ChangeLogPanel.tsx               # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
@@ -99,8 +102,6 @@ frontend/
 │   │   ├── members/
 │   │   │   ├── ChangeLog.tsx                     # 主軸: ChangeLogList を包む薄いラッパー（単一メンバー）
 │   │   │   ├── ChangeLog.module.css
-│   │   │   ├── ScoreBreakdown.tsx                # 副次: カテゴリ別スコア内訳
-│   │   │   ├── ScoreBreakdown.module.css
 │   │   │   ├── ContributionSummary.tsx           # 第2層: 変化ログの詳細（AIサマリー）
 │   │   │   ├── ContributionSummary.module.css
 │   │   │   └── useMemberDetail.ts

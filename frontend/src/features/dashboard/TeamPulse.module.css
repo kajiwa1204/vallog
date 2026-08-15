@@ -1,0 +1,105 @@
+.range {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+  padding: 12px 0;
+}
+
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+
+.track {
+  width: 100%;
+  /* 静かな日と動いた日の差が読める高さ。低いとバーが潰れて棒グラフの意味がなくなる */
+  height: 140px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--surface-dim);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+}
+
+.bar {
+  width: 100%;
+  /* 上から PR / Issue / レビュー の順に積む。1件でも見えるよう最小高さを持たせる */
+  min-height: 3px;
+  display: flex;
+  flex-direction: column;
+}
+
+.segment {
+  display: block;
+  flex-basis: 0;
+  min-height: 0;
+}
+
+.tick {
+  font-size: 10.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+/* 14本が狭い幅に詰まると 10.5px でも読めなくなる。目盛りは1日おきに間引く
+   （バー自体は全日そのまま。読めない文字を並べるより、間隔の基準が分かる
+   ほうが形を追える）。
+   末尾から数えるのは、先頭起点だと本数が偶数のとき最新日のラベルが落ちるため。
+   この画面で真っ先に確かめたいのは「あの棒は今日か」なので、今日を起点にする */
+@media (max-width: 760px) {
+  .column:nth-last-child(even) .tick {
+    visibility: hidden;
+  }
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.total {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+/* 増減は補助。合計そのものより弱く出す（増えた/減ったを評価に読ませない）。
+   opacity で更に薄めるとコントラストがAAを割るので、色は --ink-3 のまま */
+.delta {
+  color: var(--ink-3);
+}

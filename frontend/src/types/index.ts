@@ -210,3 +210,132 @@ export type PRSummaryItem = {
   generated_at: string | null;
   job: SummaryJob | null;
 };
+
+// 変化ログ（第1層・AIなし）。backend/app/schemas/changelog.py と対応する
+export type ChangeKind = "pull_request" | "issue" | "review";
+
+// 各フィールドが null 許容なのは「非適用」と「意味のあるゼロ」を区別するため。
+// Issue行の reopened_count は 0 ではなく null（再オープンの概念を適用しない）で来る
+export type ChangeLogNotes = {
+  story_points: number | null;
+  // PR行のみ: 作成から最初の他者レビューまで（PR作者の待ち時間）
+  first_review_hours: number | null;
+  // レビュー行のみ: PR作成から自分が出すまで（レビュアーの応答時間）
+  response_hours: number | null;
+  reviewed_by_others: boolean | null;
+  reopened_count: number | null;
+  draft: boolean | null;
+};
+
+export type ChangeLogEntry = {
+  // number は kind をまたいで衝突するため、一覧のキーには id を使う
+  id: string;
+  kind: ChangeKind;
+  number: number;
+  title: string;
+  actor_login: string;
+  // PR: merged/open/closed、Issue: open/closed/not_planned、
+  // レビュー: approved/changes_requested/commented/dismissed
+  state: string;
+  occurred_at: string;
+  html_url: string;
+  notes: ChangeLogNotes;
+};
+
+export type ChangeLogResponse = {
+  entries: ChangeLogEntry[];
+  has_more: boolean;
+};
+
+// チーム状況パネル（画面4）。backend/app/schemas/dashboard.py と対応する。
+// スコアは含まない（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）
+export type PulseDay = {
+  // YYYY-MM-DD。バックエンドが tz_offset_minutes を見て畳んだローカル日付
+  date: string;
+  pull_requests: number;
+  issues: number;
+  reviews: number;
+};
+
+export type AttentionPullRequest = {
+  number: number;
+  title: string;
+  author_login: string;
+  html_url: string;
+  opened_at: string;
+  // 作成から現在まで（＝まだ止まっている時間）
+  waiting_hours: number;
+  draft: boolean;
+};
+
+export type AttentionIssue = {
+  number: number;
+  title: string;
+  html_url: string;
+  assignee_login: string;
+  assigned_at: string;
+  stalled_hours: number;
+};
+
+// 修正を求められたまま動いていないPR。review_wanted とは待っている相手が逆で、
+// こちらはPR作者の番
+export type ChangesRequestedPullRequest = {
+  number: number;
+  title: string;
+  author_login: string;
+  html_url: string;
+  reviewer_login: string;
+  requested_at: string;
+  waiting_hours: number;
+};
+
+export type Attention = {
+  review_wanted: AttentionPullRequest[];
+  changes_requested: ChangesRequestedPullRequest[];
+  drafts: AttentionPullRequest[];
+  stalled_issues: AttentionIssue[];
+};
+
+// 片づいたもの1件。attention の裏返しで、人ごとの件数には畳まない
+export type DoneItem = {
+  kind: "pull_request" | "issue";
+  number: number;
+  title: string;
+  actor_login: string;
+  html_url: string;
+  occurred_at: string;
+};
+
+export type Pulse = {
+  // 古い→新しい順
+  days: PulseDay[];
+  total: number;
+  // 直前の同じ長さの期間の合計。単独の件数に基準を与えるために添えられる
+  previous_total: number;
+  // サーバがどのオフセットで日付を畳んだか
+  tz_offset_minutes: number;
+};
+
+export type Theme = {
+  label: string;
+  open_count: number;
+  closed_count: number;
+  // ラベル名の ":" より前。持たないラベルは null
+  namespace: string | null;
+};
+
+export type Themes = {
+  // 合計（open + closed）降順。サーバで打ち切り済み
+  items: Theme[];
+  // 打ち切る前の種類数
+  total: number;
+};
+
+export type DashboardResponse = {
+  // null なら初回同期がまだ完了していない
+  synced_at: string | null;
+  pulse: Pulse;
+  attention: Attention;
+  recently_done: DoneItem[];
+  themes: Themes;
+};
