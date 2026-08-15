@@ -23,6 +23,7 @@ from app.repositories.github_cache import GitHubCacheRepository
 from app.repositories.project import ProjectRepository
 from app.schemas.project import CategoryWeights
 from app.schemas.score import CategoryScores, MemberScore, ScoreResponse
+from app.services.changelog import NOT_DONE_STATE_REASONS
 from app.services.github import ensure_synced, fetch_and_store
 
 _APPROVE_OR_CHANGES = {"APPROVED", "CHANGES_REQUESTED"}
@@ -177,7 +178,9 @@ def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, floa
     物量は活動量（起票数）と品質（マージPR数）で既に報われている。
 
     Issueのclosed_atを完了時刻の代理とする（GitHubはPRマージ時に紐づくIssueを自動クローズするため）。
-    not_planned でクローズされたIssue（着手せず却下・重複等）は成果ではないため除外する。
+    却下・重複でクローズされたIssue（NOT_DONE_STATE_REASONS）は成果ではないため除外する。
+    判定は services/changelog.py と同じ定数を引く（片方だけ直されると、同じデータから
+    画面とスコアで違う事実が出る）。
     state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として計上する。
     複数アサインの場合は各担当者を満額で評価する。
 
@@ -191,7 +194,7 @@ def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, floa
     for issue in issues:
         if issue.story_points is None or issue.closed_at is None:
             continue
-        if issue.state_reason == "not_planned":
+        if issue.state_reason in NOT_DONE_STATE_REASONS:
             continue
         for a in issue.assignees:
             if a.login not in sp_sum:

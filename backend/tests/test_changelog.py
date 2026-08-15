@@ -156,6 +156,25 @@ def test_closed_issue_keeps_completed_and_rejected_apart():
     assert states == {10: "closed", 11: "not_planned"}
 
 
+def test_duplicate_close_is_not_counted_as_completed():
+    """「Close as duplicate」も成果ではない。
+
+    GitHubの state_reason は completed/reopened/not_planned/duplicate/null を取る。
+    not_planned だけを見ていた頃は重複クローズが「完了」に落ち、そのSPがスコアの
+    根拠にも流れ込んでいた。主要OSS 11リポジトリの実測では duplicate は全リポジトリで
+    使われていた（3,300件中167件）ので、起こらない想定は置けない。
+    """
+    duplicate = _issue(12, "bob", closed_day=4, state_reason="duplicate")
+    entry = build_changelog([], [duplicate], []).entries[0]
+    assert entry.state == "not_planned"
+
+
+def test_reopened_state_reason_does_not_make_an_open_issue_not_planned():
+    """reopened は open にしか付かない。closed 判定を先に見ているので巻き込まれない。"""
+    entry = build_changelog([], [_issue(13, "bob", state_reason="reopened")], []).entries[0]
+    assert entry.state == "open"
+
+
 def test_closed_issue_without_state_reason_counts_as_completed():
     """次回同期前の既存キャッシュは state_reason が NULL。completed 相当に倒す。"""
     entry = build_changelog([], [_issue(10, "bob", closed_day=4)], []).entries[0]

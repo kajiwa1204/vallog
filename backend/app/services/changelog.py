@@ -36,6 +36,25 @@ def is_excluded_login(login: str) -> bool:
     return login.endswith("[bot]") or login == "unknown"
 
 
+NOT_DONE_STATE_REASONS = frozenset({"not_planned", "duplicate"})
+"""成果として数えないクローズ理由（GitHubの state_reason）。
+
+GitHubのクローズUIは「Close as completed」が既定なので、`completed` が付いていることは
+「完了と判断された」を意味しない（既定のまま閉じただけ）。逆にここに挙げた値は、
+ドロップダウンを開いて選んだときにしか付かないため、**付いていること自体が明確な意思表示**
+になる。誤操作では付かない。
+
+`duplicate` を含めるのが要点。state_reason は completed/reopened/not_planned/duplicate/null
+を取るが、長らく not_planned しか見ていなかったため、重複としてクローズしたIssueが「完了」
+として数えられ、そのSPがスコアの根拠にも流れ込んでいた。主要OSS 11リポジトリのクローズ済み
+Issue 3,300件を実測したところ、duplicate は全リポジトリで使われており（167件・5.1%）、
+起こらない想定は成り立たなかった。
+
+scoring.py と共有する知識なので、片方だけ直されないよう1箇所に置く。is_excluded_login と
+同じ性格のため、#95 で services/github.py へ寄せるときは一緒に移すこと。
+"""
+
+
 def _reviews_by_pr(reviews: list[GitHubReview]) -> dict[int, list[GitHubReview]]:
     by_pr: dict[int, list[GitHubReview]] = {}
     for r in reviews:
@@ -107,11 +126,16 @@ def _issue_state(issue: GitHubIssue) -> str:
     GitHubはどちらも state="closed" にするため、state_reason を見ないと
     「片付けた仕事」と「着手せず閉じた起票」が同じ見た目で並ぶ。変化ログは #18 で
     分配の根拠（レシート）として読まれるので、この2つは分けて出す必要がある。
-    services/scoring.py も同じ理由で not_planned をスピード集計から除外している。
+    services/scoring.py も同じ理由で NOT_DONE_STATE_REASONS を集計から除外している。
+
+    却下（not_planned）と重複（duplicate）を1つの "not_planned" に畳んで返す。分配の
+    根拠として読む用途では、どちらも「成果ではない」という同じ意味しか持たないため
+    （schemas/changelog.py の state も「not_planned＝却下・重複」と定義している）。
+    起票者にとっての意味の違いを画面で出す必要が生じたら、その時点で状態を分ける。
 
     state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として扱う。
     """
-    if issue.state == "closed" and issue.state_reason == "not_planned":
+    if issue.state == "closed" and issue.state_reason in NOT_DONE_STATE_REASONS:
         return "not_planned"
     return issue.state
 

@@ -157,6 +157,12 @@ def test_speed_values_excludes_not_planned_issues():
     assert _speed_values(issues, {"alice"})["alice"] == 0.0
 
 
+def test_speed_values_excludes_duplicate_issues():
+    """Close as duplicate も成果ではない。changelog と同じ定数で判定する。"""
+    issues = [_issue(11, "alice", sp=5, closed_day=3, assignees=[("alice", 1)], state_reason="duplicate")]
+    assert _speed_values(issues, {"alice"})["alice"] == 0.0
+
+
 def test_speed_values_counts_state_reason_none_as_completed():
     """state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当で計上する。"""
     issues = [_issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)], state_reason=None)]
