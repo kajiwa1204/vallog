@@ -15,8 +15,10 @@ from app.services.scoring import (
     _activity_relative,
     _collect_logins,
     _combine_equal,
+    _member_facts,
     _quality_values,
     _shares,
+    _sp_totals,
     _speed_values,
     _turnaround_values,
     can_disclose_scores,
@@ -436,3 +438,108 @@ async def test_get_scores_for_disclosure_returns_scores_when_disclosable():
         new=AsyncMock(return_value=expected),
     ):
         assert await get_scores_for_disclosure(MagicMock(), project, "token") is expected
+
+
+# ---------------------------------------------------------------------------
+# _member_facts（レシート用の生事実・#18）
+# ---------------------------------------------------------------------------
+
+def test_member_facts_counts_only_authored_pull_requests():
+    """PR件数はPRだけ。活動量スコアの authored はIssue起票と合算しているが、
+    事実として並べるときに混ぜると「PR◯本」が読めなくなる。"""
+    prs = [_pr(1, "alice"), _pr(2, "alice"), _pr(3, "bob")]
+    issues = [_issue(10, "alice"), _issue(11, "alice")]
+    facts = _member_facts(prs, issues, [], {"alice", "bob"})
+    assert facts["alice"].pull_requests_authored == 2
+    assert facts["bob"].pull_requests_authored == 1
+
+
+def test_member_facts_story_points_go_to_assignees_not_authors():
+    """SPは担当者にのみ配る（_sp_totals と同じ経路）。起票しただけでは付かない。
+
+    変化ログの絞り込みはIssueだけ起票者∪担当者なので、ここを取り違えると
+    同じ「SP」で母集合が違う数字が並び、分配の席で合わなくなる。
+    """
+    issues = [_issue(10, "alice", sp=5, closed_day=2, assignees=[("bob", 1)])]
+    facts = _member_facts([], issues, [], {"alice", "bob"})
+    assert facts["alice"].story_points_earned == 0
+    assert facts["bob"].story_points_earned == 5
+
+
+def test_member_facts_story_points_exclude_not_planned_issues():
+    """成果でないクローズは獲得SPに数えない（スピードスコアと同じ除外）。"""
+    issues = [
+        _issue(10, "alice", sp=3, closed_day=2, assignees=[("alice", 1)]),
+        _issue(11, "alice", sp=8, closed_day=2, assignees=[("alice", 1)],
+               state_reason="not_planned"),
+    ]
+    facts = _member_facts([], issues, [], {"alice"})
+    assert facts["alice"].story_points_earned == 3
+
+
+def test_member_facts_story_points_match_speed_score_denominator():
+    """獲得SPとスピードスコアが同じ集計から出ていることを固定する。
+
+    _sp_totals を経由しなくなると（＝どちらかが数え直しになると）ここが落ちる。
+    """
+    issues = [
+        _issue(10, "alice", sp=5, closed_day=2, assignees=[("alice", 1)]),
+        _issue(11, "bob", sp=1, closed_day=2, assignees=[("bob", 1)]),
+    ]
+    logins = {"alice", "bob"}
+    sp_sum, hours_sum = _sp_totals(issues, logins)
+    facts = _member_facts([], issues, [], logins)
+    speed = _speed_values(issues, logins)
+    for login in logins:
+        assert facts[login].story_points_earned == sp_sum[login]
+        assert speed[login] == pytest.approx(sp_sum[login] / hours_sum[login])
+
+
+def test_member_facts_reviews_exclude_self_reviews():
+    """PR作者が自分のPRに付けたコメントはレビュー数に数えない（スコアと同じ除外）。"""
+    prs = [_pr(1, "alice")]
+    reviews = [
+        _review(1, "alice", "COMMENTED", comments=1),   # セルフ: 除外
+        _review(1, "bob", "APPROVED", submitted_hour=3),
+    ]
+    facts = _member_facts(prs, [], reviews, {"alice", "bob"})
+    assert facts["alice"].reviews_submitted == 0
+    assert facts["bob"].reviews_submitted == 1
+
+
+def test_member_facts_reopened_count_belongs_to_pr_author():
+    """手戻りはPR作者に帰属する（_quality_values と同じ帰属）。"""
+    prs = [_pr(1, "alice", reopened=2), _pr(2, "bob")]
+    facts = _member_facts(prs, [], [], {"alice", "bob"})
+    assert facts["alice"].pull_requests_reopened == 2
+    assert facts["bob"].pull_requests_reopened == 0
+
+
+def test_member_facts_avg_turnaround_matches_score_input():
+    """平均TATは応答性スコアの逆写像と一致する（_turnaround_totals を共有）。"""
+    prs = [_pr(1, "alice"), _pr(2, "alice", created_day=1)]
+    reviews = [
+        _review(1, "bob", "APPROVED", submitted_hour=2),   # 2時間
+        _review(2, "bob", "COMMENTED", submitted_hour=4),  # 4時間
+    ]
+    logins = {"alice", "bob"}
+    facts = _member_facts(prs, [], reviews, logins)
+    assert facts["bob"].avg_review_turnaround_hours == pytest.approx(3.0)
+    # スコア側は 1/(1+平均時間)。同じ平均を使っている
+    assert _turnaround_values(prs, reviews, logins)["bob"] == pytest.approx(1 / 4)
+
+
+def test_member_facts_avg_turnaround_is_null_without_reviews():
+    """0.0 を返すと「即座に返した」と読めてしまう。平均が定義できないことはNULLで言う。"""
+    facts = _member_facts([_pr(1, "alice")], [], [], {"alice"})
+    assert facts["alice"].avg_review_turnaround_hours is None
+
+
+def test_compute_scores_attaches_facts_to_every_member():
+    prs, issues, reviews = _sample_data()
+    result = compute_scores(_project(), prs, issues, reviews, registered_logins=["dave"])
+    facts = {m.github_login: m.facts for m in result.members}
+    # 活動のない登録メンバーも0埋めの事実を持つ（存在ごと消さない）
+    assert facts["dave"].pull_requests_authored == 0
+    assert facts["dave"].avg_review_turnaround_hours is None
+    assert sum(f.pull_requests_authored for f in facts.values()) == len(prs)

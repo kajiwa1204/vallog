@@ -22,7 +22,12 @@ from app.schemas.distribution import (
     ProposalUpdate,
 )
 from app.schemas.project import CategoryWeights
-from app.schemas.score import CategoryScores, MemberScore, ScoreResponse
+from app.schemas.score import (
+    CategoryScores,
+    MemberFacts,
+    MemberScore,
+    ScoreResponse,
+)
 from app.services import distribution as service
 
 _USER = SimpleNamespace(id=uuid.uuid4(), github_access_token="token")
@@ -315,6 +320,14 @@ def _scores(totals: dict[str, float]) -> ScoreResponse:
                 github_login=login,
                 categories=CategoryScores(activity=0.0, speed=0.0, quality=0.0),
                 total=total,
+                # 初期比率は total だけで決まる。生事実は分配計算に一切効かない
+                facts=MemberFacts(
+                    story_points_earned=0,
+                    pull_requests_authored=0,
+                    reviews_submitted=0,
+                    pull_requests_reopened=0,
+                    avg_review_turnaround_hours=None,
+                ),
             )
             for login, total in totals.items()
         ],

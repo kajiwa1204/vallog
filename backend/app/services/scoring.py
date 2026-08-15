@@ -26,7 +26,12 @@ from app.repositories.distribution import DistributionRepository
 from app.repositories.github_cache import GitHubCacheRepository
 from app.repositories.project import ProjectRepository
 from app.schemas.project import CategoryWeights
-from app.schemas.score import CategoryScores, MemberScore, ScoreResponse
+from app.schemas.score import (
+    CategoryScores,
+    MemberFacts,
+    MemberScore,
+    ScoreResponse,
+)
 from app.services.github import ensure_synced, fetch_and_store
 
 _APPROVE_OR_CHANGES = {"APPROVED", "CHANGES_REQUESTED"}
@@ -131,13 +136,15 @@ def _is_self_review(review: GitHubReview, pr_author: dict[int, str]) -> bool:
     return review.reviewer_login == pr_author.get(review.pr_number)
 
 
-def _turnaround_values(
+def _turnaround_totals(
     prs: list[GitHubPullRequest], reviews: list[GitHubReview], logins: set[str]
-) -> dict[str, float]:
-    """レビューのターンアラウンドタイムを「速いほど高い」応答性の値に変換する。
+) -> tuple[dict[str, float], dict[str, int]]:
+    """レビュアーごとの (レビュー応答時間の合計, 対象レビュー件数)。
 
-    PR到着→レビュー提出までの時間を時間単位で平均し、1/(1+平均時間)で0〜1に写像する。
-    正規化（個人÷チーム合計）に載せられるよう「多い/速いほど高い」向きに揃える。
+    スコア（_turnaround_values）と生事実の平均TAT（_member_facts）が**同じ集計から**
+    値を取るために切り出してある。数え直すと、除外条件（セルフレビュー・submitted_at
+    欠落・負の経過時間）が片方だけ直された日に、同じ画面でスコアの根拠と表示中の事実が
+    食い違う。
     """
     pr_created = {pr.number: pr.gh_created_at for pr in prs}
     pr_author = {pr.number: pr.author_login for pr in prs}
@@ -156,6 +163,18 @@ def _turnaround_values(
             continue
         total_hours[r.reviewer_login] += hours
         counts[r.reviewer_login] += 1
+    return total_hours, counts
+
+
+def _turnaround_values(
+    prs: list[GitHubPullRequest], reviews: list[GitHubReview], logins: set[str]
+) -> dict[str, float]:
+    """レビューのターンアラウンドタイムを「速いほど高い」応答性の値に変換する。
+
+    PR到着→レビュー提出までの時間を時間単位で平均し、1/(1+平均時間)で0〜1に写像する。
+    正規化（個人÷チーム合計）に載せられるよう「多い/速いほど高い」向きに揃える。
+    """
+    total_hours, counts = _turnaround_totals(prs, reviews, logins)
 
     responsiveness: dict[str, float] = {}
     for login in logins:
@@ -172,13 +191,10 @@ def _turnaround_values(
 _MIN_ELAPSED_HOURS = 0.1
 
 
-def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, float]:
-    """タスク完了スピード（35%）の生値。獲得SP ÷ 経過時間（アサイン〜完了）。
-
-    タスク分割に中立にするため、メンバー単位で「総獲得SP ÷ 総経過時間」を取る。
-    Issueごとに SP/時間 を出して足し上げると、同じ仕事を細かく分割するほどスコアが
-    膨らむ（SP5×1件=0.1 に対し SP1×5件=0.5）ため、分割数に依存しない総量比にする。
-    物量は活動量（起票数）と品質（マージPR数）で既に報われている。
+def _sp_totals(
+    issues: list[GitHubIssue], logins: set[str]
+) -> tuple[dict[str, int], dict[str, float]]:
+    """担当者ごとの (完了Issueで獲得したSPの合計, 経過時間の合計)。
 
     Issueのclosed_atを完了時刻の代理とする（GitHubはPRマージ時に紐づくIssueを自動クローズするため）。
     not_planned でクローズされたIssue（着手せず却下・重複等）は成果ではないため除外する。
@@ -189,6 +205,10 @@ def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, floa
     アサイン済みでもイベントが窓から溢れて None になりうる。その場合は起点をIssue作成時刻に
     代替する。資料の計測区間「アサインから」からは外れ、アサイン待ち時間の分だけ経過時間が
     長く出るが、完了した獲得SPが丸ごとスコアから消えるより実態に近い。
+
+    スコア（_speed_values）と生事実の獲得SP（_member_facts）が**同じ集計から**値を取る
+    ために切り出してある。SPが「担当者にのみ配られる」ことは両者で必ず一致していなければ
+    ならず、数え直すとその一致が偶然に頼ることになる。
     """
     sp_sum = {login: 0 for login in logins}
     hours_sum = {login: 0.0 for login in logins}
@@ -204,6 +224,18 @@ def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, floa
             elapsed_hours = (issue.closed_at - start).total_seconds() / 3600
             sp_sum[a.login] += issue.story_points
             hours_sum[a.login] += max(elapsed_hours, _MIN_ELAPSED_HOURS)
+    return sp_sum, hours_sum
+
+
+def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, float]:
+    """タスク完了スピード（35%）の生値。獲得SP ÷ 経過時間（アサイン〜完了）。
+
+    タスク分割に中立にするため、メンバー単位で「総獲得SP ÷ 総経過時間」を取る。
+    Issueごとに SP/時間 を出して足し上げると、同じ仕事を細かく分割するほどスコアが
+    膨らむ（SP5×1件=0.1 に対し SP1×5件=0.5）ため、分割数に依存しない総量比にする。
+    物量は活動量（起票数）と品質（マージPR数）で既に報われている。
+    """
+    sp_sum, hours_sum = _sp_totals(issues, logins)
     return {
         login: sp_sum[login] / hours_sum[login] if hours_sum[login] > 0 else 0.0
         for login in logins
@@ -240,6 +272,66 @@ def _quality_values(
     return {login: max(0.0, v) for login, v in values.items()}
 
 
+def _member_facts(
+    prs: list[GitHubPullRequest],
+    issues: list[GitHubIssue],
+    reviews: list[GitHubReview],
+    logins: set[str],
+) -> dict[str, MemberFacts]:
+    """スコアに潰す前の生事実（画面7の「レシート」）。
+
+    振り返りの根拠を点数分解（+0.06 等）ではなく事実の積み上げで示すために公開する。
+    ここに並ぶのは相対化も重み付けもしない実数なので、他のカテゴリの値に引きずられない。
+
+    各値は上のスコア計算が使うのと同じ関数・同じ除外条件から取る（_sp_totals /
+    _turnaround_totals / _is_self_review）。ここで数え直さないのは、除外条件が
+    片方だけ更新された日に、同じ画面で「スコアの根拠」と「並んでいる事実」が
+    静かに食い違うため。
+
+    ただし件数の内訳ではないので「和＝合計」の関係は無い。**この関数が答えるのは
+    「誰の何を数えたか」だけ**で、それは MemberFacts のフィールド名に書いてある。
+    """
+    pr_author = {pr.number: pr.author_login for pr in prs}
+    sp_sum, _ = _sp_totals(issues, logins)
+    total_hours, review_counts = _turnaround_totals(prs, reviews, logins)
+
+    authored = {login: 0 for login in logins}
+    reopened = {login: 0 for login in logins}
+    for pr in prs:
+        if pr.author_login not in authored:
+            continue
+        authored[pr.author_login] += 1
+        reopened[pr.author_login] += pr.reopened_count
+
+    # 出したレビューの件数。活動量スコアはこれを「コメント付き」と「Approve/変更要求」の
+    # 2つのサブ指標に分けて使っているため、総数そのものはスコアに現れない。事実としては
+    # 「何本レビューしたか」のほうが読めるので、除外条件だけスコアと揃えて総数を出す
+    submitted = {login: 0 for login in logins}
+    for r in reviews:
+        if r.reviewer_login not in submitted:
+            continue
+        if _is_self_review(r, pr_author):
+            continue
+        submitted[r.reviewer_login] += 1
+
+    return {
+        login: MemberFacts(
+            story_points_earned=sp_sum[login],
+            pull_requests_authored=authored[login],
+            reviews_submitted=submitted[login],
+            pull_requests_reopened=reopened[login],
+            # 対象レビューが0件のときに0.0を返すと「即座に返した」と読めてしまう。
+            # 平均が定義できないことは NULL で言う
+            avg_review_turnaround_hours=(
+                total_hours[login] / review_counts[login]
+                if review_counts[login] > 0
+                else None
+            ),
+        )
+        for login in logins
+    }
+
+
 def compute_scores(
     project: Project,
     prs: list[GitHubPullRequest],
@@ -264,6 +356,7 @@ def compute_scores(
     activity = _activity_relative(prs, issues, reviews, logins)
     speed = _shares(_speed_values(issues, logins)) or zeros
     quality = _shares(_quality_values(prs, reviews, logins)) or zeros
+    facts = _member_facts(prs, issues, reviews, logins)
 
     # データが無いカテゴリ（例: SPラベル未運用でスピードが全員0）はその重みを配分せず、
     # 値を持つカテゴリだけで重みを正規化する。全員のスコアを同じ定数で割ることと等価なので
@@ -296,6 +389,7 @@ def compute_scores(
                 quality=quality[login],
             ),
             total=_total_for(login),
+            facts=facts[login],
         )
         for login in sorted(logins)
     ]
