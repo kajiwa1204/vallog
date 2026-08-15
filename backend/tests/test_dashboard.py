@@ -7,6 +7,7 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
+from app.services.changelog import build_changelog
 from app.services.dashboard import (
     DEFAULT_PULSE_DAYS,
     RECENTLY_DONE_LIMIT,
@@ -580,3 +581,125 @@ def test_empty_cache_yields_empty_panels_not_an_error():
     assert result.recently_done == []
     assert result.themes.items == []
     assert result.synced_at is None
+
+
+# --- roster（絞り込みチップの顔ぶれ・#109） -------------------------------
+
+
+def test_roster_includes_pr_authors_issue_authors_and_reviewers():
+    result = _build(
+        prs=[_pr(1, "alice")],
+        issues=[_issue(2, "bob")],
+        reviews=[_review(1, "carol")],
+    )
+
+    assert result.roster == ["alice", "bob", "carol"]
+
+
+def test_roster_includes_assignees_who_never_appear_as_an_actor():
+    """担当しかしていない人は、エントリの actor_login にはどこにも現れない。
+
+    それでも member=dave で絞れば行は返るので、チップに出さないと辿り着けなくなる。
+    """
+    result = _build(issues=[_issue(1, "alice", assignees=[_assignee("dave")])])
+
+    assert result.roster == ["alice", "dave"]
+
+
+def test_roster_is_not_limited_by_the_changelog_page_size():
+    """読み込み済み件数に依存しない（#109 の再発防止）。
+
+    フロントが既定50件から作っていたため、直近に動いていない人がチップから消えていた。
+    ここでは60件のPRを新しい順の後ろに古い1人分を混ぜ、打ち切りの影響を受けないことを見る。
+    """
+    prs = [_pr(n, "alice", created_day=10, merged_day=10) for n in range(1, 61)]
+    prs.append(_pr(999, "long-ago", created_day=1, merged_day=1))
+
+    result = _build(prs=prs)
+
+    assert "long-ago" in result.roster
+
+
+def test_roster_excludes_bots_and_unknown():
+    result = _build(
+        prs=[_pr(1, "dependabot[bot]"), _pr(2, "unknown"), _pr(3, "alice")],
+        reviews=[_review(3, "coderabbit[bot]")],
+    )
+
+    assert result.roster == ["alice"]
+
+
+def test_roster_excludes_bot_assignees():
+    result = _build(issues=[_issue(1, "alice", assignees=[_assignee("copilot[bot]")])])
+
+    assert result.roster == ["alice"]
+
+
+def test_roster_omits_self_reviewers_who_did_nothing_else():
+    """セルフレビューは変化ログに出ない（build_changelog が落とす）。
+
+    落ちる行しか持たない人をチップに出すと、押した瞬間に0件になる。
+    """
+    result = _build(prs=[_pr(1, "alice")], reviews=[_review(1, "alice")])
+
+    assert result.roster == ["alice"]  # PR作者としてのみ。レビュー由来で重複もしない
+
+
+def test_roster_omits_reviewers_whose_target_pr_is_not_cached():
+    """対象PRがキャッシュに無いレビュー行は build_changelog が落とす（#77）。"""
+    result = _build(prs=[_pr(1, "alice")], reviews=[_review(777, "ghost")])
+
+    assert result.roster == ["alice"]
+
+
+def test_roster_omits_reviews_without_submitted_at():
+    result = _build(
+        prs=[_pr(1, "alice")],
+        reviews=[SimpleNamespace(
+            github_id=1,
+            pr_number=1,
+            reviewer_login="pending",
+            state="PENDING",
+            html_url="https://github.com/o/r/pull/1",
+            submitted_at=None,
+        )],
+    )
+
+    assert result.roster == ["alice"]
+
+
+def test_roster_is_sorted_case_insensitively_and_deduplicated():
+    result = _build(
+        prs=[_pr(1, "Zoe"), _pr(2, "adam"), _pr(3, "Zoe")],
+        issues=[_issue(4, "adam")],
+    )
+
+    assert result.roster == ["adam", "Zoe"]
+
+
+def test_every_login_in_the_roster_returns_at_least_one_entry():
+    """チップの契約: 出ている人で絞れば必ず1件以上返る。
+
+    絞ったのに0件になるチップは「自分の記録が消えた」と読ませる。roster と
+    build_changelog の判定がずれた瞬間にここが落ちる。
+    """
+    prs = [_pr(1, "alice"), _pr(2, "bob", draft=True), _pr(3, "dependabot[bot]")]
+    issues = [
+        _issue(4, "carol", assignees=[_assignee("dave")]),
+        _issue(5, "alice", closed_day=5),
+    ]
+    reviews = [
+        _review(1, "bob"),
+        _review(1, "alice"),          # セルフレビュー（落ちる）
+        _review(2, "erin"),
+        _review(99, "ghost"),         # 対象PRが無い（落ちる）
+    ]
+
+    result = _build(prs=prs, issues=issues, reviews=reviews)
+    assert result.roster == ["alice", "bob", "carol", "dave", "erin"]
+
+    for login in result.roster:
+        entries = build_changelog(
+            prs, issues, reviews, member=login, limit=100
+        ).entries
+        assert entries, f"{login} で絞ると0件になる（チップに出してはいけない）"

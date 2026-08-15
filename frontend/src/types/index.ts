@@ -334,6 +334,9 @@ export type Themes = {
 export type DashboardResponse = {
   // null なら初回同期がまだ完了していない
   synced_at: string | null;
+  // 変化ログを絞り込める顔ぶれ（大文字小文字を無視した辞書順）。
+  // サーバがキャッシュ全件から作るので、読み込み済みの件数に左右されない（#109）
+  roster: string[];
   pulse: Pulse;
   attention: Attention;
   recently_done: DoneItem[];
