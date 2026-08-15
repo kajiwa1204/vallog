@@ -58,12 +58,6 @@ export function useDashboard(projectId: string, enabled = true) {
     enabled: enabled && panelsSettled,
   });
 
-  // 絞り込みチップに出す顔ぶれ。絞り込み中は変化ログが1人分に減るので、そこから毎回
-  // 作り直すとチップ自体が1個に潰れて他の人に切り替えられなくなる。全員表示のときだけ更新する。
-  // 並びは辞書順。取得順（時系列）のままだと「直近に動いた人」が先頭に来て、
-  // ダッシュボードが出さないはずの序列を暗に作ってしまう
-  const [roster, setRoster] = useState<string[]>([]);
-
   const [panels, setPanels] = useState<DashboardResponse | null>(null);
   const [panelsError, setPanelsError] = useState<string | null>(null);
   const [panelsLoading, setPanelsLoading] = useState(true);
@@ -127,15 +121,14 @@ export function useDashboard(projectId: string, enabled = true) {
     loadPanels();
   }, [loadPanels]);
 
-  const entries = changelog.entries;
-  useEffect(() => {
-    if (selectedMember !== null) return;
-    setRoster(
-      Array.from(new Set(entries.map((e) => e.actor_login))).sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    );
-  }, [entries, selectedMember]);
+  // 絞り込みチップに出す顔ぶれ。サーバが返す（#109）。
+  //
+  // 読み込み済みのエントリから作っていたが、それだと取得件数に顔ぶれが依存する。
+  // 既定の50件では直近に動いていない人がチップから消え、その人の記録に辿り着けなく
+  // なっていた。絞り込み中はエントリが1人分に減るため「全員表示のときだけ更新する」
+  // という回避も要り、状態が増えていた。サーバはキャッシュ全件を見るのでどちらも要らない。
+  // Issueの担当しかしていない人（actor_login に現れない）も拾える。
+  const roster = panels?.roster ?? [];
 
   const reload = useCallback(() => {
     loadPanels();
