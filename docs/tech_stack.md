@@ -17,6 +17,19 @@
 
 ---
 
+## GitHub OAuthスコープ
+
+現行スコープは **`read:user repo`**（Classic OAuth App）。
+
+`repo` が必要なのは、これがないとGitHubが公開リポジトリしか返さず、privateリポジトリを登録できないため。Classic OAuth Appには「privateの読み取りのみ」のスコープが存在せず、承認画面にも「Full control of private repositories」と表示される。実際にVallogが読むのはPR・Issue・コミットのみで書き込みは行わないが、**保持する資格情報の権限としては過大**。
+
+最小権限化には **GitHub Appへの移行が必要**。移行時は以下に注意する。
+
+- `X-OAuth-Scopes` ヘッダはClassic OAuthトークン固有で、GitHub Appのユーザートークンでは付かない。付与済みスコープから再認可の要否を判定している箇所（`GitHubClient.granted_scopes` → `RepoOptionList.private_access`）は作り直しが必要
+- そのため `private_access` は `bool | null` とし、判定不能（null）を「スコープ皆無」と区別している。移行直後に再認可導線が出っぱなしになるのを防ぐための設計
+
+---
+
 ## APIルーティング設計
 
 バックエンドのエンドポイントは **`/api/*` に統一**し、フロント・バック間のパス衝突を構造的に防ぐ。

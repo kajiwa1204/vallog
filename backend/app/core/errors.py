@@ -1,6 +1,6 @@
 from enum import StrEnum
 
-from fastapi import Request
+from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
 
@@ -49,11 +49,26 @@ class AppError(Exception):
         self.status_code = status_code
         self.code = code
         self.detail = detail
+        # エラー応答に載せる Set-Cookie。FastAPI は例外送出時にエンドポイントの
+        # response パラメータをマージしないため、set_cookie しても消える。
+        # Cookie の掃除が必要なエラーはここに積んでハンドラ側で出す
+        self.set_cookies: list[tuple[bytes, bytes]] = []
         super().__init__(detail)
+
+    def with_cookies_from(self, response: Response) -> "AppError":
+        """Response に積まれた Set-Cookie をエラー応答へ引き継ぐ。"""
+        self.set_cookies.extend(
+            (key, value) for key, value in response.raw_headers if key == b"set-cookie"
+        )
+        return self
 
 
 async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-    return JSONResponse(
+    response = JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail, "code": exc.code.value},
     )
+    # Set-Cookie は同名で複数行になるため raw_headers に直接足す。
+    # content-length 等を重複させないよう set-cookie だけを対象にしている
+    response.raw_headers.extend(exc.set_cookies)
+    return response

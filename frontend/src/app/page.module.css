@@ -169,11 +169,29 @@
   background: #3a4148;
 }
 
+.noteGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .note {
   font-size: 12px;
   color: var(--ink-3);
   line-height: 1.65;
   text-align: center;
+}
+
+/* 補足は行数があるため、中央揃えをやめて枠で囲み読みやすさを優先する */
+.noteDetail {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+  background: var(--surface-dim);
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: left;
 }
 
 /* ── Responsive ── */

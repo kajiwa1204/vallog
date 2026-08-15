@@ -63,6 +63,7 @@ class GitHubClient:
         }
         # 呼び出しごとに接続を張り直さないよう、インスタンスの生存期間で共有する
         self._client = httpx.AsyncClient(timeout=_TIMEOUT)
+        self._granted_scopes: set[str] | None = None
 
     async def __aenter__(self) -> "GitHubClient":
         return self
@@ -93,6 +94,9 @@ class GitHubClient:
                 ErrorCode.GITHUB_UNAVAILABLE,
                 "Failed to connect to GitHub",
             ) from e
+        raw_scopes = res.headers.get("X-OAuth-Scopes")
+        if raw_scopes is not None:
+            self._granted_scopes = {s.strip() for s in raw_scopes.split(",") if s.strip()}
         if res.status_code == 401:
             raise AppError(
                 status.HTTP_502_BAD_GATEWAY,
@@ -141,16 +145,21 @@ class GitHubClient:
             return None
         return res.json()
 
-    async def _paginated(
+    async def _paginated_with_meta(
         self, path: str, params: dict, max_pages: int, per_page: int = 100
-    ) -> list[dict]:
-        """page=1..max_pages を順に取得し、1ページの件数が per_page 未満になったら打ち切る。"""
+    ) -> tuple[list[dict], bool]:
+        """page=1..max_pages を順に取得し、1ページの件数が per_page 未満になったら打ち切る。
+
+        (取得結果, max_pagesで打ち切ったか) を返す。
+        """
         results: list[dict] = []
+        truncated = True
         for page in range(1, max_pages + 1):
             res = await self._request(path, {**params, "per_page": per_page, "page": page})
             batch = res.json()
             results.extend(batch)
             if len(batch) < per_page:
+                truncated = False
                 break
         else:
             # max_pagesに達して打ち切った＝取得しきれていないデータがある可能性
@@ -160,15 +169,35 @@ class GitHubClient:
                 max_pages,
                 params,
             )
+        return results, truncated
+
+    async def _paginated(
+        self, path: str, params: dict, max_pages: int, per_page: int = 100
+    ) -> list[dict]:
+        results, _ = await self._paginated_with_meta(path, params, max_pages, per_page)
         return results
 
-    async def list_viewer_repos(self) -> list[dict]:
-        """最大500件（5ページ）取得して返す。"""
-        return await self._paginated(
+    async def list_viewer_repos(self) -> tuple[list[dict], bool]:
+        """最大500件（5ページ）取得し、(リポジトリ, 打ち切ったか) を返す。"""
+        return await self._paginated_with_meta(
             "/user/repos",
             {"sort": "pushed", "affiliation": "owner,collaborator,organization_member"},
             max_pages=5,
         )
+
+    @property
+    def granted_scopes(self) -> set[str] | None:
+        """直近のレスポンスの `X-OAuth-Scopes` から得たスコープ。判定不能なら None。
+
+        スコープを増やしても既存トークンには反映されないため、再認可が必要かどうかの
+        判定に使う。ヘッダは全レスポンスに付くので、専用のリクエストは投げない。
+
+        None になるのは「まだ1度もリクエストしていない」か「トークンがヘッダを返さない」
+        場合。後者は GitHub App のユーザートークンが該当する（Classic OAuth トークン
+        固有のヘッダのため）。空集合（＝スコープ皆無）と区別できないと、GitHub App へ
+        移行した際に再認可導線が出っぱなしになるので、両者を分けている。
+        """
+        return self._granted_scopes
 
     async def get_contributors(self, owner: str, name: str) -> list[dict]:
         res = await self._request(f"/repos/{owner}/{name}/contributors", {"per_page": 100})

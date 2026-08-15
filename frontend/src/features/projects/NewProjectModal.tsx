@@ -9,7 +9,13 @@ import { Badge } from "@/components/ui/Badge";
 import { Spinner } from "@/components/ui/Spinner";
 import { api } from "@/lib/api";
 import { messageForError } from "@/lib/errorMessages";
-import type { RepoOption, Project } from "@/types";
+import { startGitHubLogin } from "@/lib/auth";
+import {
+  ORG_RESTRICTION_NOTICE,
+  PRIVATE_DATA_SHARING_NOTICE,
+  REPO_SCOPE_NOTICE,
+} from "@/lib/githubAccess";
+import type { RepoOption, RepoOptionList, Project } from "@/types";
 import styles from "./NewProjectModal.module.css";
 
 type Props = {
@@ -20,6 +26,9 @@ type Props = {
 export function NewProjectModal({ open, onClose }: Props) {
   const router = useRouter();
   const [repos, setRepos] = useState<RepoOption[]>([]);
+  // null は判定不能。再認可しても直らないので導線は出さない
+  const [privateAccess, setPrivateAccess] = useState<boolean | null>(true);
+  const [truncated, setTruncated] = useState(false);
   const [reposLoading, setReposLoading] = useState(false);
   const [reposError, setReposError] = useState<string | null>(null);
 
@@ -37,12 +46,16 @@ export function NewProjectModal({ open, onClose }: Props) {
     setProjectName("");
     setSubmitError(null);
     setReposError(null);
+    setPrivateAccess(true);
+    setTruncated(false);
 
     setReposLoading(true);
     api
-      .get<RepoOption[]>("/github/repos")
+      .get<RepoOptionList>("/github/repos")
       .then((data) => {
-        setRepos(data);
+        setRepos(data.repos);
+        setPrivateAccess(data.private_access);
+        setTruncated(data.truncated);
         setReposLoading(false);
       })
       .catch((e) => {
@@ -119,6 +132,29 @@ export function NewProjectModal({ open, onClose }: Props) {
           id="repo-search"
         />
 
+        {!reposLoading && !reposError && privateAccess === false && (
+          <div className={styles.notice} role="status">
+            <p>
+              privateリポジトリは表示されていません。表示するにはGitHubでの再認可が必要です。
+              {REPO_SCOPE_NOTICE}
+            </p>
+            <p>{ORG_RESTRICTION_NOTICE}</p>
+            <button
+              type="button"
+              className={styles.noticeLink}
+              onClick={() => startGitHubLogin("/projects")}
+            >
+              GitHubで再認可する
+            </button>
+          </div>
+        )}
+
+        {!reposLoading && !reposError && truncated && (
+          <p className={styles.notice} role="status">
+            リポジトリが多いため一部のみ表示しています。目的のリポジトリが見つからない場合は検索で絞り込んでください。
+          </p>
+        )}
+
         <div className={styles.listWrap}>
           {reposLoading && (
             <div className={styles.center}>
@@ -147,10 +183,23 @@ export function NewProjectModal({ open, onClose }: Props) {
                   {repo.private && (
                     <Badge tone="neutral">private</Badge>
                   )}
+                  {repo.fork && <Badge tone="ochre">fork</Badge>}
                 </button>
               );
             })}
         </div>
+
+        {selectedRepo?.fork && (
+          <p className={styles.notice} role="status">
+            これはforkです。forkには上流リポジトリのPR・Issueが含まれないため、貢献がほとんど集計されません。チームで開発しているリポジトリを選んでください。
+          </p>
+        )}
+
+        {selectedRepo?.private && (
+          <p className={styles.notice} role="status">
+            {PRIVATE_DATA_SHARING_NOTICE}
+          </p>
+        )}
 
         <Input
           label="プロジェクト名（任意）"
