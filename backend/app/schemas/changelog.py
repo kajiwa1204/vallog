@@ -32,6 +32,14 @@ class ChangeLogNotes(BaseModel):
     # PR行のみ
     reopened_count: int | None = None
     draft: bool | None = None
+    # Issue行のみ: そのIssueの担当者。担当が付いていなければ空リスト（「誰も持っていない」
+    # は意味のある事実）、Issue以外は None（非適用）。
+    #
+    # 絞り込みは起票者∪担当者で判定するのに、エントリの actor_login は常に起票者なので、
+    # 担当しかしていない人で絞ると行には起票者の名前しか出ない。行に動詞も無いため
+    # 「その人が起票した」とも読める。担当したという事実を行が持たないと、この画面は
+    # 誰の何なのかを表現できない
+    assignee_logins: list[str] | None = None
 
 
 class ChangeLogEntry(BaseModel):
