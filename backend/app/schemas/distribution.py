@@ -124,8 +124,13 @@ class ProposalListItem(BaseModel):
     total_amount: Decimal | None
     finalized: bool
     finalized_at: datetime | None
+    # 「誰が確定したか」は合意の記録の一部。作成者とは別人になりうるので両方返す
+    finalized_by_github_login: str | None
     created_by_github_login: str | None
     created_at: datetime
+    # 削除済みなら値が入る。物理削除しないのは #100 の抑止が痕跡の存在に依存するため
+    deleted_at: datetime | None = None
+    deleted_by_github_login: str | None = None
 
 
 class ProposalResponse(BaseModel):

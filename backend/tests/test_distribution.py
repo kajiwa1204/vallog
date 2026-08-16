@@ -46,6 +46,7 @@ def _proposal(ratios: dict[str, str], finalized: bool = False) -> DistributionPr
         weight_quality=25,
         total_amount=Decimal("100000.00"),
         finalized=finalized,
+        deleted_at=None,
         items=[
             DistributionItem(github_login=login, ratio=Decimal(ratio))
             for login, ratio in ratios.items()
@@ -59,7 +60,7 @@ def _repo_returning(proposal: DistributionProposal | None) -> MagicMock:
     repo.add_edit_log = AsyncMock()
     repo.create_proposal = AsyncMock()
     repo.count_proposals = AsyncMock(return_value=0)
-    repo.delete_proposal = AsyncMock()
+    repo.mark_deleted = AsyncMock()
 
     async def replace_items(target, items):
         target.items.clear()
@@ -281,15 +282,19 @@ async def test_finalize_rejects_already_finalized_proposal():
 # ---------- 削除 ----------
 
 
-async def test_delete_removes_an_unfinalized_proposal():
+async def test_delete_marks_the_proposal_instead_of_removing_it():
+    """物理削除にすると、案を作ってスコアを読んで消す、で痕跡がゼロになる。
+    #100 の社会的抑止は痕跡が残ることに依存しているので、行は残す。"""
     proposal = _proposal({"alice": "0.5", "bob": "0.5"})
     repo = _repo_returning(proposal)
     db = _db()
 
     with patch.object(service, "DistributionRepository", return_value=repo):
-        await service.delete_proposal(db, _PROJECT, proposal.id)
+        await service.delete_proposal(db, _PROJECT, proposal.id, _USER)
 
-    repo.delete_proposal.assert_awaited_once_with(proposal)
+    target, user_id, _at = repo.mark_deleted.await_args.args
+    assert target is proposal
+    assert user_id == _USER.id
     db.commit.assert_awaited()
 
 
@@ -301,11 +306,11 @@ async def test_delete_rejects_finalized_proposal():
 
     with patch.object(service, "DistributionRepository", return_value=repo):
         with pytest.raises(AppError) as exc:
-            await service.delete_proposal(_db(), _PROJECT, proposal.id)
+            await service.delete_proposal(_db(), _PROJECT, proposal.id, _USER)
 
     assert exc.value.status_code == 409
     assert exc.value.code == ErrorCode.DISTRIBUTION_FINALIZED
-    repo.delete_proposal.assert_not_awaited()
+    repo.mark_deleted.assert_not_awaited()
 
 
 async def test_delete_rejects_proposal_of_another_project():
@@ -316,11 +321,11 @@ async def test_delete_rejects_proposal_of_another_project():
 
     with patch.object(service, "DistributionRepository", return_value=repo):
         with pytest.raises(AppError) as exc:
-            await service.delete_proposal(_db(), _PROJECT, proposal.id)
+            await service.delete_proposal(_db(), _PROJECT, proposal.id, _USER)
 
     assert exc.value.status_code == 404
     assert exc.value.code == ErrorCode.DISTRIBUTION_NOT_FOUND
-    repo.delete_proposal.assert_not_awaited()
+    repo.mark_deleted.assert_not_awaited()
 
 
 # ---------- 作成 ----------
@@ -392,8 +397,8 @@ async def test_score_based_ratios_normalize_to_one():
     ratios = await _ratios_for({"alice": 0.6, "bob": 0.2, "carol": 0.2})
     assert ratios == [
         ("alice", Decimal("0.600000")),
-        ("bob", Decimal("0.200")),
-        ("carol", Decimal("0.200")),
+        ("bob", Decimal("0.200000")),
+        ("carol", Decimal("0.200000")),
     ]
 
 

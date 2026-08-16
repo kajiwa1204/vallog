@@ -186,18 +186,23 @@ async def finalize(
 
 
 async def delete_proposal(
-    db: AsyncSession, project: Project, proposal_id: uuid.UUID
+    db: AsyncSession, project: Project, proposal_id: uuid.UUID, user: User
 ) -> None:
-    """検討中の案を削除する。
+    """検討中の案を削除する。**行は消さず、削除済みとして記録に残す。**
+
+    物理削除にしないのは、#100 の社会的抑止が「`created_by` が記録され編集履歴は
+    全員に公開されるため、見えるかたちで意図的な行為をする必要がある」ことで成り立って
+    いるため。行ごと消せると「案を作る → 全員のスコアを読む → 重みを変えて別の切り口でも
+    読む → 削除する」で痕跡がゼロになり（編集ログも ON DELETE CASCADE で道連れ）、
+    抑止の根拠そのものが無くなる。誰がいつ何を消したかが残れば、削除も「見えるかたちの
+    行為」に留まる。
 
     **確定済みの案は削除できない。** 確定は「チームで合意した分配をVallog上に永続化」
-    した記録であり（docs/screen_design.md 画面7「合意の記録」）、後から消せると
-    合意そのものが残らない。編集を止めるだけで消せるなら、確定に意味がなくなる。
+    した記録であり（docs/screen_design.md 画面7「合意の記録」）、削除済みの印を付ける
+    ことすら合意の記録を濁す。
 
-    検討中の案は作業途中なので消してよい。編集ログも一緒に消えるが、確定していない
-    以上その案で何かが決まったわけではなく、残す先の合意が無い。ロールによる制限を
-    設けないのは他の操作と同じで、誰が消したかではなく**消せるのは未確定の案だけ**
-    という範囲で守る。
+    ロールによる制限は設けない（他の操作と同じ）。守るのは「誰が消せるか」ではなく
+    「消しても記録は残る」ほうで、これは編集履歴の全員公開と同じ考え方。
     """
     proposal = await _load_proposal(db, project.id, proposal_id)
     if proposal.finalized:
@@ -206,7 +211,9 @@ async def delete_proposal(
             ErrorCode.DISTRIBUTION_FINALIZED,
             "Finalized distribution proposals cannot be deleted",
         )
-    await DistributionRepository(db).delete_proposal(proposal)
+    await DistributionRepository(db).mark_deleted(
+        proposal, user.id, datetime.now(timezone.utc)
+    )
     await db.commit()
 
 

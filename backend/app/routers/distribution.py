@@ -71,9 +71,18 @@ def _to_edit_log(log: DistributionEditLog, avatars: Avatars) -> EditLogResponse:
 @router.get(
     "/projects/{project_id}/distributions", response_model=list[ProposalListItem]
 )
-async def list_distributions(project: MemberProject, db: DB):
-    """案の一覧。配分値・編集履歴は詳細で取得する。"""
-    proposals = await distribution_service.list_proposals(db, project.id)
+async def list_distributions(
+    project: MemberProject, db: DB, include_deleted: bool = False
+):
+    """案の一覧。配分値・編集履歴は詳細で取得する。
+
+    include_deleted=true で削除済みも返す。画面7の「分配の記録」が、確定した案と
+    削除された案を同じ履歴として並べるために使う（#100 の抑止は削除の痕跡が残ることに
+    依存しているので、消したら見えなくなる、にはしない）。
+    """
+    proposals = await distribution_service.list_proposals(
+        db, project.id, include_deleted=include_deleted
+    )
     return [
         ProposalListItem(
             id=p.id,
@@ -81,8 +90,13 @@ async def list_distributions(project: MemberProject, db: DB):
             total_amount=p.total_amount,
             finalized=p.finalized,
             finalized_at=p.finalized_at,
+            finalized_by_github_login=(
+                p.finalizer.github_login if p.finalizer else None
+            ),
             created_by_github_login=p.creator.github_login if p.creator else None,
             created_at=p.created_at,
+            deleted_at=p.deleted_at,
+            deleted_by_github_login=p.deleter.github_login if p.deleter else None,
         )
         for p in proposals
     ]

@@ -22,17 +22,31 @@ class DistributionRepository:
         selectinload(DistributionProposal.items),
         selectinload(DistributionProposal.creator),
         selectinload(DistributionProposal.finalizer),
+        selectinload(DistributionProposal.deleter),
         selectinload(DistributionProposal.edit_logs).selectinload(
             DistributionEditLog.editor
         ),
     )
 
-    async def list_proposals(self, project_id: uuid.UUID) -> list[DistributionProposal]:
+    async def list_proposals(
+        self, project_id: uuid.UUID, include_deleted: bool = False
+    ) -> list[DistributionProposal]:
+        """案の一覧。既定では削除済みを含めない。
+
+        include_deleted=True は「分配の記録」（確定済みと削除済みの履歴）用。削除は
+        物理削除ではないので、記録としては読めるが作業対象の一覧には出さない。
+        """
+        query = select(DistributionProposal).where(
+            DistributionProposal.project_id == project_id
+        )
+        if not include_deleted:
+            query = query.where(DistributionProposal.deleted_at.is_(None))
         rows = await self.db.scalars(
-            select(DistributionProposal)
-            .where(DistributionProposal.project_id == project_id)
-            .options(selectinload(DistributionProposal.creator))
-            .order_by(DistributionProposal.created_at.desc())
+            query.options(
+                selectinload(DistributionProposal.creator),
+                selectinload(DistributionProposal.finalizer),
+                selectinload(DistributionProposal.deleter),
+            ).order_by(DistributionProposal.created_at.desc())
         )
         return list(rows.all())
 
@@ -72,6 +86,8 @@ class DistributionRepository:
                     exists().where(
                         DistributionProposal.project_id == project_id,
                         DistributionProposal.finalized.is_(False),
+                        # 削除済みは議論が続いていないので開示条件に数えない
+                        DistributionProposal.deleted_at.is_(None),
                         func.greatest(
                             DistributionProposal.created_at,
                             func.coalesce(
@@ -84,9 +100,12 @@ class DistributionRepository:
             )
         )
 
-    async def delete_proposal(self, proposal: DistributionProposal) -> None:
-        """案を削除する。配分値・編集ログはFKの ON DELETE CASCADE で一緒に消える。"""
-        await self.db.delete(proposal)
+    async def mark_deleted(
+        self, proposal: DistributionProposal, user_id: uuid.UUID, at: datetime
+    ) -> None:
+        """案を削除済みにする（行は残す）。誰がいつ消したかを記録に残すため。"""
+        proposal.deleted_at = at
+        proposal.deleted_by = user_id
         await self.db.flush()
 
     async def count_proposals(self, project_id: uuid.UUID) -> int:
