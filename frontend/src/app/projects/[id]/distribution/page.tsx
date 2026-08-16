@@ -10,6 +10,7 @@ import { AllocationTable } from "@/features/distribution/AllocationTable";
 import { ChangeLogPanel } from "@/features/distribution/ChangeLogPanel";
 import { CreateProposalDialog } from "@/features/distribution/CreateProposalDialog";
 import { EditHistoryTimeline } from "@/features/distribution/EditHistoryTimeline";
+import { FinalizedProposals } from "@/features/distribution/FinalizedProposals";
 import { PanelError } from "@/features/distribution/PanelError";
 import { ProposalCompare } from "@/features/distribution/ProposalCompare";
 import { ProposalSwitcher } from "@/features/distribution/ProposalSwitcher";
@@ -59,6 +60,8 @@ export default function DistributionPage() {
   const {
     changelog,
     proposals,
+    drafts,
+    finalized,
     selectedId,
     selectProposal,
     proposal,
@@ -73,9 +76,12 @@ export default function DistributionPage() {
     summaries,
     comparing,
     setComparing,
-    compared,
-    compareError,
-    reloadCompare,
+    compareIds,
+    toggleCompare,
+    details,
+    detailPending,
+    detailErrorById,
+    fetchDetail,
     createProposal,
     updateItems,
     updateProposal,
@@ -154,12 +160,13 @@ export default function DistributionPage() {
         </Card>
       ) : hasProposals ? (
         <ProposalSwitcher
-          proposals={proposals}
+          drafts={drafts}
           selectedId={selectedId}
           onSelect={selectProposal}
           onCreate={() => setConfirmingCreate(true)}
           comparing={comparing}
           onToggleCompare={() => setComparing(!comparing)}
+          canCompare={proposals.length > 1}
           creating={saving}
         />
       ) : (
@@ -173,9 +180,13 @@ export default function DistributionPage() {
 
       {comparing && (
         <ProposalCompare
-          proposals={compared}
-          error={compareError}
-          onRetry={reloadCompare}
+          options={proposals}
+          selectedIds={compareIds}
+          onToggle={toggleCompare}
+          details={details}
+          pendingIds={detailPending}
+          errorById={detailErrorById}
+          onRetry={fetchDetail}
         />
       )}
 
@@ -188,6 +199,7 @@ export default function DistributionPage() {
           onRetry={reloadScores}
           selectedIsFinalized={proposal?.finalized ?? false}
           disclosureLapsed={disclosureLapsed}
+          hasFinalized={finalized.length > 0}
         />
         <SummaryPanel summaries={summaries} />
       </div>
@@ -221,6 +233,16 @@ export default function DistributionPage() {
           </>
         )
       )}
+
+      {/* 確定した分配の記録。編集も削除もできないので、いま触る案とは面を分けて畳む。
+          分配を何度もまわすチームではここが年に十数件ずつ増える */}
+      <FinalizedProposals
+        items={finalized}
+        details={details}
+        pendingIds={detailPending}
+        errorById={detailErrorById}
+        onOpen={fetchDetail}
+      />
 
       {/* 根拠。上の概観で見た数字が実際に何から来ているかを1件ずつ確かめる場所。
           案の有無に関わらず常に出す（案を作る前の議論もここを読んで始まる） */}

@@ -45,17 +45,9 @@
   background: var(--green-strong);
 }
 
-.finalized {
-  padding: 0 5px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.22);
-  font-size: 10.5px;
-}
-
-/* 非選択タブでは白背景に白バッジになるため、緑の淡色に戻す */
-.tab:not(.active) .finalized {
-  background: var(--green-tint);
-  color: var(--green-strong);
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
 }
 
 .actions {

@@ -16,6 +16,8 @@ type Props = {
   selectedIsFinalized: boolean;
   /** 選択中の案が未確定なのに非開示＝30日を過ぎて議論が立ち消えている */
   disclosureLapsed: boolean;
+  /** 確定した分配が1件でもある。過去の記録がどこにあるかを案内するために使う */
+  hasFinalized: boolean;
 };
 
 function percent(share: number): string {
@@ -72,6 +74,7 @@ export function ScorePanel({
   onRetry,
   selectedIsFinalized,
   disclosureLapsed,
+  hasFinalized,
 }: Props) {
   return (
     <Card title="スコア">
@@ -93,7 +96,9 @@ export function ScorePanel({
               ? "確定した配分は下の表に残っています。もう一度検討するときは新しい案を作成してください。"
               : disclosureLapsed
                 ? "配分か重みを保存すると、また表示されます。"
-                : "スコアは分配を話し合うための材料なので、分配案を作成すると表示されます。"}
+                : hasFinalized
+                  ? "スコアは分配を話し合うための材料なので、分配案を作成すると表示されます。過去に確定した分配は下の「確定した分配」に残っています。"
+                  : "スコアは分配を話し合うための材料なので、分配案を作成すると表示されます。"}
           </p>
         </div>
       )}

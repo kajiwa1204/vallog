@@ -29,11 +29,18 @@ const GITHUB_MESSAGES = {
 } as const;
 
 /**
+ * 比較に同時に並べられる案の数。横に並べて読める限界で切る。
+ * 上限が無いと、案が数十件あるチームで列が数十本のテーブルが出る（読めないうえ、
+ * その数だけ詳細を取りに行くことになる）。
+ */
+export const MAX_COMPARE = 4;
+
+/**
  * スコアの開示状態。「取得できなかった」と「まだ見せない」を型で分ける。
  *
- * 案が0件のとき /scores は 403 を返すが、これは**設計どおりの正常な状態**（#100）で
- * あって失敗ではない。同じ null に潰すと、画面はエラーとして赤く出すか、黙って
- * 何も出さないかしか選べなくなる。
+ * 検討中の案が無いとき /scores は 403 を返すが、これは**設計どおりの正常な状態**
+ * （#100）であって失敗ではない。同じ null に潰すと、画面はエラーとして赤く出すか、
+ * 黙って何も出さないかしか選べなくなる。
  */
 export type ScoreState =
   | { kind: "loading" }
@@ -60,6 +67,17 @@ export function useDistribution(projectId: string, enabled = true) {
   const [scoreState, setScoreState] = useState<ScoreState>({ kind: "loading" });
   const [summaries, setSummaries] = useState<Summary[] | null>(null);
 
+  /**
+   * 触る対象は検討中の案だけ。確定済みは編集も削除もできないので、切り替えバーには
+   * 出さず履歴として別に置く（分配を何度もまわすチームでは確定済みが溜まり続け、
+   * 検討中の案がその中に埋もれる）。
+   */
+  const drafts = proposals.filter((p) => !p.finalized);
+  // 新しく確定したものから読む
+  const finalized = proposals
+    .filter((p) => p.finalized)
+    .sort((a, b) => (b.finalized_at ?? "").localeCompare(a.finalized_at ?? ""));
+
   const loadProposals = useCallback(async () => {
     if (!enabled) return;
     setListLoading(true);
@@ -69,13 +87,13 @@ export function useDistribution(projectId: string, enabled = true) {
         `/projects/${projectId}/distributions`,
       );
       setProposals(data);
-      // 選択中の案が消えていたら（他の人が消した等）先頭に戻す。詳細の取得が
-      // 404 を返し続ける状態に留まらないようにする
-      setSelectedId((current) =>
-        current !== null && data.some((p) => p.id === current)
-          ? current
-          : (data[0]?.id ?? null),
-      );
+      // 選択は検討中の案から選ぶ。消えていたら（他の人が消した等）先頭の検討中に
+      // 戻す。確定直後だけは例外で、確定した案を選んだまま残す（結果を確認できる）
+      setSelectedId((current) => {
+        const still = data.find((p) => p.id === current);
+        if (still) return current;
+        return data.find((p) => !p.finalized)?.id ?? null;
+      });
     } catch (e) {
       setListError(
         messageForError(e, { fallback: "分配案の一覧を取得できませんでした" }),
@@ -182,6 +200,9 @@ export function useDistribution(projectId: string, enabled = true) {
       try {
         const updated = await run();
         setProposal(updated);
+        // 配分が変わったら履歴・比較のキャッシュは古い。持ち越すと同じ案の
+        // 違う数字が同じ画面に並ぶ
+        setDetails({});
         setSelectedId(updated.id);
         await Promise.all([loadProposals(), loadScores()]);
         return true;
@@ -275,6 +296,8 @@ export function useDistribution(projectId: string, enabled = true) {
       setSaveError(null);
       try {
         await api.delete(`/projects/${projectId}/distributions/${proposalId}`);
+        setDetails({});
+        setCompareIds((ids) => ids.filter((id) => id !== proposalId));
         // 選択を外してから読み直す。残したままだと詳細の取得が404を返す
         setSelectedId(null);
         setProposal(null);
@@ -302,38 +325,70 @@ export function useDistribution(projectId: string, enabled = true) {
   );
 
   /**
-   * 複数案を並べて比較するための詳細。一覧は配分値を返さないので案ごとに引き直す。
+   * 案の詳細キャッシュ。確定済みの履歴を開くときと、比較で選んだ案に使う。
    *
-   * 開いたときにまとめて取る（案の数だけ並列リクエスト）。案は多くても数件で、
-   * 分配APIはGitHubを叩かずDBだけを見るため、まとめても軽い。比較を開いていない
-   * 間は1本も投げない。
+   * 一覧は配分値を返さないので案ごとに引き直す必要がある。**要求されたものだけ**を
+   * 1件ずつ取るのが要点で、以前は比較を開いた瞬間に全件を並列で取りに行っていた。
+   * 分配を何度もまわすチームでは案が数十件に育つので、開いた回数ぶんだけその数の
+   * リクエストが飛ぶ。
+   *
+   * 取得済みは保持して、開き直しや選び直しで投げ直さない。書き込みのたびに捨てる
+   * （mutate 側）ので、古い配分が履歴に残ることはない。
    */
+  const [details, setDetails] = useState<Record<string, Proposal>>({});
+  const [detailPending, setDetailPending] = useState<string[]>([]);
+  const [detailErrorById, setDetailErrorById] = useState<Record<string, string>>({});
+
+  const fetchDetail = useCallback(
+    async (proposalId: string) => {
+      setDetailPending((ids) =>
+        ids.includes(proposalId) ? ids : [...ids, proposalId],
+      );
+      setDetailErrorById(({ [proposalId]: _dropped, ...rest }) => rest);
+      try {
+        const data = await api.get<Proposal>(
+          `/projects/${projectId}/distributions/${proposalId}`,
+        );
+        setDetails((current) => ({ ...current, [proposalId]: data }));
+      } catch (e) {
+        setDetailErrorById((current) => ({
+          ...current,
+          [proposalId]: messageForError(e, {
+            fallback: "分配案を取得できませんでした",
+          }),
+        }));
+      } finally {
+        setDetailPending((ids) => ids.filter((id) => id !== proposalId));
+      }
+    },
+    [projectId],
+  );
+
   const [comparing, setComparing] = useState(false);
-  const [compared, setCompared] = useState<Proposal[] | null>(null);
-  const [compareError, setCompareError] = useState<string | null>(null);
+  // 比較に選んだ案。多くても4件までにする（それ以上は横に並べても読めない）
+  const [compareIds, setCompareIds] = useState<string[]>([]);
 
-  const loadCompare = useCallback(async () => {
-    setCompared(null);
-    setCompareError(null);
-    try {
-      setCompared(
-        await Promise.all(
-          proposals.map((p) =>
-            api.get<Proposal>(`/projects/${projectId}/distributions/${p.id}`),
-          ),
-        ),
+  const toggleCompare = useCallback(
+    (proposalId: string) => {
+      setCompareIds((ids) =>
+        ids.includes(proposalId)
+          ? ids.filter((id) => id !== proposalId)
+          : ids.length >= MAX_COMPARE
+            ? ids
+            : [...ids, proposalId],
       );
-    } catch (e) {
-      setCompareError(
-        messageForError(e, { fallback: "比較する案を取得できませんでした" }),
-      );
-    }
-  }, [projectId, proposals]);
+    },
+    [],
+  );
 
+  // 選ばれていて、まだ取っていないものだけを取りに行く
   useEffect(() => {
     if (!comparing) return;
-    loadCompare();
-  }, [comparing, loadCompare]);
+    for (const id of compareIds) {
+      if (details[id] || detailPending.includes(id) || detailErrorById[id]) continue;
+      fetchDetail(id);
+    }
+  }, [comparing, compareIds, details, detailPending, detailErrorById, fetchDetail]);
 
   const reload = useCallback(() => {
     loadProposals();
@@ -346,6 +401,8 @@ export function useDistribution(projectId: string, enabled = true) {
   return {
     changelog,
     proposals,
+    drafts,
+    finalized,
     selectedId,
     selectProposal: setSelectedId,
     proposal,
@@ -361,9 +418,12 @@ export function useDistribution(projectId: string, enabled = true) {
     summaries,
     comparing,
     setComparing,
-    compared,
-    compareError,
-    reloadCompare: loadCompare,
+    compareIds,
+    toggleCompare,
+    details,
+    detailPending,
+    detailErrorById,
+    fetchDetail,
     createProposal,
     updateItems,
     updateProposal,
