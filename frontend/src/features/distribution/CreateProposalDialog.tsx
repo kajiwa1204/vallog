@@ -37,23 +37,22 @@ export function CreateProposalDialog({ open, onClose, onConfirm, creating }: Pro
             やめる
           </Button>
           <Button onClick={onConfirm} loading={creating}>
-            作成してスコアを開示する
+            作成する
           </Button>
         </>
       }
     >
       <p className={styles.lead}>
-        作成すると、<strong>これ以降チーム全員にスコアが表示されます。</strong>
+        作成すると、<strong>チーム全員にスコアが表示されます。</strong>
       </p>
       <p className={styles.body}>
-        作業期間中にスコアが見えていると、点数を上げること自体が目的にすり替わります（Goodhartの法則）。
-        そのためVallogは、チームが分配を議論している間だけスコアを開示します。
+        スコアは分配を話し合うための材料なので、この画面で分配を検討している間だけ表示します。
       </p>
       <ul className={styles.notes}>
-        <li>誰が作成したかは記録され、以後の編集履歴とあわせて全員に公開されます。</li>
-        <li>案を確定すると、スコアは再び非開示に戻ります。</li>
+        <li>作成した人の名前は、以後の編集履歴とあわせて全員に見えます。</li>
+        <li>案を確定すると、スコアはまた表示されなくなります。</li>
         <li>
-          案が<span className="num">30</span>日更新されないと、自動的に非開示に戻ります。
+          案が<span className="num">30</span>日更新されないときも、表示されなくなります。
         </li>
       </ul>
     </Modal>

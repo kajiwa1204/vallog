@@ -80,18 +80,17 @@ export function ScorePanel({
         <div className={styles.undisclosed}>
           <p className={styles.undisclosedLead}>
             {selectedIsFinalized
-              ? "この分配は確定済みのため、スコアは非開示に戻りました。"
+              ? "この分配は確定済みのため、スコアは表示していません。"
               : disclosureLapsed
-                ? "この案は30日以上更新されていないため、スコアは非開示に戻りました。"
-                : "スコアは、検討中の分配案があるときだけ表示されます。"}
+                ? "この案は30日以上更新されていないため、スコアは表示していません。"
+                : "スコアは、検討中の分配案があるときに表示されます。"}
           </p>
           <p className={styles.undisclosedBody}>
-            作業期間中にスコアが見えていると、点数を上げること自体が目的にすり替わります（Goodhartの法則）。
-            そこでスコアは、チームが分配を議論している間だけ開示します。
-            {selectedIsFinalized &&
-              "確定した配分は下の表に残っています。もう一度検討するときは新しい案を作成してください。"}
-            {disclosureLapsed &&
-              "配分か重みを保存すると、議論が再開したものとして再び表示されます。"}
+            {selectedIsFinalized
+              ? "確定した配分は下の表に残っています。もう一度検討するときは新しい案を作成してください。"
+              : disclosureLapsed
+                ? "配分か重みを保存すると、また表示されます。"
+                : "スコアは分配を話し合うための材料なので、分配案を作成すると表示されます。"}
           </p>
         </div>
       )}

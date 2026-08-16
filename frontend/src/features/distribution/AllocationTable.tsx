@@ -143,7 +143,7 @@ export function AllocationTable({
 
       {!locked && disclosureLapsed && (
         <p className={styles.lapsedNote}>
-          この案は<span className="num">30</span>日以上更新されていないため、スコアは非開示に戻っています。配分か重みを保存すると再び表示されます。
+          この案は<span className="num">30</span>日以上更新されていないため、スコアが表示されていません。配分か重みを保存すると、また表示されます。
         </p>
       )}
 
@@ -310,7 +310,7 @@ export function AllocationTable({
           {confirmingFinalize ? (
             <>
               <p className={styles.finalizeWarning}>
-                確定すると、この案は以降編集できません。スコアの表示も非開示に戻ります（確定した配分は上の表に残ります）。
+                確定すると、この案は以降編集できません。スコアも表示されなくなります（確定した配分は上の表に残ります）。
               </p>
               <div className={styles.actions}>
                 <Button loading={saving} disabled={!balanced} onClick={onFinalize}>
