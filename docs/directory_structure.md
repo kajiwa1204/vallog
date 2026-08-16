@@ -100,7 +100,7 @@ frontend/
 │   │   │   ├── ProposalCompare.tsx               # 複数案を並べて比較（重みの差も見出しに出す）
 │   │   │   ├── SummaryPanel.tsx                  # 第2層: 変化ログの詳細（AIサマリー・読み取り専用）
 │   │   │   ├── EditHistoryTimeline.tsx           # 編集履歴（全員に公開・不正操作への抑止）
-│   │   │   ├── ScorePanel.tsx                    # 補助情報: スコアと生事実。非開示時は説明に置き換わる（#100）
+│   │   │   ├── ScorePanel.tsx                    # スコアと生事実（アプリで唯一スコアが出る場所）。表示条件を満たさなければ説明に置き換わる（#100）
 │   │   │   ├── allocation.ts                     # 比率編集の純粋関数（千分率の整数・Reactに依存しない）
 │   │   │   └── useDistribution.ts
 │   │   ├── members/
