@@ -3,7 +3,7 @@
 import { Avatar } from "@/components/ui/Avatar";
 import { Card } from "@/components/ui/Card";
 import type { EditLog, ProposalSnapshot } from "@/types";
-import { formatPercent, toTenths } from "./allocation";
+import { formatAmount, formatPercent, toTenths } from "./allocation";
 import styles from "./EditHistoryTimeline.module.css";
 
 type Props = {
@@ -44,10 +44,13 @@ function changesOf(before: ProposalSnapshot, after: ProposalSnapshot): Change[] 
   }
 
   if (before.total_amount !== after.total_amount) {
+    // 生の "300000.00" を出さない。同じ画面の他の箇所は ¥300,000 で揃っている
+    const yen = (v: string | null) =>
+      v === null ? "未入力" : `¥${formatAmount(Number(v))}`;
     changes.push({
       label: "報酬総額",
-      before: before.total_amount ?? "未入力",
-      after: after.total_amount ?? "未入力",
+      before: yen(before.total_amount),
+      after: yen(after.total_amount),
     });
   }
 

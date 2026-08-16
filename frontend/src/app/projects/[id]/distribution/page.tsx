@@ -10,7 +10,7 @@ import { AllocationTable } from "@/features/distribution/AllocationTable";
 import { ChangeLogPanel } from "@/features/distribution/ChangeLogPanel";
 import { CreateProposalDialog } from "@/features/distribution/CreateProposalDialog";
 import { EditHistoryTimeline } from "@/features/distribution/EditHistoryTimeline";
-import { FinalizedProposals } from "@/features/distribution/FinalizedProposals";
+import { ProposalRecords } from "@/features/distribution/ProposalRecords";
 import { PanelError } from "@/features/distribution/PanelError";
 import { ProposalCompare } from "@/features/distribution/ProposalCompare";
 import { ProposalSwitcher } from "@/features/distribution/ProposalSwitcher";
@@ -61,7 +61,7 @@ export default function DistributionPage() {
     changelog,
     proposals,
     drafts,
-    finalized,
+    past,
     selectedId,
     selectProposal,
     proposal,
@@ -199,7 +199,7 @@ export default function DistributionPage() {
           onRetry={reloadScores}
           selectedIsFinalized={proposal?.finalized ?? false}
           disclosureLapsed={disclosureLapsed}
-          hasFinalized={finalized.length > 0}
+          hasFinalized={past.length > 0}
         />
         <SummaryPanel summaries={summaries} />
       </div>
@@ -234,10 +234,10 @@ export default function DistributionPage() {
         )
       )}
 
-      {/* 確定した分配の記録。編集も削除もできないので、いま触る案とは面を分けて畳む。
-          分配を何度もまわすチームではここが年に十数件ずつ増える */}
-      <FinalizedProposals
-        items={finalized}
+      {/* 確定した分配と削除された案の記録。もう触れないので、いま触る案とは面を
+          分けて畳む。削除も残すのは、痕跡が消えると #100 の抑止の根拠が無くなるため */}
+      <ProposalRecords
+        items={past}
         details={details}
         pendingIds={detailPending}
         errorById={detailErrorById}

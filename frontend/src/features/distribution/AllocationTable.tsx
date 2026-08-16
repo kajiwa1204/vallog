@@ -18,6 +18,7 @@ import {
   rowsFromItems,
   setRowTenths,
   sumTenths,
+  toTenths,
   TOTAL_TENTHS,
   type AllocationRow,
 } from "./allocation";
@@ -63,6 +64,34 @@ export function AllocationTable({
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  /**
+   * 編集中の入力文字列（github_login → 打っている途中の値）。
+   *
+   * 入力欄の value を tenths から作り直すと、1文字打つたびに小数1桁へ丸め直される。
+   * 「12.5」と打とうとすると `1` → "1.0"、`2` → "1.02"→丸めて"1.0"（握りつぶし）、
+   * `5` → "1.05"→"1.1" となり、**数字を打ち込めない**。欄を空にするのも
+   * parseFloat("")→NaN→0 で即 0.0 に戻るためできない。
+   *
+   * 打っている間は入力文字列をそのまま見せ、tenths への変換は裏で行う。フォーカスが
+   * 外れた時点で正規化した表示に戻す。
+   */
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+
+  const onPercentChange = (login: string, raw: string) => {
+    setDrafts((current) => ({ ...current, [login]: raw }));
+    // 空欄や "12." のような途中の文字列は数値にできない。0扱いにせず値を据え置く
+    // （0にすると、消して打ち直すたびに合計が崩れて赤くなる）
+    const parsed = parseFloat(raw);
+    if (Number.isNaN(parsed)) return;
+    setRows((current) =>
+      setRowTenths(current, login, Math.round(parsed * 10)),
+    );
+  };
+
+  const commitDraft = (login: string) => {
+    setDrafts(({ [login]: _dropped, ...rest }) => rest);
+  };
+
   // 案を切り替えたら編集中の値を持ち越さない。残すと、別の案の配分に前の案の
   // 数字が入った状態から編集を始めることになる
   useEffect(() => {
@@ -71,6 +100,7 @@ export function AllocationTable({
     setAmountDraft(proposal.total_amount ?? "");
     setConfirmingFinalize(false);
     setConfirmingDelete(false);
+    setDrafts({});
   }, [proposal.id, proposal.items, proposal.total_amount]);
 
   const locked = proposal.finalized;
@@ -95,6 +125,8 @@ export function AllocationTable({
   const canSave = dirty && balanced && reason.trim().length > 0;
 
   const amountChanged = (amountDraft.trim() || null) !== proposal.total_amount;
+  // サーバが返した配分と金額。行が編集されていなければこちらを表示する
+  const savedByLogin = new Map(proposal.items.map((item) => [item.github_login, item]));
 
   return (
     <Card
@@ -193,7 +225,17 @@ export function AllocationTable({
         </thead>
         <tbody>
           {rows.map((row) => {
-            const amount = amountFor(amountDraft.trim() || null, row.tenths);
+            // 保存済みの値はサーバが計算した金額をそのまま出す。フロントで計算し直すと
+            // 合意する金額と記録に残る金額が食い違う。編集中の行と、総額を書き換えて
+            // いる間だけは、サーバに存在しない値なので保存後の見込みを出す
+            const saved = savedByLogin.get(row.github_login);
+            const untouchedRow =
+              !amountChanged && saved !== undefined && toTenths(saved.ratio) === row.tenths;
+            const amount = untouchedRow
+              ? saved.amount === null
+                ? null
+                : Number(saved.amount)
+              : amountFor(amountDraft.trim() || null, row.tenths);
             return (
               <tr key={row.github_login}>
                 <th scope="row" className={styles.member}>
@@ -213,19 +255,13 @@ export function AllocationTable({
                         step={0.1}
                         inputMode="decimal"
                         aria-label={`${row.github_login}の配分（%）`}
-                        value={formatPercent(row.tenths)}
+                        // 打っている最中は入力文字列をそのまま出す。tenths から
+                        // 作り直すと1文字打つたびに小数1桁へ丸め直され、2文字目
+                        // 以降が消えて数字を打ち込めなくなる（"12.5" が "1.1" に）
+                        value={drafts[row.github_login] ?? formatPercent(row.tenths)}
                         disabled={saving}
-                        onChange={(e) =>
-                          setRows((current) =>
-                            setRowTenths(
-                              current,
-                              row.github_login,
-                              // 千分率の整数に落としてから持つ。パーセントの小数の
-                              // まま保持すると合計判定が浮動小数に依存する
-                              Math.round(parseFloat(e.target.value) * 10),
-                            ),
-                          )
-                        }
+                        onChange={(e) => onPercentChange(row.github_login, e.target.value)}
+                        onBlur={() => commitDraft(row.github_login)}
                       />
                       <span className={styles.unit}>%</span>
                     </span>

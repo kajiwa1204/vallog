@@ -36,16 +36,54 @@
   background: var(--surface-dim);
 }
 
+/* 見出し行。.head と同じグリッドに乗せて列を揃える */
+.columns {
+  cursor: default;
+  padding-bottom: 4px;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.columns:hover {
+  background: none;
+}
+
+.right {
+  text-align: right;
+}
+
 .marker {
   color: var(--ink-3);
   font-size: 11px;
 }
 
 .name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
   font-size: 13px;
+}
+
+.name > :first-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 削除は「消えた」ではなく「記録として残っている」状態。赤で警告にはしない */
+.removed {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-dim);
+  color: var(--ink-3);
+  font-size: 10.5px;
+}
+
+.removedNote {
+  font-size: 12px;
+  color: var(--ink-3);
 }
 
 .total {

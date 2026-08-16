@@ -3,7 +3,7 @@
 import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import type { Proposal, ProposalListItem } from "@/types";
-import { amountFor, formatAmount, formatPercent, toTenths } from "./allocation";
+import { formatAmount, formatPercent, toTenths } from "./allocation";
 import { PanelError } from "./PanelError";
 import { MAX_COMPARE } from "./useDistribution";
 import styles from "./ProposalCompare.module.css";
@@ -53,8 +53,16 @@ export function ProposalCompare({
   const failed = selectedIds.filter((id) => errorById[id]);
   const loading = selectedIds.some((id) => pendingIds.includes(id));
 
+  // 比率と金額の両方をサーバの値から引く。金額を比率から計算し直すと、比較の席に
+  // 出る額と記録に残る額が食い違う
   const byProposal = shown.map(
-    (p) => new Map(p.items.map((i) => [i.github_login, toTenths(i.ratio)])),
+    (p) =>
+      new Map(
+        p.items.map((i) => [
+          i.github_login,
+          { tenths: toTenths(i.ratio), amount: i.amount },
+        ]),
+      ),
   );
   const logins = [
     ...new Set(shown.flatMap((p) => p.items.map((i) => i.github_login))),
@@ -140,19 +148,19 @@ export function ProposalCompare({
                       {login}
                     </th>
                     {shown.map((p, i) => {
-                      const tenths = byProposal[i].get(login);
-                      if (tenths === undefined) {
+                      const cell = byProposal[i].get(login);
+                      if (cell === undefined) {
                         return (
                           <td key={p.id} className={styles.cell}>
                             <span className={styles.absent}>対象外</span>
                           </td>
                         );
                       }
-                      const amount = amountFor(p.total_amount, tenths);
+                      const amount = cell.amount === null ? null : Number(cell.amount);
                       return (
                         <td key={p.id} className={styles.cell}>
                           <span className={`num ${styles.percent}`}>
-                            {formatPercent(tenths)}%
+                            {formatPercent(cell.tenths)}%
                           </span>
                           {amount !== null && (
                             <span className={`num ${styles.amount}`}>

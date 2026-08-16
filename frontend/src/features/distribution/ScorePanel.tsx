@@ -112,10 +112,12 @@ export function ScorePanel({
 
       {state.kind === "ready" && (
         <>
+          {/* 「案を作ったときの値」ではない。GitHubのキャッシュから都度計算する
+              ライブの値なので、案を作ってから活動が進めば変わる */}
           <p className={styles.lead}>
-            案を作ったときの出発点になった値です。分配額はここから自動では決まりません。
-            重みは 活動量 {state.scores.weights.activity}% ・ スピード{" "}
-            {state.scores.weights.speed}% ・ 品質 {state.scores.weights.quality}%。
+            選択中の案の重み（活動量 {state.scores.weights.activity}% ・ スピード{" "}
+            {state.scores.weights.speed}% ・ 品質 {state.scores.weights.quality}%）で計算した現在のスコアです。
+            分配額はここから自動では決まりません。
           </p>
 
           {state.scores.members.length === 0 ? (
@@ -143,7 +145,10 @@ export function ScorePanel({
                         key={c.key}
                         className={styles.segment}
                         style={{
-                          flexGrow: member.categories[c.key],
+                          // 重みを掛ける。カテゴリの相対値そのままだと、バーの
+                          // 内訳を足しても隣の総合スコアにならない
+                          flexGrow:
+                            state.scores.weights[c.key] * member.categories[c.key],
                           background: c.color,
                         }}
                       />
@@ -157,6 +162,13 @@ export function ScorePanel({
               ))}
             </ul>
           )}
+
+          {/* 生事実と総合スコアは順位が逆転しうる（SPが最多でも総合は3位、など）。
+              事実は実数、総合は3カテゴリを重みで合成した相対値で、別のものを見ている。
+              説明が無いと分配の席で最初に突かれる */}
+          <p className={styles.factsNote}>
+            下段の数字は重み付けをしていない実数です。総合スコアは3カテゴリを相対化して重みで合成した値なので、順位が一致しないことがあります。
+          </p>
 
           <p className={styles.legend}>
             {CATEGORIES.map((c) => (

@@ -5,7 +5,7 @@ import type { ProposalListItem } from "@/types";
 import styles from "./ProposalSwitcher.module.css";
 
 type Props = {
-  /** 検討中の案だけ。確定済みは FinalizedProposals が持つ */
+  /** 検討中の案だけ。確定済み・削除済みは ProposalRecords が持つ */
   drafts: ProposalListItem[];
   selectedId: string | null;
   onSelect: (id: string) => void;

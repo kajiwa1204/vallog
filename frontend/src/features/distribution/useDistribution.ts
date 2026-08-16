@@ -65,6 +65,8 @@ export function useDistribution(projectId: string, enabled = true) {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const [scoreState, setScoreState] = useState<ScoreState>({ kind: "loading" });
+  // スコアを計算するときの重み。選択中の案の重みを使う（null ならプロジェクト既定）
+  const [scoreWeights, setScoreWeights] = useState<CategoryWeights | null>(null);
   const [summaries, setSummaries] = useState<Summary[] | null>(null);
 
   /**
@@ -72,27 +74,32 @@ export function useDistribution(projectId: string, enabled = true) {
    * 出さず履歴として別に置く（分配を何度もまわすチームでは確定済みが溜まり続け、
    * 検討中の案がその中に埋もれる）。
    */
-  const drafts = proposals.filter((p) => !p.finalized);
-  // 新しく確定したものから読む
-  const finalized = proposals
-    .filter((p) => p.finalized)
-    .sort((a, b) => (b.finalized_at ?? "").localeCompare(a.finalized_at ?? ""));
+  const drafts = proposals.filter((p) => !p.finalized && p.deleted_at === null);
+  // 分配の記録（確定済み・削除済み）。新しい出来事から読む
+  const past = proposals
+    .filter((p) => p.finalized || p.deleted_at !== null)
+    .sort((a, b) =>
+      ((b.finalized_at ?? b.deleted_at) ?? "").localeCompare(
+        (a.finalized_at ?? a.deleted_at) ?? "",
+      ),
+    );
 
   const loadProposals = useCallback(async () => {
     if (!enabled) return;
     setListLoading(true);
     setListError(null);
     try {
+      // 削除済みも取る。作業対象の一覧からは外すが、記録としては読める必要がある
       const data = await api.get<ProposalListItem[]>(
-        `/projects/${projectId}/distributions`,
+        `/projects/${projectId}/distributions?include_deleted=true`,
       );
       setProposals(data);
       // 選択は検討中の案から選ぶ。消えていたら（他の人が消した等）先頭の検討中に
       // 戻す。確定直後だけは例外で、確定した案を選んだまま残す（結果を確認できる）
       setSelectedId((current) => {
-        const still = data.find((p) => p.id === current);
+        const still = data.find((p) => p.id === current && p.deleted_at === null);
         if (still) return current;
-        return data.find((p) => !p.finalized)?.id ?? null;
+        return data.find((p) => !p.finalized && p.deleted_at === null)?.id ?? null;
       });
     } catch (e) {
       setListError(
@@ -138,7 +145,19 @@ export function useDistribution(projectId: string, enabled = true) {
     if (!enabled) return;
     setScoreState({ kind: "loading" });
     try {
-      const scores = await api.get<ScoreResponse>(`/projects/${projectId}/scores`);
+      // 選択中の案の重みで計算させる。案の配分比率は案の重みで算出されるので、
+      // スコアだけプロジェクト既定の重みで取ると、同じ画面の「配分」と「その根拠」が
+      // 別々の重みの産物になる（重みを 100/0/0 にすると根拠と配分が別の数字を出す）
+      const params = new URLSearchParams();
+      if (scoreWeights !== null) {
+        params.set("weight_activity", String(scoreWeights.activity));
+        params.set("weight_speed", String(scoreWeights.speed));
+        params.set("weight_quality", String(scoreWeights.quality));
+      }
+      const query = params.toString();
+      const scores = await api.get<ScoreResponse>(
+        `/projects/${projectId}/scores${query ? `?${query}` : ""}`,
+      );
       setScoreState({ kind: "ready", scores });
     } catch (e) {
       if (e instanceof ApiError && e.code === "SCORES_NOT_DISCLOSED") {
@@ -157,7 +176,7 @@ export function useDistribution(projectId: string, enabled = true) {
         retryable: code !== "GITHUB_RATE_LIMITED" && code !== "GITHUB_FORBIDDEN",
       });
     }
-  }, [projectId, enabled]);
+  }, [projectId, enabled, scoreWeights]);
 
   // 生成済みの貢献サマリー（第2層）。生成の起動・進捗は #16 の担当なのでここでは読むだけ。
   // 失敗しても画面にエラーを出さない。まだ1件も生成していないチームのほうが多く、
@@ -185,6 +204,24 @@ export function useDistribution(projectId: string, enabled = true) {
     }
     loadProposal(selectedId);
   }, [selectedId, loadProposal]);
+
+  // 選択中の案の重みでスコアを計算させる。同じ値なら参照を変えないので、
+  // loadScores（scoreWeights に依存）が無限に走ることはない
+  useEffect(() => {
+    if (proposal === null) {
+      setScoreWeights(null);
+      return;
+    }
+    const next = proposal.weights;
+    setScoreWeights((current) =>
+      current !== null &&
+      current.activity === next.activity &&
+      current.speed === next.speed &&
+      current.quality === next.quality
+        ? current
+        : next,
+    );
+  }, [proposal]);
 
   /**
    * 保存系の共通処理。**成功したら必ずスコアの開示状態を取り直す。**
@@ -402,7 +439,7 @@ export function useDistribution(projectId: string, enabled = true) {
     changelog,
     proposals,
     drafts,
-    finalized,
+    past,
     selectedId,
     selectProposal: setSelectedId,
     proposal,

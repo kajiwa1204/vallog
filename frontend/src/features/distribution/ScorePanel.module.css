@@ -112,6 +112,12 @@
   font-weight: 600;
 }
 
+.factsNote {
+  margin-top: 14px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
 .legend {
   display: flex;
   flex-wrap: wrap;

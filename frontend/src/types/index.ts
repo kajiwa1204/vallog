@@ -212,8 +212,14 @@ export type ProposalListItem = {
   total_amount: string | null;
   finalized: boolean;
   finalized_at: string | null;
+  // 確定した人。作成者とは別人になりうるので両方来る
+  finalized_by_github_login: string | null;
   created_by_github_login: string | null;
   created_at: string;
+  // 削除済みなら値が入る。物理削除しないのは、削除の痕跡が残ることに #100 の
+  // 社会的抑止が依存しているため
+  deleted_at: string | null;
+  deleted_by_github_login: string | null;
 };
 
 export type SummaryJob = {

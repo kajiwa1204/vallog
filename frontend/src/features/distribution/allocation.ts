@@ -99,8 +99,12 @@ export function equalize(rows: AllocationRow[]): AllocationRow[] {
 /**
  * 報酬総額を比率で按分した金額。総額が未入力なら金額は出さない（比率のみ表示）。
  *
- * バックエンドの services/distribution.py amount_for() と同じ計算だが、**保存前の
- * 編集中の値**にも金額を出すためにフロントでも計算する。丸めは同じく小数第2位まで。
+ * **保存済みの値には使わない。** サーバが返す `DistributionItemResponse.amount` が
+ * 記録に残る金額なので、そちらを表示する。ここで計算した値を出すと、チームが画面上で
+ * 合意する金額と記録に残る金額が食い違う。
+ *
+ * この関数を使うのは**まだ保存されていない編集中の配分**だけ。サーバに存在しない値の
+ * 金額はサーバに聞けないため、保存したらいくらになるかをその場で示す。
  */
 export function amountFor(totalAmount: string | null, tenths: number): number | null {
   if (totalAmount === null || totalAmount.trim() === "") return null;
