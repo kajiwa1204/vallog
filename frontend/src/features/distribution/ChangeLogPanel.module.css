@@ -4,6 +4,19 @@
   color: var(--ink-2);
 }
 
+/* 既定50件・上限200件まで伸びるので、外側に伸ばさず中でスクロールさせる。
+   vh 併用なのは、ノートPCの縦で 60vh より 560px が大きくなる場合があるため。
+   小さいほうを採ると、どの画面でも「1画面の半分強」に収まる */
+.scroll {
+  max-height: min(560px, 60vh);
+  overflow-y: auto;
+  /* スクロールバーと行の右端が重ならないようにする */
+  padding-right: 4px;
+  /* 中の日付見出しが sticky ではないので、スクロール位置の手がかりに枠線を出す */
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
 .limit {
   margin-top: 12px;
   font-size: 12px;

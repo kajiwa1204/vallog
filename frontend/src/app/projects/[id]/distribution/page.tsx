@@ -24,13 +24,27 @@ import styles from "./page.module.css";
  * 分配シミュレーション（画面7）。
  *
  * **スコアが現れる唯一の画面**（docs/scoring_design.md「Goodhart対策とスコアの事後
- * 開示」）。ただし主役は上部の変化ログで、スコアは最下部に補助情報として置く。
- * ページの縦の並びがそのまま議論の順序になっている:
+ * 開示」）。縦の並びがそのまま議論の順序になっている:
  *
- *   変化ログ（事実）→ 貢献サマリー（要約）→ 分配案（人が決める）→ スコア（補助）
+ *   概観（スコアと貢献サマリーを同列に並べる）
+ *     → 分配案（人が決める）
+ *     → 変化ログ（根拠を1件ずつ確かめる）
+ *     → 重み・編集履歴
  *
- * この順序は #100 のゲートで構造的にも強制されている。案を作るまでスコアは返らない
- * ので、最初に開いたときは最下部のカードが「分配案を作成すると表示されます」になる。
+ * スコアと貢献サマリーを横並びの同列に置くのは、**どちらも同じ活動を別の粒度で
+ * 言い直したもの**で、片方だけを先に読ませる理由がないため。数値の隣に文章があると
+ * 「なぜこの数字なのか」をその場で照らし合わせられる。
+ *
+ * 以前はスコアを最下部に小さく置いていた（「数字の降格」）が、**その役目は #100 の
+ * 開示ゲートが引き継いだ**。作業期間中はAPIがスコアを返さないので、③事前既知を折る
+ * 担保はページ内の位置ではなく構造の側にある。開示が許された文脈での配置は、位置で
+ * 守る必要がなくなった分だけ読みやすさに寄せてよい。
+ *
+ * 一方 ①ターゲット（スコアがそのまま分配額になる）への対策は位置とは無関係に効かせる
+ * 必要があり、これは「分配の最終決定は人間」＝手動調整と理由必須の側が担う。
+ *
+ * 変化ログは高さに上限を掛けて内部スクロールにしてある。ここを伸びるままにすると、
+ * この画面で実際にやること（配分を決める）に着くまでのスクロールが長くなりすぎる。
  */
 export default function DistributionPage() {
   const { id } = useParams<{ id: string }>();
@@ -94,12 +108,14 @@ export default function DistributionPage() {
       {!listLoading && !hasProposals && (
         <div className={styles.intro}>
           <p className={styles.introLead}>
-            まず下の変化ログを読み、チームで話してから分配案を作ります。
+            下の変化ログを読み、チームで話してから分配案を作ります。
           </p>
           <p className={styles.introBody}>
             案を作ると、GitHubのスコアから計算した割合が出発点として入ります。そこから全員が自由に調整でき、
             調整には理由の入力が必要です。変更はすべて記録され、チームの全員が見られます。
-            スコアは案を作ってから、この画面の最下部にだけ表示されます。
+            {/* 案が0件のいまはスコア欄が「分配案を作成すると表示されます」になっている。
+                なぜそう出ているのかを、その場所とセットで言う */}
+            スコアは案を作るまで表示されません。
           </p>
         </div>
       )}
@@ -139,24 +155,17 @@ export default function DistributionPage() {
         />
       )}
 
-      {/* 主役は変化ログ。案の有無に関わらず常に出す（読んでから議論するため） */}
-      <ChangeLogPanel
-        entries={changelog.entries}
-        loading={changelog.loading}
-        error={changelog.error}
-        hasMore={changelog.hasMore}
-        atLimit={changelog.atLimit}
-        onLoadMore={changelog.loadMore}
-        // 利用上限に当たっているときは再試行を出さない。押すと ensure_synced 経由で
-        // またGitHubを叩き、状況を悪化させるだけになる
-        onRetry={
-          isRetryableChangeLogError(changelog.errorCode)
-            ? changelog.reload
-            : undefined
-        }
-      />
-
-      <SummaryPanel summaries={summaries} />
+      {/* 概観。数値（スコアと生事実）と文章（貢献サマリー）を同列に並べる。
+          どちらも同じ活動を別の粒度で言い直したものなので、片方を先に読ませる理由が
+          ない。横に置くと「なぜこの数字なのか」をその場で照らし合わせられる */}
+      <div className={styles.overview}>
+        <ScorePanel
+          state={scoreState}
+          onRetry={reloadScores}
+          selectedIsFinalized={proposal?.finalized ?? false}
+        />
+        <SummaryPanel summaries={summaries} />
+      </div>
 
       {detailError ? (
         <Card title="分配案">
@@ -182,26 +191,41 @@ export default function DistributionPage() {
               }
               onFinalize={() => finalize(proposal.id)}
             />
-
-            <DistributionWeightEditor
-              proposal={proposal}
-              saving={saving}
-              onSave={(weights, reason) =>
-                updateProposal(proposal.id, { reason, weights })
-              }
-            />
-
-            <EditHistoryTimeline logs={proposal.edit_logs} />
           </>
         )
       )}
 
-      {/* スコアは最下部。ページの他のどこにも出さない（数字の降格） */}
-      <ScorePanel
-        state={scoreState}
-        onRetry={reloadScores}
-        selectedIsFinalized={proposal?.finalized ?? false}
+      {/* 根拠。上の概観で見た数字が実際に何から来ているかを1件ずつ確かめる場所。
+          案の有無に関わらず常に出す（案を作る前の議論もここを読んで始まる） */}
+      <ChangeLogPanel
+        entries={changelog.entries}
+        loading={changelog.loading}
+        error={changelog.error}
+        hasMore={changelog.hasMore}
+        atLimit={changelog.atLimit}
+        onLoadMore={changelog.loadMore}
+        // 利用上限に当たっているときは再試行を出さない。押すと ensure_synced 経由で
+        // またGitHubを叩き、状況を悪化させるだけになる
+        onRetry={
+          isRetryableChangeLogError(changelog.errorCode)
+            ? changelog.reload
+            : undefined
+        }
       />
+
+      {proposal && (
+        <>
+          <DistributionWeightEditor
+            proposal={proposal}
+            saving={saving}
+            onSave={(weights, reason) =>
+              updateProposal(proposal.id, { reason, weights })
+            }
+          />
+
+          <EditHistoryTimeline logs={proposal.edit_logs} />
+        </>
+      )}
       </div>
     </AppShell>
   );

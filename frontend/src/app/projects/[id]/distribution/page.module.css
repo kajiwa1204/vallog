@@ -19,12 +19,29 @@
   color: var(--ink-3);
 }
 
-/* 縦の並びがそのまま議論の順序（事実 → 要約 → 決定 → 補助）。間隔は一括で持つ */
+/* 縦の並びがそのまま議論の順序（概観 → 決定 → 根拠 → 重み・履歴）。
+   間隔は一括で持つ。各カードが自分の外側の余白を持つと並び替えで崩れる */
 .stack {
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding-bottom: 24px;
+}
+
+/* 概観の2カラム。スコア（数値）と貢献サマリー（文章）を同列に置く。
+   align-items: start で、中身の少ない側が相手の高さに引き伸ばされないようにする */
+.overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+/* 横に並べる余地が無くなったら縦積みに戻す。画面4のパネルと同じ境界にしてある */
+@media (max-width: 900px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .intro {

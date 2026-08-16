@@ -25,7 +25,7 @@ export function SummaryPanel({ summaries }: Props) {
   return (
     <Card title="貢献サマリー">
       <p className={styles.lead}>
-        上の変化ログをAIが要約したものです。数字ではなく事実の説明なので、気になった記述は変化ログの該当行から元のPR・Issueで確かめられます。
+        メンバーごとの活動をAIが要約したものです。数字ではなく事実の説明なので、気になった記述は下の変化ログの該当行から元のPR・Issueで確かめられます。
       </p>
 
       {items.length === 0 ? (

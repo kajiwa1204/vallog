@@ -32,11 +32,11 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .member {
-  padding-bottom: 14px;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -65,7 +65,7 @@
 .bar {
   display: flex;
   height: 5px;
-  margin-top: 6px;
+  margin-top: 5px;
   border-radius: 999px;
   overflow: hidden;
   gap: 1px;
@@ -81,20 +81,25 @@
   flex-grow: 0.0001;
 }
 
+/* ラベルは母集合を言い切るぶん長い（「担当した完了IssueのSP」など。types の
+   MemberFacts と揃える必要があり短縮できない）。flex-wrap で流すと行ごとに要素数が
+   変わって段が揃わず、縦にも伸びる。auto-fit のグリッドなら幅に応じて列数だけが
+   変わり、段が揃ったまま最小の高さに収まる */
 .facts {
   list-style: none;
-  margin: 8px 0 0;
+  margin: 7px 0 0;
   padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 1px 14px;
 }
 
 .fact {
   display: flex;
   align-items: baseline;
+  justify-content: space-between;
   gap: 6px;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .factLabel {
@@ -110,8 +115,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px 16px;
-  margin-top: 16px;
-  padding-top: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
   font-size: 11.5px;
   color: var(--ink-3);
