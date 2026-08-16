@@ -90,14 +90,10 @@ export default function DistributionPage() {
    * 案を作る操作がスコアの開示スイッチを兼ねているかどうか。
    *
    * すでに開示されている（他に検討中の案がある）なら、作っても開示状態は変わらない。
-   * そのときに「これ以降スコアが表示されます」と出すのは事実に反するので、確認を
-   * 挟まず直接作る。
+   * そのときに「これ以降スコアが表示されます」と出すのは事実に反するので、その節だけ
+   * 出さない。ダイアログ自体は名前と報酬総額を受け取るので常に開く。
    */
   const createWillDiscloseScores = scoreState.kind === "undisclosed";
-  const startCreate = () => {
-    if (createWillDiscloseScores) setConfirmingCreate(true);
-    else createProposal();
-  };
 
   /**
    * 選択中の案は検討中なのにスコアが非開示＝最終更新から30日を過ぎている（#100）。
@@ -161,14 +157,14 @@ export default function DistributionPage() {
           proposals={proposals}
           selectedId={selectedId}
           onSelect={selectProposal}
-          onCreate={startCreate}
+          onCreate={() => setConfirmingCreate(true)}
           comparing={comparing}
           onToggleCompare={() => setComparing(!comparing)}
           creating={saving}
         />
       ) : (
         <div className={styles.createRow}>
-          <Button loading={saving} onClick={startCreate}>
+          <Button loading={saving} onClick={() => setConfirmingCreate(true)}>
             分配案を作成する
           </Button>
           {saveError && <PanelError message={saveError} />}
@@ -263,8 +259,9 @@ export default function DistributionPage() {
         open={confirmingCreate}
         onClose={() => setConfirmingCreate(false)}
         creating={saving}
-        onConfirm={async () => {
-          if (await createProposal()) setConfirmingCreate(false);
+        willDiscloseScores={createWillDiscloseScores}
+        onConfirm={async (name, totalAmount) => {
+          if (await createProposal(name, totalAmount)) setConfirmingCreate(false);
         }}
       />
     </AppShell>

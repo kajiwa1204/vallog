@@ -209,12 +209,14 @@ export function useDistribution(projectId: string, enabled = true) {
   );
 
   const createProposal = useCallback(
-    (name?: string) =>
+    (name?: string, totalAmount?: string) =>
       // items を送らないとスコアから初期比率が算出される。案の出発点は
       // 「スコアどおりの配分」で、そこから議論して動かす
       mutate(() =>
         api.post<Proposal>(`/projects/${projectId}/distributions`, {
           ...(name ? { name } : {}),
+          // 空文字は数値として不正なので送らない（未入力＝割合のみ表示）
+          ...(totalAmount ? { total_amount: totalAmount } : {}),
         }),
       ),
     [projectId, mutate],
