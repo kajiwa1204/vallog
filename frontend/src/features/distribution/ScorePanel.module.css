@@ -1,0 +1,130 @@
+.lead {
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.undisclosed {
+  padding: 14px 16px;
+  background: var(--surface-dim);
+  border-radius: var(--radius-s);
+}
+
+.undisclosedLead {
+  font-size: 13px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.undisclosedBody {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.member {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.member:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.memberHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.login {
+  font-size: 12.5px;
+}
+
+/* 総合スコアは補助情報。主役の変化ログより弱い階層に留める */
+.total {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.bar {
+  display: flex;
+  height: 5px;
+  margin-top: 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  gap: 1px;
+  background: var(--line);
+}
+
+.segment {
+  min-width: 0;
+  transition: flex-grow 0.2s ease;
+}
+
+.segmentRest {
+  flex-grow: 0.0001;
+}
+
+.facts {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+}
+
+.factLabel {
+  color: var(--ink-3);
+}
+
+.factValue {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}

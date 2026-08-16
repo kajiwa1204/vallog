@@ -78,6 +78,8 @@ frontend/
 │   │       ├── Button.module.css
 │   │       ├── Modal.tsx
 │   │       ├── Modal.module.css
+│   │       ├── WeightSliders.tsx                 # カテゴリ重みの入力（画面3のデフォルト重みと画面7の案ごとの重みで共有）
+│   │       ├── WeightSliders.module.css
 │   │       ├── Input.tsx
 │   │       └── Input.module.css
 │   ├── features/                                 # 機能別コンポーネント（画面内フラット）
@@ -91,13 +93,14 @@ frontend/
 │   │   │   └── useDashboard.ts
 │   │   ├── distribution/
 │   │   │   ├── ChangeLogPanel.tsx               # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
-│   │   │   ├── ChangeLogPanel.module.css
-│   │   │   ├── AllocationTable.tsx
-│   │   │   ├── AllocationTable.module.css
-│   │   │   ├── SummaryPanel.tsx                  # 第2層: 変化ログの詳細（AIサマリー）
-│   │   │   ├── SummaryPanel.module.css
-│   │   │   ├── EditHistoryTimeline.tsx
-│   │   │   ├── EditHistoryTimeline.module.css
+│   │   │   ├── ProposalSwitcher.tsx              # 案の切り替え・新規作成・比較の開閉
+│   │   │   ├── AllocationTable.tsx               # 分配比率の手動調整（理由必須）・報酬総額・合意確定
+│   │   │   ├── WeightEditor.tsx                  # 案ごとの重み（WeightSliders を使う・変更で比率を再計算）
+│   │   │   ├── ProposalCompare.tsx               # 複数案を並べて比較（重みの差も見出しに出す）
+│   │   │   ├── SummaryPanel.tsx                  # 第2層: 変化ログの詳細（AIサマリー・読み取り専用）
+│   │   │   ├── EditHistoryTimeline.tsx           # 編集履歴（全員に公開・不正操作への抑止）
+│   │   │   ├── ScorePanel.tsx                    # 補助情報: スコアと生事実。非開示時は説明に置き換わる（#100）
+│   │   │   ├── allocation.ts                     # 比率編集の純粋関数（千分率の整数・Reactに依存しない）
 │   │   │   └── useDistribution.ts
 │   │   ├── members/
 │   │   │   ├── ChangeLog.tsx                     # 主軸: ChangeLogList を包む薄いラッパー（単一メンバー）
