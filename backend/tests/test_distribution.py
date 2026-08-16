@@ -59,6 +59,7 @@ def _repo_returning(proposal: DistributionProposal | None) -> MagicMock:
     repo.add_edit_log = AsyncMock()
     repo.create_proposal = AsyncMock()
     repo.count_proposals = AsyncMock(return_value=0)
+    repo.delete_proposal = AsyncMock()
 
     async def replace_items(target, items):
         target.items.clear()
@@ -275,6 +276,51 @@ async def test_finalize_rejects_already_finalized_proposal():
 
     assert exc.value.code == ErrorCode.DISTRIBUTION_FINALIZED
     assert proposal.finalized_at == datetime(2026, 8, 1, tzinfo=timezone.utc)
+
+
+# ---------- 削除 ----------
+
+
+async def test_delete_removes_an_unfinalized_proposal():
+    proposal = _proposal({"alice": "0.5", "bob": "0.5"})
+    repo = _repo_returning(proposal)
+    db = _db()
+
+    with patch.object(service, "DistributionRepository", return_value=repo):
+        await service.delete_proposal(db, _PROJECT, proposal.id)
+
+    repo.delete_proposal.assert_awaited_once_with(proposal)
+    db.commit.assert_awaited()
+
+
+async def test_delete_rejects_finalized_proposal():
+    """確定は「チームで合意した分配の永続化」なので、後から消せてはいけない。
+    消せるなら確定に意味がなくなる。"""
+    proposal = _proposal({"alice": "1.0"}, finalized=True)
+    repo = _repo_returning(proposal)
+
+    with patch.object(service, "DistributionRepository", return_value=repo):
+        with pytest.raises(AppError) as exc:
+            await service.delete_proposal(_db(), _PROJECT, proposal.id)
+
+    assert exc.value.status_code == 409
+    assert exc.value.code == ErrorCode.DISTRIBUTION_FINALIZED
+    repo.delete_proposal.assert_not_awaited()
+
+
+async def test_delete_rejects_proposal_of_another_project():
+    """他プロジェクトの案は存在を伏せて404。IDを総当たりされても消せない。"""
+    proposal = _proposal({"alice": "1.0"})
+    proposal.project_id = uuid.uuid4()
+    repo = _repo_returning(proposal)
+
+    with patch.object(service, "DistributionRepository", return_value=repo):
+        with pytest.raises(AppError) as exc:
+            await service.delete_proposal(_db(), _PROJECT, proposal.id)
+
+    assert exc.value.status_code == 404
+    assert exc.value.code == ErrorCode.DISTRIBUTION_NOT_FOUND
+    repo.delete_proposal.assert_not_awaited()
 
 
 # ---------- 作成 ----------

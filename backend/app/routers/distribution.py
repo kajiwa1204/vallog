@@ -146,6 +146,17 @@ async def update_distribution_items(
     return _to_response(proposal, await _avatars(db, project.id))
 
 
+@router.delete(
+    "/projects/{project_id}/distributions/{proposal_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_distribution(
+    proposal_id: uuid.UUID, project: MemberProject, db: DB
+):
+    """検討中の案を削除する。確定済みの案は 409（合意の記録は消せない）。"""
+    await distribution_service.delete_proposal(db, project, proposal_id)
+
+
 @router.post(
     "/projects/{project_id}/distributions/{proposal_id}/finalize",
     response_model=ProposalResponse,

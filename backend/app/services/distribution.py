@@ -174,6 +174,31 @@ async def finalize(
     return await _load_proposal(db, project.id, proposal_id)
 
 
+async def delete_proposal(
+    db: AsyncSession, project: Project, proposal_id: uuid.UUID
+) -> None:
+    """検討中の案を削除する。
+
+    **確定済みの案は削除できない。** 確定は「チームで合意した分配をVallog上に永続化」
+    した記録であり（docs/screen_design.md 画面7「合意の記録」）、後から消せると
+    合意そのものが残らない。編集を止めるだけで消せるなら、確定に意味がなくなる。
+
+    検討中の案は作業途中なので消してよい。編集ログも一緒に消えるが、確定していない
+    以上その案で何かが決まったわけではなく、残す先の合意が無い。ロールによる制限を
+    設けないのは他の操作と同じで、誰が消したかではなく**消せるのは未確定の案だけ**
+    という範囲で守る。
+    """
+    proposal = await _load_proposal(db, project.id, proposal_id)
+    if proposal.finalized:
+        raise AppError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.DISTRIBUTION_FINALIZED,
+            "Finalized distribution proposals cannot be deleted",
+        )
+    await DistributionRepository(db).delete_proposal(proposal)
+    await db.commit()
+
+
 def amount_for(total_amount: Decimal | None, ratio: Decimal) -> Decimal | None:
     """報酬総額を比率で按分した金額。総額未入力なら金額は出さない（比率のみ表示）。"""
     if total_amount is None:
