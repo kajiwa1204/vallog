@@ -4,7 +4,7 @@
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +12,7 @@ import pytest
 
 from app.core.errors import AppError, ErrorCode
 from app.services.scoring import (
+    SCORE_DISCLOSURE_WINDOW_DAYS,
     _activity_relative,
     _collect_logins,
     _combine_equal,
@@ -438,6 +439,22 @@ async def test_get_scores_for_disclosure_returns_scores_when_disclosable():
         new=AsyncMock(return_value=expected),
     ):
         assert await get_scores_for_disclosure(MagicMock(), project, "token") is expected
+
+
+@pytest.mark.asyncio
+async def test_can_disclose_scores_asks_only_for_recently_updated_proposals():
+    """作りっぱなしの案でスコアが永久に開いたままにならないよう、判定には
+    「最終更新がこの時刻以降」という窓を渡す。"""
+    repo = _disclosure_repo(True)
+    before = datetime.now(timezone.utc)
+    with patch("app.services.scoring.DistributionRepository", return_value=repo):
+        await can_disclose_scores(MagicMock(), uuid.uuid4())
+
+    cutoff = repo.exists_unfinalized.await_args.args[1]
+    # 窓の長さが SCORE_DISCLOSURE_WINDOW_DAYS 日ぶん過去にあること。
+    # 定数を変えたときにここが追随する（値をベタ書きしない）
+    expected = before - timedelta(days=SCORE_DISCLOSURE_WINDOW_DAYS)
+    assert abs((cutoff - expected).total_seconds()) < 5
 
 
 # ---------------------------------------------------------------------------

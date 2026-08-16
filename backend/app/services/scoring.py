@@ -15,6 +15,7 @@
 
 import uuid
 from collections.abc import Iterable
+from datetime import datetime, timedelta, timezone
 
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -426,14 +427,28 @@ async def get_project_scores(
     )
 
 
+# 未確定の案が「分配を議論している最中」と見なされる期間。最終更新からこの日数を
+# 過ぎるとスコアは非開示に戻る。
+#
+# 期限を設けないと、誰かが案を作って放置しただけでスコアが**永久に開いたまま**になる。
+# #100 は「1回目の分配以降ずっと見えたまま」を避けるために finalized を条件に入れたが、
+# 確定されない案はその条件をすり抜けるため、次の作業期間がまるごと汚染される。
+#
+# 30日にしたのは、分配の議論が数週間に及ぶことはあっても月をまたいで続くことは想定
+# しないため。長い議論の途中で落ちないだけの余裕を持たせつつ、放置された案が次の
+# 作業期間まで開示を引きずらない長さにしている。
+SCORE_DISCLOSURE_WINDOW_DAYS = 30
+
+
 async def can_disclose_scores(db: AsyncSession, project_id: uuid.UUID) -> bool:
     """スコアをクライアントに開示してよい状態か（#100）。
 
-    「振り返りのとき」を、未確定の分配案が存在することで判定する。
+    「振り返りのとき」を、**最近動いた未確定の分配案**が存在することで判定する。
 
-        案が0件          → 非開示（作業期間中）
-        未確定の案がある → 開示（分配を議論している最中）
-        全部確定済み     → 非開示（議論が終わった）
+        案が0件                    → 非開示（作業期間中）
+        未確定で最近動いた案がある → 開示（分配を議論している最中）
+        全部確定済み               → 非開示（議論が終わった）
+        未確定だが30日動いていない → 非開示（議論が立ち消えた）
 
     新しいテーブルもフェーズ状態も持たないのは、分配案の作成をトリガーにすると
     「変化ログを読む → 議論する → 案を作る → 初めてスコアが見える」という順序まで
@@ -441,9 +456,11 @@ async def can_disclose_scores(db: AsyncSession, project_id: uuid.UUID) -> bool:
     フェーズ状態は単なるスイッチで、この順序までは担保しない。
 
     確定済みに戻して非開示にしても情報は失われない。確定した案は DistributionItem に
-    当時の数値を保持しており、隠れるのはライブのスコアだけ。
+    当時の数値を保持しており、隠れるのはライブのスコアだけ。放置で閉じた場合も、案を
+    編集すればまた開く（最終更新が動くため）。
     """
-    return await DistributionRepository(db).exists_unfinalized(project_id)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=SCORE_DISCLOSURE_WINDOW_DAYS)
+    return await DistributionRepository(db).exists_unfinalized(project_id, cutoff)
 
 
 async def get_scores_for_disclosure(

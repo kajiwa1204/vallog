@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,18 +47,47 @@ class DistributionRepository:
             .execution_options(populate_existing=True)
         )
 
-    async def exists_unfinalized(self, project_id: uuid.UUID) -> bool:
-        """未確定の分配案が1件でもあるか。スコアの開示判定に使う（#100）。"""
+    async def exists_unfinalized(
+        self, project_id: uuid.UUID, updated_after: datetime
+    ) -> bool:
+        """`updated_after` 以降に動いた未確定の分配案が1件でもあるか。
+
+        スコアの開示判定に使う（#100）。「動いた」は作成か編集で、編集は
+        distribution_edit_logs に必ず1件残る（services/distribution.py の
+        update_items / update_proposal がどちらもログを書く）。
+
+        作成日時だけを見ないのは、数週間かけて議論している案が途中で非開示に
+        落ちてしまうため。逆に最終更新を見ないと、作りっぱなしの案が1件あるだけで
+        スコアが永久に開いたままになる。
+        """
+        last_edit = (
+            select(func.max(DistributionEditLog.created_at))
+            .where(DistributionEditLog.proposal_id == DistributionProposal.id)
+            .correlate(DistributionProposal)
+            .scalar_subquery()
+        )
         return bool(
             await self.db.scalar(
                 select(
                     exists().where(
                         DistributionProposal.project_id == project_id,
                         DistributionProposal.finalized.is_(False),
+                        func.greatest(
+                            DistributionProposal.created_at,
+                            func.coalesce(
+                                last_edit, DistributionProposal.created_at
+                            ),
+                        )
+                        >= updated_after,
                     )
                 )
             )
         )
+
+    async def delete_proposal(self, proposal: DistributionProposal) -> None:
+        """案を削除する。配分値・編集ログはFKの ON DELETE CASCADE で一緒に消える。"""
+        await self.db.delete(proposal)
+        await self.db.flush()
 
     async def count_proposals(self, project_id: uuid.UUID) -> int:
         return (
