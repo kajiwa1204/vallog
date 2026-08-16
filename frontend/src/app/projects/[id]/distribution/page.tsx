@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useParams } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
@@ -7,6 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Spinner } from "@/components/ui/Spinner";
 import { AllocationTable } from "@/features/distribution/AllocationTable";
 import { ChangeLogPanel } from "@/features/distribution/ChangeLogPanel";
+import { CreateProposalDialog } from "@/features/distribution/CreateProposalDialog";
 import { EditHistoryTimeline } from "@/features/distribution/EditHistoryTimeline";
 import { PanelError } from "@/features/distribution/PanelError";
 import { ProposalCompare } from "@/features/distribution/ProposalCompare";
@@ -51,6 +53,7 @@ export default function DistributionPage() {
   // リダイレクトは AppShell 側の useAuth が担う。ここは認証確定を待つだけ
   const { status } = useAuth({ required: false });
   const authed = status === "authenticated";
+  const [confirmingCreate, setConfirmingCreate] = useState(false);
 
   const { project } = useProject(id, authed);
   const {
@@ -77,10 +80,35 @@ export default function DistributionPage() {
     updateItems,
     updateProposal,
     finalize,
+    deleteProposal,
     reload,
   } = useDistribution(id, authed);
 
   const hasProposals = proposals.length > 0;
+
+  /**
+   * 案を作る操作がスコアの開示スイッチを兼ねているかどうか。
+   *
+   * すでに開示されている（他に検討中の案がある）なら、作っても開示状態は変わらない。
+   * そのときに「これ以降スコアが表示されます」と出すのは事実に反するので、確認を
+   * 挟まず直接作る。
+   */
+  const createWillDiscloseScores = scoreState.kind === "undisclosed";
+  const startCreate = () => {
+    if (createWillDiscloseScores) setConfirmingCreate(true);
+    else createProposal();
+  };
+
+  /**
+   * 選択中の案は検討中なのにスコアが非開示＝最終更新から30日を過ぎている（#100）。
+   *
+   * 案が確定済みでも0件でもないのに閉じている、という条件からしか判定できない。
+   * APIは理由まで返さないが、画面は選択中の案の状態を知っているので言い分けられる。
+   */
+  const disclosureLapsed =
+    proposal !== null &&
+    !proposal.finalized &&
+    scoreState.kind === "undisclosed";
 
   return (
     <AppShell projectId={id} projectName={project?.name}>
@@ -133,14 +161,14 @@ export default function DistributionPage() {
           proposals={proposals}
           selectedId={selectedId}
           onSelect={selectProposal}
-          onCreate={() => createProposal()}
+          onCreate={startCreate}
           comparing={comparing}
           onToggleCompare={() => setComparing(!comparing)}
           creating={saving}
         />
       ) : (
         <div className={styles.createRow}>
-          <Button loading={saving} onClick={() => createProposal()}>
+          <Button loading={saving} onClick={startCreate}>
             分配案を作成する
           </Button>
           {saveError && <PanelError message={saveError} />}
@@ -163,6 +191,7 @@ export default function DistributionPage() {
           state={scoreState}
           onRetry={reloadScores}
           selectedIsFinalized={proposal?.finalized ?? false}
+          disclosureLapsed={disclosureLapsed}
         />
         <SummaryPanel summaries={summaries} />
       </div>
@@ -189,7 +218,9 @@ export default function DistributionPage() {
               onSaveTotalAmount={(totalAmount, reason) =>
                 updateProposal(proposal.id, { reason, total_amount: totalAmount })
               }
+              disclosureLapsed={disclosureLapsed}
               onFinalize={() => finalize(proposal.id)}
+              onDelete={() => deleteProposal(proposal.id)}
             />
           </>
         )
@@ -227,6 +258,15 @@ export default function DistributionPage() {
         </>
       )}
       </div>
+
+      <CreateProposalDialog
+        open={confirmingCreate}
+        onClose={() => setConfirmingCreate(false)}
+        creating={saving}
+        onConfirm={async () => {
+          if (await createProposal()) setConfirmingCreate(false);
+        }}
+      />
     </AppShell>
   );
 }

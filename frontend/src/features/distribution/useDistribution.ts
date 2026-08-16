@@ -262,6 +262,44 @@ export function useDistribution(projectId: string, enabled = true) {
   );
 
   /**
+   * 検討中の案を削除する。確定済みは 409（合意の記録は消せない）。
+   *
+   * mutate に載せないのは、削除は Proposal を返さないため。返ってこない案を
+   * setProposal してしまうと、消したはずの案が表示に残る。
+   */
+  const deleteProposal = useCallback(
+    async (proposalId: string) => {
+      setSaving(true);
+      setSaveError(null);
+      try {
+        await api.delete(`/projects/${projectId}/distributions/${proposalId}`);
+        // 選択を外してから読み直す。残したままだと詳細の取得が404を返す
+        setSelectedId(null);
+        setProposal(null);
+        // 最後の未確定案を消すとスコアは非開示に戻る。案の状態を変える操作は
+        // すべて開示の見え方を変えるので、必ず取り直す
+        await Promise.all([loadProposals(), loadScores()]);
+        return true;
+      } catch (e) {
+        setSaveError(
+          messageForError(e, {
+            codes: {
+              DISTRIBUTION_FINALIZED:
+                "確定済みの案は削除できません。合意の記録として残ります。",
+              DISTRIBUTION_NOT_FOUND: "この分配案は既に削除されています。",
+            },
+            fallback: "分配案を削除できませんでした",
+          }),
+        );
+        return false;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [projectId, loadProposals, loadScores],
+  );
+
+  /**
    * 複数案を並べて比較するための詳細。一覧は配分値を返さないので案ごとに引き直す。
    *
    * 開いたときにまとめて取る（案の数だけ並列リクエスト）。案は多くても数件で、
@@ -328,6 +366,7 @@ export function useDistribution(projectId: string, enabled = true) {
     updateItems,
     updateProposal,
     finalize,
+    deleteProposal,
     reload,
   };
 }

@@ -28,9 +28,12 @@ type Props = {
   proposal: Proposal;
   saving: boolean;
   saveError: string | null;
+  /** 未確定なのにスコアが非開示＝最終更新から30日を過ぎている（#100） */
+  disclosureLapsed: boolean;
   onSaveItems: (rows: AllocationRow[], reason: string) => Promise<boolean>;
   onSaveTotalAmount: (totalAmount: string, reason: string) => Promise<boolean>;
   onFinalize: () => Promise<boolean>;
+  onDelete: () => Promise<boolean>;
 };
 
 /**
@@ -47,15 +50,18 @@ export function AllocationTable({
   proposal,
   saving,
   saveError,
+  disclosureLapsed,
   onSaveItems,
   onSaveTotalAmount,
   onFinalize,
+  onDelete,
 }: Props) {
   const original = rowsFromItems(proposal.items);
   const [rows, setRows] = useState<AllocationRow[]>(original);
   const [reason, setReason] = useState("");
   const [amountDraft, setAmountDraft] = useState(proposal.total_amount ?? "");
   const [confirmingFinalize, setConfirmingFinalize] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // 案を切り替えたら編集中の値を持ち越さない。残すと、別の案の配分に前の案の
   // 数字が入った状態から編集を始めることになる
@@ -64,9 +70,24 @@ export function AllocationTable({
     setReason("");
     setAmountDraft(proposal.total_amount ?? "");
     setConfirmingFinalize(false);
+    setConfirmingDelete(false);
   }, [proposal.id, proposal.items, proposal.total_amount]);
 
   const locked = proposal.finalized;
+
+  /**
+   * 一度も調整されていない＝配分はスコアをそのままの値。
+   *
+   * 案の作成時、比率はスコアから算出した値がそのまま入る（services/distribution.py の
+   * _score_based_ratios）。既定値は合意されやすいので、放っておくと「スコア＝分配額」が
+   * そのまま通り、Goodhartの①ターゲットが折れない。**設計上は「分配の最終決定は人間」
+   * だが、人が能動的に動かして初めて成立する**という非対称がここにある。
+   *
+   * そこで未確定のうちは「これは出発点」と明示し、それでも動かさずに確定したときは
+   * その事実を記録として残す。抑止の考え方は既存の「編集履歴を全員に公開する」と同じで、
+   * 禁止するのではなく見えるようにする。
+   */
+  const untouched = proposal.edit_logs.length === 0;
   const total = sumTenths(rows);
   const balanced = isBalanced(rows);
   const dirty = isDirty(rows, original);
@@ -79,11 +100,16 @@ export function AllocationTable({
     <Card
       title={`分配案: ${proposal.name}`}
       actions={
-        proposal.finalized ? (
-          <Badge tone="green">確定済み</Badge>
-        ) : (
-          <Badge tone="ochre">検討中</Badge>
-        )
+        <span className={styles.badges}>
+          {/* 調整なしで確定した案は、スコアをそのまま採用したという事実が残る。
+              確定後は変えられないので、後から読む人にはこれが唯一の手がかりになる */}
+          {locked && untouched && <Badge tone="ochre">調整なしで確定</Badge>}
+          {locked ? (
+            <Badge tone="green">確定済み</Badge>
+          ) : (
+            <Badge tone="ochre">検討中</Badge>
+          )}
+        </span>
       }
     >
       <p className={styles.meta}>
@@ -101,6 +127,25 @@ export function AllocationTable({
           </span>
         )}
       </p>
+
+      {locked && untouched && (
+        <p className={styles.stampNote}>
+          この案は一度も調整されずに確定しました。配分はGitHubスコアの計算結果そのままです。
+        </p>
+      )}
+
+      {!locked && untouched && (
+        <p className={styles.startNote}>
+          <strong>この配分はスコアをそのまま入れた出発点です。</strong>
+          議論して動かしてください。数字に現れない貢献（設計の相談・ドキュメント・運用など）は、下の理由欄に書いて反映できます。
+        </p>
+      )}
+
+      {!locked && disclosureLapsed && (
+        <p className={styles.lapsedNote}>
+          この案は<span className="num">30</span>日以上更新されていないため、スコアは非開示に戻っています。配分か重みを保存すると再び表示されます。
+        </p>
+      )}
 
       <div className={styles.amountRow}>
         <label className={styles.amountLabel} htmlFor="total-amount">
@@ -296,6 +341,41 @@ export function AllocationTable({
             <p className={styles.finalizeHint}>
               未保存の調整があります。保存してから確定してください。
             </p>
+          )}
+        </div>
+      )}
+
+      {/* 削除は検討中の案だけ。確定済みは合意の記録なので消せない（APIも409で拒否）。
+          「押せないボタンを出さない」ため、確定済みでは導線ごと出さない */}
+      {!locked && (
+        <div className={styles.danger}>
+          {confirmingDelete ? (
+            <>
+              <p className={styles.dangerWarning}>
+                この案と、そこに積まれた調整の履歴を削除します。元に戻せません。
+              </p>
+              <div className={styles.actions}>
+                <Button variant="danger" size="s" loading={saving} onClick={onDelete}>
+                  削除する
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="s"
+                  disabled={saving}
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  やめる
+                </Button>
+              </div>
+            </>
+          ) : (
+            <button
+              type="button"
+              className={styles.deleteLink}
+              onClick={() => setConfirmingDelete(true)}
+            >
+              この案を削除する
+            </button>
           )}
         </div>
       )}

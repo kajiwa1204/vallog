@@ -14,6 +14,8 @@ type Props = {
   onRetry: () => void;
   /** 選択中の案が確定済み。非開示に戻った理由を言い分けるために使う */
   selectedIsFinalized: boolean;
+  /** 選択中の案が未確定なのに非開示＝30日を過ぎて議論が立ち消えている */
+  disclosureLapsed: boolean;
 };
 
 function percent(share: number): string {
@@ -62,7 +64,12 @@ function Facts({ member }: { member: MemberScore }) {
  * 各メンバーには根拠として生事実を添える。振り返りの「レシート」は点数分解
  * （+0.06 等）ではなく事実の積み上げで示す、というのがこの画面の方針のため。
  */
-export function ScorePanel({ state, onRetry, selectedIsFinalized }: Props) {
+export function ScorePanel({
+  state,
+  onRetry,
+  selectedIsFinalized,
+  disclosureLapsed,
+}: Props) {
   return (
     <Card title="スコア（補助情報）">
       {state.kind === "loading" && <Spinner label="スコアを読み込んでいます…" />}
@@ -74,13 +81,17 @@ export function ScorePanel({ state, onRetry, selectedIsFinalized }: Props) {
           <p className={styles.undisclosedLead}>
             {selectedIsFinalized
               ? "この分配は確定済みのため、スコアは非開示に戻りました。"
-              : "スコアは、未確定の分配案があるときだけ表示されます。"}
+              : disclosureLapsed
+                ? "この案は30日以上更新されていないため、スコアは非開示に戻りました。"
+                : "スコアは、検討中の分配案があるときだけ表示されます。"}
           </p>
           <p className={styles.undisclosedBody}>
-            作業期間中にスコアが見えていると、点数を上げる動きが目的にすり替わります（Goodhartの法則）。
-            そこでスコアは、チームが変化ログを読んで議論し、分配案を作った段階で初めて開示します。
+            作業期間中にスコアが見えていると、点数を上げること自体が目的にすり替わります（Goodhartの法則）。
+            そこでスコアは、チームが分配を議論している間だけ開示します。
             {selectedIsFinalized &&
               "確定した配分は下の表に残っています。もう一度検討するときは新しい案を作成してください。"}
+            {disclosureLapsed &&
+              "配分か重みを保存すると、議論が再開したものとして再び表示されます。"}
           </p>
         </div>
       )}

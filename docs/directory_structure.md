@@ -94,6 +94,7 @@ frontend/
 │   │   ├── distribution/
 │   │   │   ├── ChangeLogPanel.tsx               # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
 │   │   │   ├── ProposalSwitcher.tsx              # 案の切り替え・新規作成・比較の開閉
+│   │   │   ├── CreateProposalDialog.tsx          # 案作成の確認（押すとチーム全員にスコアが開示される・#100）
 │   │   │   ├── AllocationTable.tsx               # 分配比率の手動調整（理由必須）・報酬総額・合意確定
 │   │   │   ├── WeightEditor.tsx                  # 案ごとの重み（WeightSliders を使う・変更で比率を再計算）
 │   │   │   ├── ProposalCompare.tsx               # 複数案を並べて比較（重みの差も見出しに出す）

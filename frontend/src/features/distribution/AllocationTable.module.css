@@ -1,3 +1,39 @@
+.badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 出発点であることの注記。読み飛ばされると①ターゲットが折れないので、
+   周囲の説明文より一段強い面で出す */
+.startNote {
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  background: var(--green-tint);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+.stampNote {
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  background: var(--ochre-tint);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.lapsedNote {
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  background: var(--surface-dim);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
 .meta {
   display: flex;
   flex-wrap: wrap;
@@ -164,4 +200,32 @@
   margin-top: 8px;
   font-size: 12px;
   color: var(--ink-3);
+}
+
+/* 破壊的な操作は他の導線と同じ強さで並べない。押す前は控えめなリンクに留める */
+.danger {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.deleteLink {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-3);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.deleteLink:hover {
+  color: var(--red-strong);
+}
+
+.dangerWarning {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: var(--red-strong);
 }
