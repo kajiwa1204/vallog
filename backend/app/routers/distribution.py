@@ -165,10 +165,13 @@ async def update_distribution_items(
     status_code=status.HTTP_204_NO_CONTENT,
 )
 async def delete_distribution(
-    proposal_id: uuid.UUID, project: MemberProject, db: DB
+    proposal_id: uuid.UUID, project: MemberProject, user: CurrentUser, db: DB
 ):
-    """検討中の案を削除する。確定済みの案は 409（合意の記録は消せない）。"""
-    await distribution_service.delete_proposal(db, project, proposal_id)
+    """検討中の案を削除する。確定済みの案は 409（合意の記録は消せない）。
+
+    行は残し、誰がいつ消したかを記録する（#100 の抑止が痕跡の存在に依存しているため）。
+    """
+    await distribution_service.delete_proposal(db, project, proposal_id, user)
 
 
 @router.post(

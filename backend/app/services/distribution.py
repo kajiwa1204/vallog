@@ -48,9 +48,11 @@ _RATIO_TOTAL_TOLERANCE = Decimal("0.005")
 
 
 async def list_proposals(
-    db: AsyncSession, project_id: uuid.UUID
+    db: AsyncSession, project_id: uuid.UUID, include_deleted: bool = False
 ) -> list[DistributionProposal]:
-    return await DistributionRepository(db).list_proposals(project_id)
+    return await DistributionRepository(db).list_proposals(
+        project_id, include_deleted=include_deleted
+    )
 
 
 async def get_proposal(
@@ -228,8 +230,13 @@ async def _load_proposal(
     db: AsyncSession, project_id: uuid.UUID, proposal_id: uuid.UUID
 ) -> DistributionProposal:
     proposal = await DistributionRepository(db).get_proposal(proposal_id)
-    # 他プロジェクトの案は存在を伏せて404にする（メンバーシップは project_id 側で検証済み）
-    if proposal is None or proposal.project_id != project_id:
+    # 他プロジェクトの案は存在を伏せて404にする（メンバーシップは project_id 側で検証済み）。
+    # 削除済みも同じ扱い。記録としては一覧に残すが、取得・編集・確定の対象にはしない
+    if (
+        proposal is None
+        or proposal.project_id != project_id
+        or proposal.deleted_at is not None
+    ):
         raise AppError(
             status.HTTP_404_NOT_FOUND,
             ErrorCode.DISTRIBUTION_NOT_FOUND,

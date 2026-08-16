@@ -313,6 +313,20 @@ async def test_delete_rejects_finalized_proposal():
     repo.mark_deleted.assert_not_awaited()
 
 
+async def test_deleted_proposal_is_not_found():
+    """削除済みは記録として一覧には残るが、取得・編集・確定の対象にはしない。"""
+    proposal = _proposal({"alice": "1.0"})
+    proposal.deleted_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    repo = _repo_returning(proposal)
+
+    with patch.object(service, "DistributionRepository", return_value=repo):
+        with pytest.raises(AppError) as exc:
+            await service.get_proposal(_db(), _PROJECT.id, proposal.id)
+
+    assert exc.value.status_code == 404
+    assert exc.value.code == ErrorCode.DISTRIBUTION_NOT_FOUND
+
+
 async def test_delete_rejects_proposal_of_another_project():
     """他プロジェクトの案は存在を伏せて404。IDを総当たりされても消せない。"""
     proposal = _proposal({"alice": "1.0"})
