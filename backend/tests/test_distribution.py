@@ -103,8 +103,8 @@ async def test_update_items_logs_before_and_after_snapshots():
         {"github_login": "bob", "ratio": "0.4"},
     ]
     assert log.after_items["items"] == [
-        {"github_login": "alice", "ratio": "0.500000"},
-        {"github_login": "bob", "ratio": "0.500000"},
+        {"github_login": "alice", "ratio": "0.500"},
+        {"github_login": "bob", "ratio": "0.500"},
     ]
     # 比率以外の状態もタイムラインに出せるようスナップショットに含める
     assert log.after_items["total_amount"] == "100000.00"
@@ -199,8 +199,8 @@ async def test_update_weights_recomputes_ratios_from_scores():
     assert get_scores.await_args.kwargs["weights"] == payload.weights
     assert proposal.weight_speed == 60
     assert {(i.github_login, i.ratio) for i in proposal.items} == {
-        ("alice", Decimal("0.800000")),
-        ("bob", Decimal("0.200000")),
+        ("alice", Decimal("0.800")),
+        ("bob", Decimal("0.200")),
     }
     log = repo.add_edit_log.await_args.args[0]
     assert log.before_items["weights"]["speed"] == 35
@@ -392,8 +392,8 @@ async def test_score_based_ratios_normalize_to_one():
     ratios = await _ratios_for({"alice": 0.6, "bob": 0.2, "carol": 0.2})
     assert ratios == [
         ("alice", Decimal("0.600000")),
-        ("bob", Decimal("0.200000")),
-        ("carol", Decimal("0.200000")),
+        ("bob", Decimal("0.200")),
+        ("carol", Decimal("0.200")),
     ]
 
 
@@ -404,6 +404,69 @@ async def test_score_based_ratios_fall_back_to_equal_split_without_data():
 
 async def test_score_based_ratios_are_empty_without_members():
     assert await _ratios_for({}) == []
+
+
+# ---------- 合計をちょうど1.0にする ----------
+
+
+@pytest.mark.parametrize("members", [2, 3, 4, 5, 6, 7, 8, 9, 11, 13])
+async def test_equal_split_always_totals_exactly_one(members):
+    """均等割りの丸めで合計が1.0からずれると、作りたての案が確定できない。
+
+    画面は合計100.0%ちょうどでないと保存させないので、サーバが作った案がそのままでは
+    確定できない状態になる（3人なら 0.333×3 = 99.9%）。
+    """
+    ratios = await _ratios_for({f"m{i}": 0.0 for i in range(members)})
+    assert sum(r for _, r in ratios) == Decimal(1)
+    assert len(ratios) == members
+
+
+@pytest.mark.parametrize(
+    "totals",
+    [
+        {"a": 1.0, "b": 1.0, "c": 1.0},
+        {"a": 0.5, "b": 0.3, "c": 0.2},
+        {"a": 1 / 3, "b": 1 / 3, "c": 1 / 3},
+        {"a": 7.0, "b": 3.0, "c": 3.0, "d": 3.0},
+        {"a": 1.0, "b": 1.0, "c": 1.0, "d": 1.0, "e": 1.0, "f": 1.0},
+        {"a": 100.0, "b": 0.001},
+    ],
+)
+async def test_score_based_ratios_always_total_exactly_one(totals):
+    ratios = await _ratios_for(totals)
+    assert sum(r for _, r in ratios) == Decimal(1)
+
+
+async def test_normalize_keeps_ratios_at_the_display_step():
+    """比率の刻みは画面の入力刻み（0.1%）と一致していること。
+
+    ここがずれると、画面は比率を丸めて表示し、丸めた値から金額を計算するので、
+    画面の金額とAPIが返す金額が食い違う。
+    """
+    ratios = await _ratios_for({"a": 2.0, "b": 1.0})
+    for _, ratio in ratios:
+        assert ratio == ratio.quantize(Decimal("0.001"))
+
+
+async def test_normalize_spreads_the_remainder_instead_of_dumping_it():
+    """余りは1人に押し付けず、0.1%ずつ複数人に配る。
+
+    6人均等は 0.167×6 = 1.002 で 0.002 の超過。1人から 0.002 引くとその人だけ
+    0.165 になり、均等割りのはずが1人だけ 0.2% 低い案ができる。2人から 0.001 ずつ
+    引けば全員の差は 0.1% に収まる。
+    """
+    ratios = dict(await _ratios_for({f"m{i}": 1.0 for i in range(6)}))
+    assert sum(ratios.values()) == Decimal(1)
+    assert sorted(ratios.values()) == [
+        Decimal("0.166"),
+        Decimal("0.166"),
+        Decimal("0.167"),
+        Decimal("0.167"),
+        Decimal("0.167"),
+        Decimal("0.167"),
+    ]
+    # 誰か1人に寄せた場合との違いを固定する（最大と最小の差は1刻みまで）
+    assert max(ratios.values()) - min(ratios.values()) == Decimal("0.001")
 
 
 # ---------- 金額換算 ----------

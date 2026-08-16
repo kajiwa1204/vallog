@@ -29,10 +29,21 @@ from app.schemas.distribution import ItemsUpdate, ProposalCreate, ProposalUpdate
 from app.schemas.project import CategoryWeights
 from app.services import scoring
 
-_RATIO_PLACES = Decimal("0.000001")
+# 分配比率の刻み。画面7の入力刻み（0.1%）と一致させる。
+#
+# 以前は 0.000001（0.0001%）まで保持していたが、**画面がその精度を表現できない**。
+# 0.1%刻みでしか編集できないので、画面は比率を丸めて表示し、丸めた値から金額を
+# 計算していた。結果、画面の金額とAPIが返す金額が実データで最大¥50ずれ、しかも
+# 丸めの和が1にならないと画面の合計が100.0%にならず、作りたての案を確定できなかった
+# （3人均等 = 0.333333 × 3 = 99.9%）。
+#
+# 保存できる精度を画面の精度に合わせることで、この一致を構成上の帰結にする。
+# 実際、ユーザーが一度でも配分を保存すれば全比率は0.1%刻みになるので、6桁の精度は
+# 「一度も編集されていない案」にしか存在しない見せかけの精度だった。
+_RATIO_PLACES = Decimal("0.001")
 _AMOUNT_PLACES = Decimal("0.01")
-# 合計比率の許容誤差。フロントがパーセント表示で丸めた値を送ってくるため、
-# 厳密一致は要求しない（画面7の入力刻みは0.1%）
+# 合計比率の許容誤差。クライアントが独自に丸めた値を送ってくる場合に備えて残す。
+# サーバが生成する比率は _normalize_to_one() でちょうど1になる
 _RATIO_TOTAL_TOLERANCE = Decimal("0.005")
 
 
@@ -270,6 +281,38 @@ def _quantize_ratio(ratio: Decimal) -> Decimal:
     return ratio.quantize(_RATIO_PLACES, rounding=ROUND_HALF_UP)
 
 
+def _normalize_to_one(
+    ratios: list[tuple[str, Decimal]],
+) -> list[tuple[str, Decimal]]:
+    """丸めた比率の合計をちょうど1.0にする（最大剰余法）。
+
+    各値を独立に丸めると和が1にならない。3人均等なら 0.333×3 = 0.999、6人なら
+    0.167×6 = 1.002 になり、**サーバが作った直後の案が確定できない**（画面は合計
+    100.0%ちょうどでないと保存させない）。
+
+    余り（または超過分）を、丸めで最も損をした順に1刻みずつ配る。誰かに丸ごと
+    押し付けるより差が小さく、同点なら並び順で決まるので結果が安定する。
+    """
+    if not ratios:
+        return ratios
+
+    step = _RATIO_PLACES
+    diff = Decimal(1) - sum((ratio for _, ratio in ratios), Decimal(0))
+    if diff == 0:
+        return ratios
+
+    # 丸めで削られた量が大きい順（超過なら削る量が小さい順）に配る
+    count = int(abs(diff) / step)
+    order = sorted(range(len(ratios)), key=lambda i: ratios[i][1], reverse=diff < 0)
+    adjusted = [ratio for _, ratio in ratios]
+    for n in range(count):
+        index = order[n % len(order)]
+        adjusted[index] += step if diff > 0 else -step
+    # 0未満は作らない（比率は ge=0 の契約）
+    adjusted = [max(Decimal(0), value) for value in adjusted]
+    return [(login, adjusted[i]) for i, (login, _) in enumerate(ratios)]
+
+
 def _quantize_amount(amount: Decimal | None) -> Decimal | None:
     """DBの桁（Numeric(14,2)）に丸めてから保持する。編集ログのスナップショットが
     保存前後で別の表記（300000 と 300000.00）にならないようにする。
@@ -314,11 +357,13 @@ async def _score_based_ratios(
         if count == 0:
             return []
         equal = _quantize_ratio(Decimal(1) / Decimal(count))
-        return [(m.github_login, equal) for m in scores.members]
-    return [
-        (
-            m.github_login,
-            _quantize_ratio(Decimal(str(m.total)) / Decimal(str(grand_total))),
-        )
-        for m in scores.members
-    ]
+        return _normalize_to_one([(m.github_login, equal) for m in scores.members])
+    return _normalize_to_one(
+        [
+            (
+                m.github_login,
+                _quantize_ratio(Decimal(str(m.total)) / Decimal(str(grand_total))),
+            )
+            for m in scores.members
+        ]
+    )
