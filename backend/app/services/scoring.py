@@ -464,7 +464,10 @@ async def can_disclose_scores(db: AsyncSession, project_id: uuid.UUID) -> bool:
 
 
 async def get_scores_for_disclosure(
-    db: AsyncSession, project: Project, access_token: str
+    db: AsyncSession,
+    project: Project,
+    access_token: str,
+    weights: CategoryWeights | None = None,
 ) -> ScoreResponse:
     """クライアントへ返すスコア。開示条件を満たさなければ 403 で拒否する。
 
@@ -477,6 +480,11 @@ async def get_scores_for_disclosure(
     誰でも分配案を作れるので、ダミーの案を作ればスコアは見られる。これは技術的な壁では
     なく、受け入れた制約（#100）。created_by が記録され編集履歴は全員に公開されるため、
     見えるかたちで意図的な行為をする必要がある、という社会的抑止で担保する。
+
+    weights は分配案ごとの重みの上書き。**指定を受け取れるようにしてあるのが重要**で、
+    案の配分比率は案の重みで計算されるのに、スコアだけプロジェクト既定の重みで返すと、
+    同じ画面に並ぶ「配分」と「その根拠」が別々の重みの産物になる。重みを動かして複数案を
+    比較すること自体が②固定を折る施策なので、そこで根拠が食い違うと施策ごと壊れる。
     """
     if not await can_disclose_scores(db, project.id):
         raise AppError(
@@ -484,4 +492,4 @@ async def get_scores_for_disclosure(
             ErrorCode.SCORES_NOT_DISCLOSED,
             "Scores are disclosed only while an unfinalized distribution proposal exists",
         )
-    return await get_project_scores(db, project, access_token)
+    return await get_project_scores(db, project, access_token, weights=weights)
