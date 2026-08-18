@@ -92,8 +92,16 @@ export function AllocationTable({
     setDrafts(({ [login]: _dropped, ...rest }) => rest);
   };
 
-  // 案を切り替えたら編集中の値を持ち越さない。残すと、別の案の配分に前の案の
-  // 数字が入った状態から編集を始めることになる
+  /**
+   * 案を切り替えたら編集中の値を持ち越さない。残すと、別の案の配分に前の案の数字が
+   * 入った状態から編集を始めることになる。
+   *
+   * **依存は proposal.id だけにする。** items / total_amount も見ていたが、保存のたびに
+   * setProposal(updated) で参照が変わるので、**総額を保存しただけで未保存の配分編集が
+   * 黙って消えていた**（サーバ側の items は変わっていないのにフロントだけが捨てる）。
+   * 同じ案の中で配分のリセットが要るのは配分そのものを保存したときだけなので、そこは
+   * 保存の成功ハンドラで明示的に行う。
+   */
   useEffect(() => {
     setRows(rowsFromItems(proposal.items));
     setReason("");
@@ -101,7 +109,9 @@ export function AllocationTable({
     setConfirmingFinalize(false);
     setConfirmingDelete(false);
     setDrafts({});
-  }, [proposal.id, proposal.items, proposal.total_amount]);
+    // proposal.id 以外は意図的に依存させない（上のコメント参照）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [proposal.id]);
 
   const locked = proposal.finalized;
 
@@ -223,14 +233,24 @@ export function AllocationTable({
             size="s"
             variant="secondary"
             loading={saving}
-            disabled={reason.trim().length === 0}
+            // 配分の編集中は押させない。理由欄を両方の操作で共有しているので、
+            // 同時に保存できると同じ理由文がどちらの編集ログに乗るかが押した
+            // ボタン次第になる。禁止すれば dirty のとき理由は配分の保存に、
+            // そうでなければ総額の保存に、一意に紐づく
+            disabled={dirty || reason.trim().length === 0}
             onClick={() => onSaveTotalAmount(amountDraft.trim(), reason.trim())}
           >
             総額を保存
           </Button>
         )}
-        {!locked && amountChanged && reason.trim().length === 0 && (
-          <span className={styles.amountHint}>下の理由欄が必要です</span>
+        {!locked && amountChanged && (
+          <span className={styles.amountHint}>
+            {dirty
+              ? "先に配分を保存してください"
+              : reason.trim().length === 0
+                ? "下の理由欄が必要です"
+                : ""}
+          </span>
         )}
       </div>
 
@@ -320,7 +340,12 @@ export function AllocationTable({
           <button
             type="button"
             className={styles.link}
-            onClick={() => setRows(equalize(rows))}
+            onClick={() => {
+              setRows(equalize(rows));
+              // 入力中の文字列を残すと、均等割りにしたのに触っていた欄だけ
+              // 古い値が見えたままになる
+              setDrafts({});
+            }}
           >
             均等割りにする
           </button>
@@ -343,7 +368,11 @@ export function AllocationTable({
               disabled={!canSave}
               loading={saving}
               onClick={async () => {
-                if (await onSaveItems(rows, reason.trim())) setReason("");
+                if (!(await onSaveItems(rows, reason.trim()))) return;
+                // 配分を保存したときだけ編集状態を畳む。effect は案の切り替えしか
+                // 見ていないので、ここで明示的に行う
+                setReason("");
+                setDrafts({});
               }}
             >
               配分を保存
