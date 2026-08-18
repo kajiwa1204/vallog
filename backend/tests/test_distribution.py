@@ -548,6 +548,28 @@ def test_amount_is_none_without_total():
 # ---------- バリデーション ----------
 
 
+@pytest.mark.parametrize("login", [
+    "a" * 40,          # GitHubの上限39文字を超える
+    "with space",      # 空白
+    "user@example",    # 記号
+    "日本語",           # 非ASCII
+    "",                # 空
+])
+def test_item_input_rejects_invalid_github_login(login):
+    """DBと画面に任意の文字列が流れ込むのを境界で止める。
+
+    未登録の貢献者を足せるのは意図的な仕様なのでメンバーには縛らないが、
+    GitHubのログイン規則（39文字以内・英数字とハイフン）は安定した契約。
+    """
+    with pytest.raises(ValidationError):
+        DistributionItemInput(github_login=login, ratio=Decimal("1.0"))
+
+
+@pytest.mark.parametrize("login", ["a", "SHOU6439", "some-user", "a" * 39])
+def test_item_input_accepts_valid_github_login(login):
+    assert DistributionItemInput(github_login=login, ratio=Decimal("1.0")).github_login == login
+
+
 def test_reason_must_not_be_blank():
     with pytest.raises(ValidationError):
         ItemsUpdate(reason="   ", items=_items(alice="1.0"))

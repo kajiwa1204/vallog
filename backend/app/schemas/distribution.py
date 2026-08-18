@@ -8,7 +8,12 @@ from app.schemas.project import CategoryWeights
 
 
 class DistributionItemInput(BaseModel):
-    github_login: str
+    # 未登録の貢献者も分配対象にできるのは意図的な仕様（ItemsUpdate 参照）なので
+    # プロジェクトメンバーには縛らない。ただしGitHubのログイン規則（39文字以内・
+    # 英数字とハイフン）は安定した契約なので、DBと画面に任意の文字列が流れ込むのは
+    # ここで止める。「ハイフン連続不可・先頭末尾ハイフン不可」までは見ない —
+    # 厳しくしすぎると、GitHub側の規則が緩んだときに正当なログインを弾く
+    github_login: str = Field(min_length=1, max_length=39, pattern=r"^[A-Za-z0-9-]+$")
     ratio: Decimal = Field(ge=0, le=1)
 
 
