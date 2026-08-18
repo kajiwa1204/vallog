@@ -93,6 +93,15 @@ export default function DistributionPage() {
   const hasProposals = proposals.length > 0;
 
   /**
+   * 貢献サマリーが1件でもあるか。無いときは概観を2カラムにしない。
+   *
+   * 「スコアと貢献サマリーを同列に置く」はレイアウトで主張したことなので、片方が空だと
+   * 主張が見た目で崩れる（実測でスコア758px に対しサマリー170px、右が588px空く）。
+   * 生成はまだ #16 の担当で、1件も無いチームのほうが多い。
+   */
+  const hasSummaries = (summaries?.length ?? 0) > 0;
+
+  /**
    * 案を作る操作がスコアの開示スイッチを兼ねているかどうか。
    *
    * すでに開示されている（他に検討中の案がある）なら、作っても開示状態は変わらない。
@@ -193,7 +202,7 @@ export default function DistributionPage() {
       {/* 概観。数値（スコアと生事実）と文章（貢献サマリー）を同列に並べる。
           どちらも同じ活動を別の粒度で言い直したものなので、片方を先に読ませる理由が
           ない。横に置くと「なぜこの数字なのか」をその場で照らし合わせられる */}
-      <div className={styles.overview}>
+      <div className={`${styles.overview} ${hasSummaries ? "" : styles.singleColumn}`}>
         <ScorePanel
           state={scoreState}
           onRetry={reloadScores}

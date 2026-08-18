@@ -37,6 +37,12 @@
   gap: 16px;
 }
 
+/* サマリーが1件も無いときは並べる相手がいない。2カラムのまま出すと右が大きく空き、
+   「同列に置く」という主張だけが残る */
+.singleColumn {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 /* 横に並べる余地が無くなったら縦積みに戻す。画面4のパネルと同じ境界にしてある */
 @media (max-width: 900px) {
   .overview {
