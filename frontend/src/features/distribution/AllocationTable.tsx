@@ -118,6 +118,16 @@ export function AllocationTable({
    * 禁止するのではなく見えるようにする。
    */
   const untouched = proposal.edit_logs.length === 0;
+
+  /**
+   * 最終更新。作成日時と編集ログの最新の新しいほう（サーバの開示判定と同じ定義）。
+   *
+   * **カウントダウンは出さない。** 「あと3日でスコアが見えなくなります」と出すと、
+   * 議論が止まっているのに案を生かすためだけに触る動機になり、30日ルールが塞いだ穴を
+   * 開け直すことになる。ここに出すのは期限ではなく事実で、読み手は自分がどこに居るかを
+   * 判断できればよい（edit_logs はサーバが created_at の降順で返す）。
+   */
+  const lastUpdated = proposal.edit_logs[0]?.created_at ?? proposal.created_at;
   const total = sumTenths(rows);
   const balanced = isBalanced(rows);
   const dirty = isDirty(rows, original);
@@ -153,6 +163,15 @@ export function AllocationTable({
         <span className="num">
           {new Date(proposal.created_at).toLocaleString("ja-JP")}
         </span>
+        {/* 確定済みは確定日時が最終更新そのものなので重ねて出さない */}
+        {!locked && (
+          <span>
+            最終更新{" "}
+            <span className="num">
+              {new Date(lastUpdated).toLocaleString("ja-JP")}
+            </span>
+          </span>
+        )}
         {proposal.finalized && proposal.finalized_at && (
           <span>
             確定 {proposal.finalized_by_github_login ?? "（退会済み）"} ・
