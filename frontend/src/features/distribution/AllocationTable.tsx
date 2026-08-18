@@ -134,8 +134,12 @@ export function AllocationTable({
       actions={
         <span className={styles.badges}>
           {/* 調整なしで確定した案は、スコアをそのまま採用したという事実が残る。
-              確定後は変えられないので、後から読む人にはこれが唯一の手がかりになる */}
-          {locked && untouched && <Badge tone="ochre">調整なしで確定</Badge>}
+              確定後は変えられないので、後から読む人にはこれが唯一の手がかりになる。
+              **警告色にしない。** これは「折れていないことを見えるようにする」施策で
+              あって咎めではなく、スコアどおりの分配自体は正当な運用。咎める見た目に
+              すると、バッジを避けるためだけに0.1%動かして適当な理由を書く動機が生まれ、
+              抑止の土台である編集履歴が中身の無いログで薄まる */}
+          {locked && untouched && <Badge tone="neutral">調整なしで確定</Badge>}
           {locked ? (
             <Badge tone="green">確定済み</Badge>
           ) : (
