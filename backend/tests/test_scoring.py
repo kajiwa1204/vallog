@@ -11,6 +11,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from app.core.errors import AppError, ErrorCode
+from app.schemas.project import CategoryWeights
 from app.services.scoring import (
     SCORE_DISCLOSURE_WINDOW_DAYS,
     _activity_relative,
@@ -25,6 +26,7 @@ from app.services.scoring import (
     can_disclose_scores,
     compute_scores,
     get_scores_for_disclosure,
+    resolve_weights,
 )
 
 
@@ -455,6 +457,35 @@ async def test_can_disclose_scores_asks_only_for_recently_updated_proposals():
     # 定数を変えたときにここが追随する（値をベタ書きしない）
     expected = before - timedelta(days=SCORE_DISCLOSURE_WINDOW_DAYS)
     assert abs((cutoff - expected).total_seconds()) < 5
+
+
+def test_resolve_weights_returns_none_when_nothing_is_given():
+    """指定なしは「プロジェクト既定で計算せよ」という正当な指定。"""
+    assert resolve_weights(None, None, None) is None
+
+
+def test_resolve_weights_accepts_all_three():
+    assert resolve_weights(50, 30, 20) == CategoryWeights(
+        activity=50, speed=30, quality=20
+    )
+
+
+@pytest.mark.parametrize(
+    "given",
+    [(100, None, None), (None, 50, None), (None, None, 25), (40, 35, None)],
+)
+def test_resolve_weights_rejects_partial(given):
+    """足りない分を既定値で埋めない。
+
+    埋めると、利用者が指定していない重みが黙って混ざったスコアが 200 で返る。画面7は
+    「配分」と「その根拠」が同じ重みの産物であることに依存しているので、片方だけ別の
+    重みで計算された値が正しい根拠として並び、誰も気づけない。
+    """
+    with pytest.raises(AppError) as e:
+        resolve_weights(*given)
+
+    assert e.value.status_code == 422
+    assert e.value.code is ErrorCode.SCORES_WEIGHTS_INCOMPLETE
 
 
 # ---------------------------------------------------------------------------

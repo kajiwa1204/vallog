@@ -463,6 +463,30 @@ async def can_disclose_scores(db: AsyncSession, project_id: uuid.UUID) -> bool:
     return await DistributionRepository(db).exists_unfinalized(project_id, cutoff)
 
 
+def resolve_weights(
+    activity: int | None, speed: int | None, quality: int | None
+) -> CategoryWeights | None:
+    """クエリで渡された重みを CategoryWeights にする。3つ揃っていなければ拒否する。
+
+    **足りない分を既定値で埋めない。** 埋めると、利用者が指定していない重みが黙って
+    混ざったスコアが 200 で返る。画面7は「配分」と「その根拠」が同じ重みの産物である
+    ことに依存しているので、片方だけ別の重みで計算された値が正しい根拠として並び、
+    誰も気づけない。3つ揃わないなら答えを返さないほうが安全。
+
+    1つも指定が無いのは「プロジェクト既定で計算せよ」という正当な指定なので None を返す。
+    """
+    given = (activity, speed, quality)
+    if all(w is None for w in given):
+        return None
+    if any(w is None for w in given):
+        raise AppError(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            ErrorCode.SCORES_WEIGHTS_INCOMPLETE,
+            "weight_activity, weight_speed and weight_quality must be given together",
+        )
+    return CategoryWeights(activity=activity, speed=speed, quality=quality)
+
+
 async def get_scores_for_disclosure(
     db: AsyncSession,
     project: Project,
