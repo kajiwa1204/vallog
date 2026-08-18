@@ -42,9 +42,6 @@ from app.services import scoring
 # 「一度も編集されていない案」にしか存在しない見せかけの精度だった。
 _RATIO_PLACES = Decimal("0.001")
 _AMOUNT_PLACES = Decimal("0.01")
-# 合計比率の許容誤差。クライアントが独自に丸めた値を送ってくる場合に備えて残す。
-# サーバが生成する比率は _normalize_to_one() でちょうど1になる
-_RATIO_TOTAL_TOLERANCE = Decimal("0.005")
 
 
 async def list_proposals(
@@ -282,12 +279,24 @@ def _reject_if_no_members(ratios: list[tuple[str, Decimal]]) -> None:
 
 
 def _reject_if_ratios_do_not_total_one(ratios: list[tuple[str, Decimal]]) -> None:
+    """合計はちょうど1.0でなければならない。**許容誤差は設けない。**
+
+    以前は0.005（0.5%ポイント）の窓があったが、比率の精度をフロントの入力刻みと
+    揃えた時点で意味を失った。比率は量子化後に必ず0.001の倍数なので、1との差も0.001の
+    倍数にしかならず、**0.001未満の許容値はすべて完全一致と等価**。つまりこの窓は
+    「合計99.5%〜100.5%の案を確定できる」ためだけに存在していて、総額¥300,000なら
+    ¥1,500の取りこぼしが 200 で通る。分配額に直結する値でそれは許容できない。
+
+    サーバが生成する比率は _spread_remainder_to_total_one() でちょうど1になり、画面も
+    合計がちょうど100.0%でなければ保存させない（frontend allocation.ts の isBalanced）
+    ので、正当な経路はどちらもこの条件を満たす。
+    """
     total = sum((ratio for _, ratio in ratios), Decimal(0))
-    if abs(total - Decimal(1)) > _RATIO_TOTAL_TOLERANCE:
+    if total != Decimal(1):
         raise AppError(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             ErrorCode.DISTRIBUTION_RATIO_TOTAL_INVALID,
-            f"Distribution ratios must sum to 1.0 (got {total})",
+            f"Distribution ratios must sum to exactly 1.0 (got {total})",
         )
 
 
@@ -295,17 +304,23 @@ def _quantize_ratio(ratio: Decimal) -> Decimal:
     return ratio.quantize(_RATIO_PLACES, rounding=ROUND_HALF_UP)
 
 
-def _normalize_to_one(
+def _spread_remainder_to_total_one(
     ratios: list[tuple[str, Decimal]],
 ) -> list[tuple[str, Decimal]]:
-    """丸めた比率の合計をちょうど1.0にする（最大剰余法）。
+    """丸めた比率の合計をちょうど1.0にする。
 
     各値を独立に丸めると和が1にならない。3人均等なら 0.333×3 = 0.999、6人なら
     0.167×6 = 1.002 になり、**サーバが作った直後の案が確定できない**（画面は合計
     100.0%ちょうどでないと保存させない）。
 
-    余り（または超過分）を、丸めで最も損をした順に1刻みずつ配る。誰かに丸ごと
-    押し付けるより差が小さく、同点なら並び順で決まるので結果が安定する。
+    過不足を**配分の少ない順（超過なら多い順）に0.1%ずつ**配る。1人に丸ごと押し付ける
+    より差が小さく、同点なら並び順で決まるので結果が安定する。
+
+    最大剰余法ではない。ここに渡ってくるのは既に _quantize_ratio() を通った値で、
+    **どれだけ切り捨てられたかの情報は残っていない**ため、剰余では並べられない。
+    配分の少ない人に不足を寄せるのは差を縮める方向なので、分配のポリシーとしては
+    妥当だと判断している。剰余で配りたくなったら、量子化前の真値をここに渡す形に
+    変えること（呼び出しは _score_based_ratios の2箇所だけ）。
     """
     if not ratios:
         return ratios
@@ -315,7 +330,7 @@ def _normalize_to_one(
     if diff == 0:
         return ratios
 
-    # 丸めで削られた量が大きい順（超過なら削る量が小さい順）に配る
+    # 不足は配分の少ない順に足し、超過は多い順から引く
     count = int(abs(diff) / step)
     order = sorted(range(len(ratios)), key=lambda i: ratios[i][1], reverse=diff < 0)
     adjusted = [ratio for _, ratio in ratios]
@@ -371,8 +386,10 @@ async def _score_based_ratios(
         if count == 0:
             return []
         equal = _quantize_ratio(Decimal(1) / Decimal(count))
-        return _normalize_to_one([(m.github_login, equal) for m in scores.members])
-    return _normalize_to_one(
+        return _spread_remainder_to_total_one(
+            [(m.github_login, equal) for m in scores.members]
+        )
+    return _spread_remainder_to_total_one(
         [
             (
                 m.github_login,

@@ -138,7 +138,8 @@ async def test_update_items_rejects_ratios_not_summing_to_one():
     repo.add_edit_log.assert_not_awaited()
 
 
-async def test_update_items_accepts_rounding_error():
+async def test_update_items_accepts_exactly_one():
+    """0.1%刻みで合計ちょうど1.0なら通る（画面が送ってくる形）。"""
     proposal = _proposal({"a": "0.5", "b": "0.5"})
     repo = _repo_returning(proposal)
     payload = ItemsUpdate(reason="3等分", items=_items(a="0.333", b="0.333", c="0.334"))
@@ -147,6 +148,30 @@ async def test_update_items_accepts_rounding_error():
         await service.update_items(_db(), _PROJECT, proposal.id, _USER, payload)
 
     repo.add_edit_log.assert_awaited()
+
+
+@pytest.mark.parametrize("ratios", [
+    {"a": "0.333", "b": "0.333", "c": "0.333"},   # 0.999（1刻み不足）
+    {"a": "0.334", "b": "0.333", "c": "0.334"},   # 1.001（1刻み超過）
+    {"a": "0.500", "b": "0.495"},                  # 0.995（旧許容誤差の境界）
+])
+async def test_update_items_rejects_any_deviation_from_one(ratios):
+    """許容誤差は設けない。
+
+    以前は0.005の窓があり、合計99.5%の案が 200 で通っていた。総額¥300,000なら
+    ¥1,500の取りこぼしが記録として確定できてしまう。
+    """
+    proposal = _proposal({"a": "0.5", "b": "0.5"})
+    repo = _repo_returning(proposal)
+    payload = ItemsUpdate(reason="調整", items=_items(**ratios))
+
+    with patch.object(service, "DistributionRepository", return_value=repo):
+        with pytest.raises(AppError) as exc:
+            await service.update_items(_db(), _PROJECT, proposal.id, _USER, payload)
+
+    assert exc.value.status_code == 422
+    assert exc.value.code == ErrorCode.DISTRIBUTION_RATIO_TOTAL_INVALID
+    repo.add_edit_log.assert_not_awaited()
 
 
 async def test_update_items_rejects_finalized_proposal():
@@ -465,6 +490,25 @@ async def test_normalize_keeps_ratios_at_the_display_step():
     ratios = await _ratios_for({"a": 2.0, "b": 1.0})
     for _, ratio in ratios:
         assert ratio == ratio.quantize(Decimal("0.001"))
+
+
+async def test_remainder_goes_to_the_smallest_share():
+    """不足分は**配分の少ない順**に配る（最大剰余法ではない）。
+
+    _spread_remainder_to_total_one に渡るのは量子化済みの値で、切り捨て量の情報は
+    残っていないため剰余では並べられない。方針を固定して、逆向きの実装に変えたら
+    落ちるようにする。
+
+    真値 big 0.6004 / mid 0.2004 / small 0.1992 → 丸めて 0.600 / 0.200 / 0.199（合計0.999）。
+    剰余は big=0.0004 / mid=0.0004 / small=0.0002 なので、最大剰余法なら big か mid に
+    +0.001 が行く。この実装は small に配る。
+    """
+    ratios = await _ratios_for({"big": 0.6004, "mid": 0.2004, "small": 0.1992})
+    got = dict(ratios)
+    assert sum(got.values()) == Decimal(1)
+    assert got["small"] == Decimal("0.200"), "不足は配分の少ない人に寄せる"
+    assert got["big"] == Decimal("0.600")
+    assert got["mid"] == Decimal("0.200")
 
 
 async def test_normalize_spreads_the_remainder_instead_of_dumping_it():
