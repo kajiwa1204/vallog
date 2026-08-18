@@ -67,6 +67,16 @@ export function useDistribution(projectId: string, enabled = true) {
   const [scoreState, setScoreState] = useState<ScoreState>({ kind: "loading" });
   // スコアを計算するときの重み。選択中の案の重みを使う（null ならプロジェクト既定）
   const [scoreWeights, setScoreWeights] = useState<CategoryWeights | null>(null);
+  /**
+   * 使う重みが確定したか。**確定するまでスコアを取りに行かない。**
+   *
+   * 先に一度取ると、proposal が届いた時点で重み付きで取り直すことになり、1本目は必ず
+   * 捨てる値になる。/scores は ensure_synced を通るのでGitHubのレート消費に直結する。
+   * 画面4の useDashboard が panelsSettled で同じことをしている。
+   */
+  const [weightsSettled, setWeightsSettled] = useState(false);
+  // 一覧が一度でも返ったか。再読み込みで listLoading が立ち直っても戻さない
+  const [proposalsLoaded, setProposalsLoaded] = useState(false);
   const [summaries, setSummaries] = useState<Summary[] | null>(null);
 
   /**
@@ -107,6 +117,7 @@ export function useDistribution(projectId: string, enabled = true) {
       );
     } finally {
       setListLoading(false);
+      setProposalsLoaded(true);
     }
   }, [projectId, enabled]);
 
@@ -141,18 +152,27 @@ export function useDistribution(projectId: string, enabled = true) {
    * ステータスだけで判定しないのは、403 の既定訳が「この操作を行う権限がありません」
    * で、**権限の問題ではない**この状況に対して誤った原因を主張してしまうため。
    */
-  const loadScores = useCallback(async () => {
-    if (!enabled) return;
+  /**
+   * スコアを取り直す。
+   *
+   * 重みは**引数で受け取る**。state（scoreWeights）だけを見ると、mutate の中で
+   * setProposal した直後に呼ぶときに古い値を掴む（state はまだ反映されていない）ので、
+   * 重みを変えるたびに捨てるリクエストが1本増えていた。引数を省略したときは現在の
+   * 重みで動く（page.tsx の再試行ボタンが引数なしで呼ぶため）。
+   */
+  const loadScores = useCallback(
+    async (weights: CategoryWeights | null = scoreWeights) => {
+    if (!enabled || !weightsSettled) return;
     setScoreState({ kind: "loading" });
     try {
       // 選択中の案の重みで計算させる。案の配分比率は案の重みで算出されるので、
       // スコアだけプロジェクト既定の重みで取ると、同じ画面の「配分」と「その根拠」が
       // 別々の重みの産物になる（重みを 100/0/0 にすると根拠と配分が別の数字を出す）
       const params = new URLSearchParams();
-      if (scoreWeights !== null) {
-        params.set("weight_activity", String(scoreWeights.activity));
-        params.set("weight_speed", String(scoreWeights.speed));
-        params.set("weight_quality", String(scoreWeights.quality));
+      if (weights !== null) {
+        params.set("weight_activity", String(weights.activity));
+        params.set("weight_speed", String(weights.speed));
+        params.set("weight_quality", String(weights.quality));
       }
       const query = params.toString();
       const scores = await api.get<ScoreResponse>(
@@ -176,7 +196,9 @@ export function useDistribution(projectId: string, enabled = true) {
         retryable: code !== "GITHUB_RATE_LIMITED" && code !== "GITHUB_FORBIDDEN",
       });
     }
-  }, [projectId, enabled, scoreWeights]);
+    },
+    [projectId, enabled, weightsSettled, scoreWeights],
+  );
 
   // 生成済みの貢献サマリー（第2層）。生成の起動・進捗は #16 の担当なのでここでは読むだけ。
   // 失敗しても画面にエラーを出さない。まだ1件も生成していないチームのほうが多く、
@@ -190,11 +212,20 @@ export function useDistribution(projectId: string, enabled = true) {
     }
   }, [projectId, enabled]);
 
+  // 案一覧とサマリーは重みと無関係。loadScores と同じ effect にまとめていたため、
+  // proposal が届いて scoreWeights が動くたびに巻き添えで取り直していた（実測で
+  // 画面を開くだけで /distributions 2回・/summaries 2回）
   useEffect(() => {
     loadProposals();
-    loadScores();
+  }, [loadProposals]);
+
+  useEffect(() => {
     loadSummaries();
-  }, [loadProposals, loadScores, loadSummaries]);
+  }, [loadSummaries]);
+
+  useEffect(() => {
+    loadScores();
+  }, [loadScores]);
 
   useEffect(() => {
     if (selectedId === null) {
@@ -205,13 +236,21 @@ export function useDistribution(projectId: string, enabled = true) {
     loadProposal(selectedId);
   }, [selectedId, loadProposal]);
 
-  // 選択中の案の重みでスコアを計算させる。同じ値なら参照を変えないので、
-  // loadScores（scoreWeights に依存）が無限に走ることはない
+  /**
+   * 選択中の案の重みをスコアの計算条件にする。
+   *
+   * 同じ値なら参照を変えないので、loadScores（scoreWeights に依存）が無限に走ることは
+   * ない。詳細の取得に失敗した場合も確定させる — 待ち続けるとスコア欄がローディングの
+   * まま止まる。
+   */
   useEffect(() => {
-    if (proposal === null) {
+    if (!proposalsLoaded) return;
+    if (selectedId === null || detailError !== null) {
       setScoreWeights(null);
+      setWeightsSettled(true);
       return;
     }
+    if (proposal === null || proposal.id !== selectedId) return;
     const next = proposal.weights;
     setScoreWeights((current) =>
       current !== null &&
@@ -221,7 +260,8 @@ export function useDistribution(projectId: string, enabled = true) {
         ? current
         : next,
     );
-  }, [proposal]);
+    setWeightsSettled(true);
+  }, [proposalsLoaded, selectedId, proposal, detailError]);
 
   /**
    * 保存系の共通処理。**成功したら必ずスコアの開示状態を取り直す。**
@@ -241,7 +281,8 @@ export function useDistribution(projectId: string, enabled = true) {
         // 違う数字が同じ画面に並ぶ
         setDetails({});
         setSelectedId(updated.id);
-        await Promise.all([loadProposals(), loadScores()]);
+        // 更新後の重みを明示的に渡す。state 経由だとこの時点ではまだ古い
+        await Promise.all([loadProposals(), loadScores(updated.weights)]);
         return true;
       } catch (e) {
         setSaveError(
