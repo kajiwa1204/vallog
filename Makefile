@@ -3,8 +3,13 @@
 ENV ?= dev
 ENV_EXAMPLE = .env.$(ENV).example
 
+# 本番は cloudflared が profiles: [production] にいるため、プロファイルを指定しないと
+# トンネルが起動せず公開されない。down でも対象から漏れ、切り戻したつもりで公開だけ
+# 残るため、DC 自体に持たせて up/down/logs/ps/clean すべてで揃える。
+# dev 側には付けないこと（docker-compose.dev.yml が nginx にも同じプロファイルを
+# 付けており、dev で不要な nginx まで起動する）
 ifeq ($(ENV), prod)
-	DC = docker compose --env-file .env
+	DC = docker compose --env-file .env --profile production
 else
 	DC = docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml
 endif
@@ -48,7 +53,7 @@ logs:
 	$(DC) logs -f
 
 ps:
-	docker compose --env-file .env ps
+	$(DC) ps
 
 # ---------- 開発 ----------
 dev:
