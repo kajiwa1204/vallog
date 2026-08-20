@@ -210,7 +210,12 @@ export default function DistributionPage() {
           disclosureLapsed={disclosureLapsed}
           hasFinalized={past.length > 0}
         />
-        <SummaryPanel summaries={summaries} />
+        <SummaryPanel
+          projectId={id}
+          repoOwner={project?.repo_owner}
+          repoName={project?.repo_name}
+          summaries={summaries}
+        />
       </div>
 
       {detailError ? (

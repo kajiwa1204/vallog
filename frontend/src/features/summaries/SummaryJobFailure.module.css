@@ -1,0 +1,19 @@
+.message {
+  color: var(--red-strong);
+}
+
+.details {
+  margin-top: 4px;
+  color: var(--ink-3);
+}
+
+.summary {
+  width: fit-content;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reason {
+  margin-top: 4px;
+}

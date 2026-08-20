@@ -61,7 +61,27 @@
 
 .content {
   padding: 0 0 14px 24px;
-  font-size: 13px;
-  color: var(--ink-2);
-  white-space: pre-wrap;
+}
+
+.manageLink,
+.memberLink {
+  color: var(--green-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+}
+
+.manageLink:hover,
+.memberLink:hover {
+  text-decoration-color: currentColor;
+}
+
+.manageLink {
+  margin-left: 4px;
+}
+
+.memberLink {
+  display: inline-block;
+  margin-top: 9px;
+  font-size: 12px;
 }

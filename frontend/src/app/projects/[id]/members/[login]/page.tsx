@@ -8,8 +8,10 @@ import { Button } from "@/components/ui/Button";
 import { ActivityChart } from "@/features/members/ActivityChart";
 import { MemberChangeLog } from "@/features/members/ChangeLog";
 import { ContributionFacts } from "@/features/members/ContributionFacts";
+import { ContributionSummary } from "@/features/members/ContributionSummary";
 import { MemberSwitcher } from "@/features/members/MemberSwitcher";
 import { useMemberDetail } from "@/features/members/useMemberDetail";
+import { useMemberSummaries } from "@/features/members/useMemberSummaries";
 import { useAuth } from "@/hooks/useAuth";
 import { isRetryableChangeLogError } from "@/hooks/useChangeLog";
 import { useProject } from "@/hooks/useProject";
@@ -51,12 +53,18 @@ export default function MemberDetailPage() {
     members,
     knownMember,
   } = useMemberDetail(id, login, authed);
+  const summaryState = useMemberSummaries(id, login, authed);
 
   // 記録が1件も無いときに0が並んだ集計とバーの無いグラフを出しても読むものがない。
   // 「まだ記録がありません」は一覧の空表示が引き受ける。
   // 取得に失敗したときも出さない。一覧が消えている横に数字だけ残ると、数えて
   // 確かめられない数字を主張することになる（この画面が成り立たなくなる）
   const hasRecords = changelog.error === null && changelog.entries.length > 0;
+  const canGenerateSummary = knownMember === true || hasRecords;
+  const generationDisabledMessage =
+    knownMember === false
+      ? `このプロジェクトに ${login} は見つからないため、サマリーを生成できません。`
+      : "プロジェクトのメンバーであることを確認できるまで、サマリーは生成できません。";
 
   return (
     <AppShell projectId={id} projectName={project?.name}>
@@ -118,6 +126,26 @@ export default function MemberDetailPage() {
           <ActivityChart weeks={weeks} truncated={truncated} latestAt={latestAt} />
         </div>
       )}
+
+      <div className={styles.summary}>
+        <ContributionSummary
+          repoOwner={project?.repo_owner}
+          repoName={project?.repo_name}
+          summary={summaryState.summary}
+          prs={summaryState.prs}
+          memberJob={summaryState.memberJob}
+          loading={summaryState.loading}
+          error={summaryState.error}
+          startingMember={summaryState.startingMember}
+          startingPrs={summaryState.startingPrs}
+          memberUnchanged={summaryState.memberUnchanged}
+          canGenerate={canGenerateSummary}
+          generationDisabledMessage={generationDisabledMessage}
+          onGenerateMember={summaryState.generateMember}
+          onGeneratePr={summaryState.generatePr}
+          onRetry={summaryState.reload}
+        />
+      </div>
 
       <MemberChangeLog
         login={login}
