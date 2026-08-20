@@ -30,8 +30,6 @@ export function SummaryPanel({ summaries }: Props) {
 
       {items.length === 0 ? (
         <p className={styles.empty}>
-          {/* サイドバーの「サマリー生成」が指す /summaries はまだ実装されていない
-              （#16）。存在しない画面へ誘導しない */}
           まだ生成されたサマリーがありません。
           生成機能は準備中で、それまでは下の変化ログが根拠になります。
         </p>
