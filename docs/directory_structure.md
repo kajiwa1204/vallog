@@ -41,6 +41,7 @@ backend/
 │   │   ├── scoring.py               # スコア計算ロジック
 │   │   ├── changelog.py             # 変化ログ整形（PR/Issue/レビューを時系列マージ・既存キャッシュから読み取り）
 │   │   ├── dashboard.py             # チーム状況パネル4種の集計（既存キャッシュから読み取り）
+│   │   ├── members.py               # GitHub貢献者とVallog登録メンバーの照合
 │   │   └── claude.py                # 貢献サマリー生成（Claude API）
 │   └── repositories/                # DBアクセス層
 │       ├── project.py               # ProjectRepository

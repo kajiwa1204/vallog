@@ -21,19 +21,9 @@ from app.models.github_cache import GitHubIssue, GitHubPullRequest, GitHubReview
 from app.models.project import Project
 from app.repositories.github_cache import GitHubCacheRepository
 from app.schemas.changelog import ChangeLogEntry, ChangeLogNotes, ChangeLogResponse
-from app.services.github import ensure_synced, fetch_and_store
+from app.services.github import ensure_synced, fetch_and_store, is_excluded_github_actor
 
 DEFAULT_LIMIT = 50
-
-
-def is_excluded_login(login: str) -> bool:
-    """変化ログに載せない実行者か。
-
-    "unknown" は services/github.py の _actor_login が login を取得できなかったときの
-    フォールバック値で、実在の貢献者ではない。botのPR（依存更新等）はチームの動きとして
-    読む価値が薄いため除く。services/scoring.py の _is_excluded と同じ方針。
-    """
-    return login.endswith("[bot]") or login == "unknown"
 
 
 NOT_DONE_STATE_REASONS = frozenset({"not_planned", "duplicate"})
@@ -50,8 +40,7 @@ GitHubのクローズUIは「Close as completed」が既定なので、`complete
 Issue 3,300件を実測したところ、duplicate は全リポジトリで使われており（167件・5.1%）、
 起こらない想定は成り立たなかった。
 
-scoring.py と共有する知識なので、片方だけ直されないよう1箇所に置く。is_excluded_login と
-同じ性格のため、#95 で services/github.py へ寄せるときは一緒に移すこと。
+scoring.py と共有する知識なので、片方だけ直されないよう1箇所に置く。
 """
 
 
@@ -82,7 +71,7 @@ def _first_external_review(
         r
         for r in reviews
         if r.reviewer_login != pr.author_login
-        and not is_excluded_login(r.reviewer_login)
+        and not is_excluded_github_actor(r.reviewer_login)
         and r.submitted_at is not None
     ]
     if not external:
@@ -208,14 +197,14 @@ def build_changelog(
     entries: list[ChangeLogEntry] = []
 
     for pr in prs:
-        if is_excluded_login(pr.author_login):
+        if is_excluded_github_actor(pr.author_login):
             continue
         if member is not None and pr.author_login != member:
             continue
         entries.append(_pr_entry(pr, reviews_by_pr.get(pr.number, [])))
 
     for issue in issues:
-        if is_excluded_login(issue.author_login):
+        if is_excluded_github_actor(issue.author_login):
             continue
         if member is not None and member not in _issue_logins(issue):
             continue
@@ -224,7 +213,7 @@ def build_changelog(
     for review in reviews:
         if review.submitted_at is None:
             continue
-        if is_excluded_login(review.reviewer_login):
+        if is_excluded_github_actor(review.reviewer_login):
             continue
         if member is not None and review.reviewer_login != member:
             continue
@@ -274,21 +263,23 @@ def roster_logins(
     logins: set[str] = set()
 
     for pr in prs:
-        if is_excluded_login(pr.author_login):
+        if is_excluded_github_actor(pr.author_login):
             continue
         logins.add(pr.author_login)
 
     for issue in issues:
-        if is_excluded_login(issue.author_login):
+        if is_excluded_github_actor(issue.author_login):
             continue
         logins.update(
-            login for login in _issue_logins(issue) if not is_excluded_login(login)
+            login
+            for login in _issue_logins(issue)
+            if not is_excluded_github_actor(login)
         )
 
     for review in reviews:
         if review.submitted_at is None:
             continue
-        if is_excluded_login(review.reviewer_login):
+        if is_excluded_github_actor(review.reviewer_login):
             continue
         pr = pr_by_number.get(review.pr_number)
         if pr is None:

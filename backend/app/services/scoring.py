@@ -24,20 +24,9 @@ from app.repositories.project import ProjectRepository
 from app.schemas.project import CategoryWeights
 from app.schemas.score import CategoryScores, MemberScore, ScoreResponse
 from app.services.changelog import NOT_DONE_STATE_REASONS
-from app.services.github import ensure_synced, fetch_and_store
+from app.services.github import ensure_synced, fetch_and_store, is_excluded_github_actor
 
 _APPROVE_OR_CHANGES = {"APPROVED", "CHANGES_REQUESTED"}
-
-
-def _is_excluded(login: str) -> bool:
-    """スコア対象外のログイン。
-
-    "unknown" は services/github.py の _actor_login が、GitHubアカウント削除等で login を
-    取得できなかったときに入れるフォールバック値。実在の貢献者ではないため、複数の削除済み
-    アカウントの活動が1人分に合算された幽霊メンバーになるのを防ぐ。
-    """
-    return login.endswith("[bot]") or login == "unknown"
-
 
 def _collect_logins(
     prs: list[GitHubPullRequest],
@@ -59,7 +48,7 @@ def _collect_logins(
             logins.add(a.login)
     for r in reviews:
         logins.add(r.reviewer_login)
-    return {login for login in logins if not _is_excluded(login)}
+    return {login for login in logins if not is_excluded_github_actor(login)}
 
 
 def _shares(values: dict[str, float]) -> dict[str, float] | None:

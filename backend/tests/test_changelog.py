@@ -10,8 +10,8 @@ from app.services.changelog import (
     _elapsed_hours,
     _first_external_review,
     build_changelog,
-    is_excluded_login,
 )
+from app.services.github import is_excluded_github_actor
 
 
 def _dt(day: int, hour: int = 0) -> datetime:
@@ -81,13 +81,15 @@ def _review(number, reviewer, state="APPROVED", *, day=2, hour=0, submitted=True
 
 
 # ---------------------------------------------------------------------------
-# is_excluded_login
+# is_excluded_github_actor
 # ---------------------------------------------------------------------------
 
 def test_excludes_bots_and_unknown_fallback():
-    assert is_excluded_login("dependabot[bot]")
-    assert is_excluded_login("unknown")
-    assert not is_excluded_login("alice")
+    assert is_excluded_github_actor("dependabot[bot]")
+    assert is_excluded_github_actor("unknown")
+    assert is_excluded_github_actor("Copilot")
+    assert is_excluded_github_actor("some-service", "Bot")
+    assert not is_excluded_github_actor("alice", "User")
 
 
 # ---------------------------------------------------------------------------

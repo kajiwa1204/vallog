@@ -69,7 +69,10 @@ def _review(number, reviewer, state, *, submitted_day=1, submitted_hour=1, comme
 def test_collect_logins_unions_all_roles_and_drops_bots():
     prs = [_pr(1, "alice")]
     issues = [_issue(10, "bob", assignees=[("carol", 1)])]
-    reviews = [_review(1, "dependabot[bot]", "APPROVED")]
+    reviews = [
+        _review(1, "dependabot[bot]", "APPROVED"),
+        _review(1, "Copilot", "APPROVED"),
+    ]
     assert _collect_logins(prs, issues, reviews) == {"alice", "bob", "carol"}
 
 
