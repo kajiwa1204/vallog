@@ -84,10 +84,51 @@ export function setRowTenths(
 }
 
 /**
+ * 合計を100.0%にするために、その行にあと何を足せばよいか（負なら引く）。
+ *
+ * 合計がちょうどなら 0。行の値がマイナスになる引き算はできないので、その場合は null
+ * （呼び出し側はボタンを出さない）。
+ */
+export function remainderFor(
+  rows: AllocationRow[],
+  login: string,
+): number | null {
+  const row = rows.find((r) => r.github_login === login);
+  if (row === undefined) return null;
+  const delta = TOTAL_TENTHS - sumTenths(rows);
+  if (delta === 0) return null;
+  if (row.tenths + delta < 0) return null;
+  return delta;
+}
+
+/**
+ * 不足（超過）分をその行に寄せて、合計をちょうど100.0%にする。
+ *
+ * **均等割りと違い、他の行に触らない。** 何人か調整したあとに2%足りない、という
+ * ときに欲しいのは「誰に残りを持たせるか」であって、全員を等分に戻すことではない。
+ * 均等割りをその場面の解決策として出すと、それまでの調整を全部捨てることになる。
+ */
+export function giveRemainderTo(
+  rows: AllocationRow[],
+  login: string,
+): AllocationRow[] {
+  const delta = remainderFor(rows, login);
+  if (delta === null) return rows;
+  return setRowTenths(
+    rows,
+    login,
+    (rows.find((r) => r.github_login === login)?.tenths ?? 0) + delta,
+  );
+}
+
+/**
  * 端数を先頭の行に寄せて合計をちょうど1000にする均等割り。
  *
  * 3人なら 333 + 333 + 334。「均等にする」を押した結果が合計99.9%で保存できない、
  * という状態を作らないため、丸めの余りを捨てずに配る。
+ *
+ * これは「全員を同じ配分にする」という**方針の選択**であって、合計のズレを直す
+ * 訂正ではない（訂正は giveRemainderTo）。画面でも別の場所に置く。
  */
 export function equalize(rows: AllocationRow[]): AllocationRow[] {
   if (rows.length === 0) return rows;

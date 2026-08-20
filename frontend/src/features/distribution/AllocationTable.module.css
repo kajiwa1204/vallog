@@ -159,15 +159,58 @@
   color: var(--red-strong);
 }
 
-.link {
-  margin-left: 8px;
+/* 行の過不足ボタン。押すとその人に残りが寄る。合計がズレている間だけ出る */
+.remainder {
+  min-width: 46px;
+  padding: 1px 6px;
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  background: var(--green-tint);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--green-strong);
+  cursor: pointer;
+}
+
+.remainder:hover {
+  background: var(--green);
+  color: #fff;
+}
+
+.remainder:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* 説明文の中に出す見本。押せないので枠だけ揃える */
+.remainderSample {
+  display: inline-block;
+  margin: 0 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  background: var(--green-tint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--green-strong);
+}
+
+/* 均等割りは方針の選択なので、保存系のボタンより弱い見た目に留める */
+.equalize {
+  margin-left: auto;
   padding: 0;
   border: none;
   background: none;
   font: inherit;
-  color: var(--green);
+  font-size: 12px;
+  color: var(--ink-3);
   text-decoration: underline;
   cursor: pointer;
+}
+
+.equalize:hover {
+  color: var(--green);
 }
 
 .editor {

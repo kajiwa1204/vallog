@@ -11,9 +11,11 @@ import {
   amountFor,
   equalize,
   formatAmount,
+  giveRemainderTo,
   formatPercent,
   isBalanced,
   isDirty,
+  remainderFor,
   remainingPercent,
   rowsFromItems,
   setRowTenths,
@@ -279,6 +281,8 @@ export function AllocationTable({
                 ? null
                 : Number(saved.amount)
               : amountFor(amountDraft.trim() || null, row.tenths);
+            // この行に寄せれば合計がちょうど100.0%になる差分。合計が合っていれば null
+            const remainder = locked ? null : remainderFor(rows, row.github_login);
             return (
               <tr key={row.github_login}>
                 <th scope="row" className={styles.member}>
@@ -307,6 +311,27 @@ export function AllocationTable({
                         onBlur={() => commitDraft(row.github_login)}
                       />
                       <span className={styles.unit}>%</span>
+                      {/* 合計がズレているときだけ出す。押すとこの人に過不足を寄せて
+                          ちょうど100.0%になる。他の行には触らない */}
+                      {remainder !== null && (
+                        <button
+                          type="button"
+                          className={styles.remainder}
+                          disabled={saving}
+                          aria-label={`残りの ${formatPercent(Math.abs(remainder))}% を ${row.github_login} に${remainder > 0 ? "足す" : "引く"}`}
+                          onClick={() => {
+                            setRows((current) =>
+                              giveRemainderTo(current, row.github_login),
+                            );
+                            // 入力中の文字列を消さないと、寄せた値がこの欄だけ
+                            // 反映されて見えない
+                            setDrafts(({ [row.github_login]: _d, ...rest }) => rest);
+                          }}
+                        >
+                          {remainder > 0 ? "+" : "−"}
+                          {formatPercent(Math.abs(remainder))}
+                        </button>
+                      )}
                     </span>
                   )}
                 </td>
@@ -336,19 +361,12 @@ export function AllocationTable({
           <span className="num">
             {total < TOTAL_TENTHS ? `あと ${remainingPercent(rows)}%` : `${formatPercent(total - TOTAL_TENTHS)}% 超過`}
           </span>
-          ）。
-          <button
-            type="button"
-            className={styles.link}
-            onClick={() => {
-              setRows(equalize(rows));
-              // 入力中の文字列を残すと、均等割りにしたのに触っていた欄だけ
-              // 古い値が見えたままになる
-              setDrafts({});
-            }}
-          >
-            均等割りにする
-          </button>
+          ）。表の
+          <span className={styles.remainderSample}>
+            {total < TOTAL_TENTHS ? "+" : "−"}
+            {formatPercent(Math.abs(TOTAL_TENTHS - total))}
+          </span>
+          を押すと、その人に{total < TOTAL_TENTHS ? "残りを足せます" : "超過分を引けます"}。
         </p>
       )}
 
@@ -387,6 +405,19 @@ export function AllocationTable({
                 元に戻す
               </Button>
             )}
+            {/* 「全員を同じ配分にする」という方針の選択。合計のズレを直す訂正
+                （行の残りボタン）とは別ものなので、同じ文に並べない */}
+            <button
+              type="button"
+              className={styles.equalize}
+              disabled={saving}
+              onClick={() => {
+                setRows(equalize(rows));
+                setDrafts({});
+              }}
+            >
+              全員を均等割りにする
+            </button>
           </div>
         </div>
       )}
