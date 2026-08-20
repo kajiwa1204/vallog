@@ -441,7 +441,11 @@ export function useDistribution(projectId: string, enabled = true) {
       setDetailPending((ids) =>
         ids.includes(proposalId) ? ids : [...ids, proposalId],
       );
-      setDetailErrorById(({ [proposalId]: _dropped, ...rest }) => rest);
+      setDetailErrorById((current) => {
+        const next = { ...current };
+        delete next[proposalId];
+        return next;
+      });
       try {
         const data = await api.get<Proposal>(
           `/projects/${projectId}/distributions/${proposalId}`,
