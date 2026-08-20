@@ -10,8 +10,8 @@ from app.services.changelog import (
     _elapsed_hours,
     _first_external_review,
     build_changelog,
-    is_excluded_login,
 )
+from app.services.github import is_excluded_github_actor
 
 
 def _dt(day: int, hour: int = 0) -> datetime:
@@ -81,13 +81,15 @@ def _review(number, reviewer, state="APPROVED", *, day=2, hour=0, submitted=True
 
 
 # ---------------------------------------------------------------------------
-# is_excluded_login
+# is_excluded_github_actor
 # ---------------------------------------------------------------------------
 
 def test_excludes_bots_and_unknown_fallback():
-    assert is_excluded_login("dependabot[bot]")
-    assert is_excluded_login("unknown")
-    assert not is_excluded_login("alice")
+    assert is_excluded_github_actor("dependabot[bot]")
+    assert is_excluded_github_actor("unknown")
+    assert is_excluded_github_actor("Copilot")
+    assert is_excluded_github_actor("some-service", "Bot")
+    assert not is_excluded_github_actor("alice", "User")
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +156,25 @@ def test_closed_issue_keeps_completed_and_rejected_apart():
     rejected = _issue(11, "bob", closed_day=4, state_reason="not_planned")
     states = {e.number: e.state for e in build_changelog([], [completed, rejected], []).entries}
     assert states == {10: "closed", 11: "not_planned"}
+
+
+def test_duplicate_close_is_not_counted_as_completed():
+    """「Close as duplicate」も成果ではない。
+
+    GitHubの state_reason は completed/reopened/not_planned/duplicate/null を取る。
+    not_planned だけを見ていた頃は重複クローズが「完了」に落ち、そのSPがスコアの
+    根拠にも流れ込んでいた。主要OSS 11リポジトリの実測では duplicate は全リポジトリで
+    使われていた（3,300件中167件）ので、起こらない想定は置けない。
+    """
+    duplicate = _issue(12, "bob", closed_day=4, state_reason="duplicate")
+    entry = build_changelog([], [duplicate], []).entries[0]
+    assert entry.state == "not_planned"
+
+
+def test_reopened_state_reason_does_not_make_an_open_issue_not_planned():
+    """reopened は open にしか付かない。closed 判定を先に見ているので巻き込まれない。"""
+    entry = build_changelog([], [_issue(13, "bob", state_reason="reopened")], []).entries[0]
+    assert entry.state == "open"
 
 
 def test_closed_issue_without_state_reason_counts_as_completed():

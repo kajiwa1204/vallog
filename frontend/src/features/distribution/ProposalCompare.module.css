@@ -1,0 +1,144 @@
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.picker {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  background: var(--surface-dim);
+}
+
+.legend {
+  padding: 0 6px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+.option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.disabled {
+  cursor: not-allowed;
+  color: var(--ink-3);
+}
+
+.optionName {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.limitNote {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+/* 案が増えると横に伸びる。ページ全体を横スクロールさせない */
+.scroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 420px;
+}
+
+/* 基底を :where() で包んで詳細度を 0-1-0 に落とす。`.table th, .table td` だと
+   0-1-1 になり、単独クラスの `.right` などが**必ず負ける**（実際に金額の右揃えが
+   死んでいた）。0-1-0 同士ならソース順で後勝ちになるので、以降のクラスが素直に効く。
+   規則を1つにするため3ファイルとも同じ形にしてある */
+.table :where(th, td) {
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-weight: 400;
+  vertical-align: top;
+}
+
+.memberHead {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.proposalHead {
+  text-align: right;
+  min-width: 128px;
+}
+
+.proposalName {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.weights {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.amountHead {
+  display: block;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.finalized {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--green-tint);
+  color: var(--green-strong);
+  font-size: 10.5px;
+}
+
+.member {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+.cell {
+  text-align: right;
+}
+
+.percent {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.amount {
+  display: block;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.absent {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.note {
+  margin-top: 12px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}

@@ -3,20 +3,30 @@
 キャッシュ済みGitHubデータ（ORMオブジェクト）を SimpleNamespace で模して渡す。DBは使わない。
 """
 
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.core.errors import AppError, ErrorCode
+from app.schemas.project import CategoryWeights
 from app.services.scoring import (
+    SCORE_DISCLOSURE_WINDOW_DAYS,
     _activity_relative,
     _collect_logins,
     _combine_equal,
+    _member_facts,
     _quality_values,
     _shares,
+    _sp_totals,
     _speed_values,
     _turnaround_values,
+    can_disclose_scores,
     compute_scores,
+    get_scores_for_disclosure,
+    resolve_weights,
 )
 
 
@@ -69,7 +79,10 @@ def _review(number, reviewer, state, *, submitted_day=1, submitted_hour=1, comme
 def test_collect_logins_unions_all_roles_and_drops_bots():
     prs = [_pr(1, "alice")]
     issues = [_issue(10, "bob", assignees=[("carol", 1)])]
-    reviews = [_review(1, "dependabot[bot]", "APPROVED")]
+    reviews = [
+        _review(1, "dependabot[bot]", "APPROVED"),
+        _review(1, "Copilot", "APPROVED"),
+    ]
     assert _collect_logins(prs, issues, reviews) == {"alice", "bob", "carol"}
 
 
@@ -152,8 +165,76 @@ def test_speed_values_skips_when_no_sp_or_not_closed():
 
 
 def test_speed_values_excludes_not_planned_issues():
-    """Close as not planned で中止されたIssueは成果ではないためSPを計上しない。"""
-    issues = [_issue(10, "alice", sp=5, closed_day=3, assignees=[("alice", 1)], state_reason="not_planned")]
+    """not_planned は成果でも完了時間でもないため、速度計算から除外する。"""
+    issues = [
+        _issue(
+            10,
+            "alice",
+            sp=5,
+            closed_day=30,
+            assignees=[("alice", 1)],
+            state_reason="not_planned",
+        )
+    ]
+    assert _speed_values(issues, {"alice"})["alice"] == 0.0
+
+
+def test_not_planned_issue_does_not_change_existing_speeds_or_shares():
+    """却下を減点にせず、長期not_plannedを足しても本人・他人の取り分を動かさない。"""
+    baseline = [
+        _issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)]),  # 48h
+        _issue(11, "bob", sp=3, closed_day=2, assignees=[("bob", 1)]),  # 24h
+        _issue(12, "bob", sp=3, closed_day=4, assignees=[("bob", 1)]),  # 72h
+    ]
+    with_rejected = baseline + [
+        _issue(
+            13,
+            "alice",
+            sp=5,
+            closed_day=30,
+            assignees=[("alice", 1)],
+            state_reason="not_planned",
+        )
+    ]
+
+    baseline_values = _speed_values(baseline, {"alice", "bob"})
+    rejected_values = _speed_values(with_rejected, {"alice", "bob"})
+
+    assert rejected_values == baseline_values
+    assert _shares(rejected_values) == _shares(baseline_values)
+
+
+def test_zero_story_points_do_not_add_elapsed_time():
+    """旧キャッシュ等にSP:0が残っても、0SPのIssueで速度を下げない。"""
+    baseline = [
+        _issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)])
+    ]
+    with_zero = baseline + [
+        _issue(11, "alice", sp=0, closed_day=30, assignees=[("alice", 1)])
+    ]
+
+    assert _speed_values(with_zero, {"alice"}) == _speed_values(
+        baseline, {"alice"}
+    )
+
+
+def test_speed_values_use_actual_elapsed_time_without_team_wide_cap():
+    """第三者のIssueで時間軸を変えず、完了Issueは各担当者の実経過時間で測る。"""
+    issues = [
+        _issue(10, "alice", sp=3, closed_day=30, assignees=[("alice", 1)]),  # 696h
+        _issue(11, "bob", sp=3, closed_day=2, assignees=[("bob", 1)]),  # 24h
+        _issue(12, "bob", sp=3, closed_day=3, assignees=[("bob", 1)]),  # 48h
+    ]
+
+    values = _speed_values(issues, {"alice", "bob"})
+
+    assert values["alice"] == pytest.approx(3 / 696)
+    assert values["bob"] == pytest.approx(6 / 72)
+
+
+def test_speed_values_excludes_duplicate_issues():
+    """Close as duplicate も成果ではない。changelog と同じ定数で判定する。"""
+    issues = [_issue(11, "alice", sp=5, closed_day=3, assignees=[("alice", 1)], state_reason="duplicate")]
     assert _speed_values(issues, {"alice"})["alice"] == 0.0
 
 
@@ -360,3 +441,270 @@ def test_compute_scores_only_activity_has_data():
     result = compute_scores(_project(), prs, [], [])
     assert all(m.categories.speed == 0.0 and m.categories.quality == 0.0 for m in result.members)
     assert sum(m.total for m in result.members) == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# スコアの事後開示ゲート（#100）
+# ---------------------------------------------------------------------------
+
+def _disclosure_repo(exists_unfinalized: bool) -> MagicMock:
+    repo = MagicMock()
+    repo.exists_unfinalized = AsyncMock(return_value=exists_unfinalized)
+    return repo
+
+
+@pytest.mark.asyncio
+async def test_can_disclose_scores_is_false_without_any_proposal():
+    """作業期間中（案が0件）。③事前既知を折るため非開示。"""
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(False),
+    ):
+        assert await can_disclose_scores(MagicMock(), uuid.uuid4()) is False
+
+
+@pytest.mark.asyncio
+async def test_can_disclose_scores_is_true_while_a_proposal_is_open():
+    """分配を議論している最中だけ開示する。"""
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(True),
+    ):
+        assert await can_disclose_scores(MagicMock(), uuid.uuid4()) is True
+
+
+@pytest.mark.asyncio
+async def test_can_disclose_scores_is_false_when_all_proposals_are_finalized():
+    """議論が終わったら非開示に戻る。1回目の分配以降ずっと見えたままにすると、
+    2回目の作業期間中に③が折れない。"""
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(False),
+    ):
+        assert await can_disclose_scores(MagicMock(), uuid.uuid4()) is False
+
+
+@pytest.mark.asyncio
+async def test_get_scores_for_disclosure_rejects_when_not_disclosable():
+    project = SimpleNamespace(id=uuid.uuid4())
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(False),
+    ), patch("app.services.scoring.get_project_scores", new=AsyncMock()) as compute:
+        with pytest.raises(AppError) as e:
+            await get_scores_for_disclosure(MagicMock(), project, "token")
+
+    assert e.value.status_code == 403
+    assert e.value.code is ErrorCode.SCORES_NOT_DISCLOSED
+    # 拒否するときはGitHub同期もスコア計算も走らせない
+    compute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_get_scores_for_disclosure_returns_scores_when_disclosable():
+    project = SimpleNamespace(id=uuid.uuid4())
+    expected = object()
+    with patch(
+        "app.services.scoring.DistributionRepository",
+        return_value=_disclosure_repo(True),
+    ), patch(
+        "app.services.scoring.get_project_scores",
+        new=AsyncMock(return_value=expected),
+    ):
+        assert await get_scores_for_disclosure(MagicMock(), project, "token") is expected
+
+
+@pytest.mark.asyncio
+async def test_can_disclose_scores_asks_only_for_recently_updated_proposals():
+    """作りっぱなしの案でスコアが永久に開いたままにならないよう、判定には
+    「最終更新がこの時刻以降」という窓を渡す。"""
+    repo = _disclosure_repo(True)
+    before = datetime.now(timezone.utc)
+    with patch("app.services.scoring.DistributionRepository", return_value=repo):
+        await can_disclose_scores(MagicMock(), uuid.uuid4())
+
+    cutoff = repo.exists_unfinalized.await_args.args[1]
+    # 窓の長さが SCORE_DISCLOSURE_WINDOW_DAYS 日ぶん過去にあること。
+    # 定数を変えたときにここが追随する（値をベタ書きしない）
+    expected = before - timedelta(days=SCORE_DISCLOSURE_WINDOW_DAYS)
+    assert abs((cutoff - expected).total_seconds()) < 5
+
+
+def test_resolve_weights_returns_none_when_nothing_is_given():
+    """指定なしは「プロジェクト既定で計算せよ」という正当な指定。"""
+    assert resolve_weights(None, None, None) is None
+
+
+def test_resolve_weights_accepts_all_three():
+    assert resolve_weights(50, 30, 20) == CategoryWeights(
+        activity=50, speed=30, quality=20
+    )
+
+
+@pytest.mark.parametrize(
+    "given",
+    [(100, None, None), (None, 50, None), (None, None, 25), (40, 35, None)],
+)
+def test_resolve_weights_rejects_partial(given):
+    """足りない分を既定値で埋めない。
+
+    埋めると、利用者が指定していない重みが黙って混ざったスコアが 200 で返る。画面7は
+    「配分」と「その根拠」が同じ重みの産物であることに依存しているので、片方だけ別の
+    重みで計算された値が正しい根拠として並び、誰も気づけない。
+    """
+    with pytest.raises(AppError) as e:
+        resolve_weights(*given)
+
+    assert e.value.status_code == 422
+    assert e.value.code is ErrorCode.SCORES_WEIGHTS_INCOMPLETE
+
+
+@pytest.mark.parametrize(
+    "given",
+    [(50, 50, 50), (0, 0, 0), (100, 100, 100), (60, 30, 20)],
+)
+def test_resolve_weights_rejects_weights_not_summing_to_100(given):
+    with pytest.raises(AppError) as exc:
+        resolve_weights(*given)
+
+    assert exc.value.status_code == 422
+    assert exc.value.code is ErrorCode.SCORES_WEIGHTS_INVALID
+
+
+def test_scores_endpoint_returns_422_for_invalid_weight_sum():
+    from fastapi.testclient import TestClient
+
+    from app.core.database import get_db
+    from app.core.security import get_current_user
+    from app.main import app
+    from app.routers.deps import require_project_member
+
+    project_id = uuid.uuid4()
+    project = SimpleNamespace(id=project_id)
+    user = SimpleNamespace(id=uuid.uuid4(), github_access_token="token")
+    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[require_project_member] = lambda: project
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/projects/{project_id}/scores",
+                params={
+                    "weight_activity": 50,
+                    "weight_speed": 50,
+                    "weight_quality": 50,
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Score weights must each be between 0 and 100 and sum to 100",
+        "code": "SCORES_WEIGHTS_INVALID",
+    }
+
+
+# ---------------------------------------------------------------------------
+# _member_facts（レシート用の生事実・#18）
+# ---------------------------------------------------------------------------
+
+def test_member_facts_counts_only_authored_pull_requests():
+    """PR件数はPRだけ。活動量スコアの authored はIssue起票と合算しているが、
+    事実として並べるときに混ぜると「PR◯本」が読めなくなる。"""
+    prs = [_pr(1, "alice"), _pr(2, "alice"), _pr(3, "bob")]
+    issues = [_issue(10, "alice"), _issue(11, "alice")]
+    facts = _member_facts(prs, issues, [], {"alice", "bob"})
+    assert facts["alice"].pull_requests_authored == 2
+    assert facts["bob"].pull_requests_authored == 1
+
+
+def test_member_facts_story_points_go_to_assignees_not_authors():
+    """SPは担当者にのみ配る（_sp_totals と同じ経路）。起票しただけでは付かない。
+
+    変化ログの絞り込みはIssueだけ起票者∪担当者なので、ここを取り違えると
+    同じ「SP」で母集合が違う数字が並び、分配の席で合わなくなる。
+    """
+    issues = [_issue(10, "alice", sp=5, closed_day=2, assignees=[("bob", 1)])]
+    facts = _member_facts([], issues, [], {"alice", "bob"})
+    assert facts["alice"].story_points_earned == 0
+    assert facts["bob"].story_points_earned == 5
+
+
+def test_member_facts_story_points_exclude_not_planned_issues():
+    """成果でないクローズは獲得SPに数えない（スピードスコアと同じ除外）。"""
+    issues = [
+        _issue(10, "alice", sp=3, closed_day=2, assignees=[("alice", 1)]),
+        _issue(11, "alice", sp=8, closed_day=2, assignees=[("alice", 1)],
+               state_reason="not_planned"),
+    ]
+    facts = _member_facts([], issues, [], {"alice"})
+    assert facts["alice"].story_points_earned == 3
+
+
+def test_member_facts_story_points_match_speed_score_denominator():
+    """獲得SPとスピードスコアが同じ集計から出ていることを固定する。
+
+    _sp_totals を経由しなくなると（＝どちらかが数え直しになると）ここが落ちる。
+    """
+    issues = [
+        _issue(10, "alice", sp=5, closed_day=2, assignees=[("alice", 1)]),
+        _issue(11, "bob", sp=1, closed_day=2, assignees=[("bob", 1)]),
+    ]
+    logins = {"alice", "bob"}
+    sp_sum, hours_sum = _sp_totals(issues, logins)
+    facts = _member_facts([], issues, [], logins)
+    speed = _speed_values(issues, logins)
+    for login in logins:
+        assert facts[login].story_points_earned == sp_sum[login]
+        assert speed[login] == pytest.approx(sp_sum[login] / hours_sum[login])
+
+
+def test_member_facts_reviews_exclude_self_reviews():
+    """PR作者が自分のPRに付けたコメントはレビュー数に数えない（スコアと同じ除外）。"""
+    prs = [_pr(1, "alice")]
+    reviews = [
+        _review(1, "alice", "COMMENTED", comments=1),   # セルフ: 除外
+        _review(1, "bob", "APPROVED", submitted_hour=3),
+    ]
+    facts = _member_facts(prs, [], reviews, {"alice", "bob"})
+    assert facts["alice"].reviews_submitted == 0
+    assert facts["bob"].reviews_submitted == 1
+
+
+def test_member_facts_reopened_count_belongs_to_pr_author():
+    """手戻りはPR作者に帰属する（_quality_values と同じ帰属）。"""
+    prs = [_pr(1, "alice", reopened=2), _pr(2, "bob")]
+    facts = _member_facts(prs, [], [], {"alice", "bob"})
+    assert facts["alice"].pull_requests_reopened == 2
+    assert facts["bob"].pull_requests_reopened == 0
+
+
+def test_member_facts_avg_turnaround_matches_score_input():
+    """平均TATは応答性スコアの逆写像と一致する（_turnaround_totals を共有）。"""
+    prs = [_pr(1, "alice"), _pr(2, "alice", created_day=1)]
+    reviews = [
+        _review(1, "bob", "APPROVED", submitted_hour=2),   # 2時間
+        _review(2, "bob", "COMMENTED", submitted_hour=4),  # 4時間
+    ]
+    logins = {"alice", "bob"}
+    facts = _member_facts(prs, [], reviews, logins)
+    assert facts["bob"].avg_review_turnaround_hours == pytest.approx(3.0)
+    # スコア側は 1/(1+平均時間)。同じ平均を使っている
+    assert _turnaround_values(prs, reviews, logins)["bob"] == pytest.approx(1 / 4)
+
+
+def test_member_facts_avg_turnaround_is_null_without_reviews():
+    """0.0 を返すと「即座に返した」と読めてしまう。平均が定義できないことはNULLで言う。"""
+    facts = _member_facts([_pr(1, "alice")], [], [], {"alice"})
+    assert facts["alice"].avg_review_turnaround_hours is None
+
+
+def test_compute_scores_attaches_facts_to_every_member():
+    prs, issues, reviews = _sample_data()
+    result = compute_scores(_project(), prs, issues, reviews, registered_logins=["dave"])
+    facts = {m.github_login: m.facts for m in result.members}
+    # 活動のない登録メンバーも0埋めの事実を持つ（存在ごと消さない）
+    assert facts["dave"].pull_requests_authored == 0
+    assert facts["dave"].avg_review_turnaround_hours is None
+    assert sum(f.pull_requests_authored for f in facts.values()) == len(prs)

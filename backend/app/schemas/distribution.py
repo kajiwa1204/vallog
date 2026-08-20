@@ -8,7 +8,12 @@ from app.schemas.project import CategoryWeights
 
 
 class DistributionItemInput(BaseModel):
-    github_login: str
+    # 未登録の貢献者も分配対象にできるのは意図的な仕様（ItemsUpdate 参照）なので
+    # プロジェクトメンバーには縛らない。ただしGitHubのログイン規則（39文字以内・
+    # 英数字とハイフン）は安定した契約なので、DBと画面に任意の文字列が流れ込むのは
+    # ここで止める。「ハイフン連続不可・先頭末尾ハイフン不可」までは見ない —
+    # 厳しくしすぎると、GitHub側の規則が緩んだときに正当なログインを弾く
+    github_login: str = Field(min_length=1, max_length=39, pattern=r"^[A-Za-z0-9-]+$")
     ratio: Decimal = Field(ge=0, le=1)
 
 
@@ -80,7 +85,8 @@ class ProposalUpdate(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one_change(self) -> "ProposalUpdate":
-        if self.name is None and self.total_amount is None and self.weights is None:
+        amount_was_supplied = "total_amount" in self.model_fields_set
+        if self.name is None and not amount_was_supplied and self.weights is None:
             raise ValueError("At least one of name, total_amount, weights is required")
         return self
 
@@ -124,8 +130,15 @@ class ProposalListItem(BaseModel):
     total_amount: Decimal | None
     finalized: bool
     finalized_at: datetime | None
+    # 「誰が確定したか」は合意の記録の一部。作成者とは別人になりうるので両方返す
+    finalized_by_github_login: str | None
     created_by_github_login: str | None
     created_at: datetime
+    # 0 なら配分値は一度も手動変更されていない。名前・総額だけの編集は数えない。
+    allocation_edit_count: int = 0
+    # 削除済みなら値が入る。物理削除しないのは #100 の抑止が痕跡の存在に依存するため
+    deleted_at: datetime | None = None
+    deleted_by_github_login: str | None = None
 
 
 class ProposalResponse(BaseModel):

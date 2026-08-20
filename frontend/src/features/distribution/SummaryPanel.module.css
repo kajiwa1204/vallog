@@ -1,0 +1,87 @@
+.lead {
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  border-top: 1px solid var(--line);
+}
+
+.item:first-child {
+  border-top: none;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.head::-webkit-details-marker {
+  display: none;
+}
+
+.head::before {
+  content: "▸";
+  color: var(--ink-3);
+  font-size: 11px;
+}
+
+.item details[open] .head::before {
+  content: "▾";
+}
+
+.login {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.at {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  margin-left: auto;
+}
+
+.content {
+  padding: 0 0 14px 24px;
+}
+
+.manageLink,
+.memberLink {
+  color: var(--green-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+}
+
+.manageLink:hover,
+.memberLink:hover {
+  text-decoration-color: currentColor;
+}
+
+.manageLink {
+  margin-left: 4px;
+}
+
+.memberLink {
+  display: inline-block;
+  margin-top: 9px;
+  font-size: 12px;
+}

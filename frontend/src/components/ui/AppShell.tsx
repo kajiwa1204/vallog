@@ -24,7 +24,7 @@ type Props = {
 
 const PROJECT_NAV = [
   { href: "dashboard", label: "ダッシュボード" },
-  { href: "summaries", label: "サマリー生成" },
+  { href: "summaries", label: "貢献サマリー" },
   { href: "distribution", label: "分配シミュレーション" },
   { href: "settings", label: "プロジェクト設定" },
 ];

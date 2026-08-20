@@ -53,6 +53,31 @@ _SP_LABEL_RE = re.compile(r"^SP:(\d+)$", re.IGNORECASE)
 
 logger = logging.getLogger(__name__)
 
+# GitHubのBotは通常 ``[bot]`` 接尾辞を持つが、Copilotのcontributors応答は
+# login="Copilot", type="Bot" になる。キャッシュ済み活動にはtypeを保存していないため、
+# 接尾辞なしで現れる既知のBotだけloginでも判定できるようにする。
+_KNOWN_BOT_LOGINS = frozenset({"copilot"})
+
+NOT_DONE_STATE_REASONS = frozenset({"not_planned", "duplicate"})
+"""成果として数えないGitHub Issueのクローズ理由。
+
+GitHubのクローズUIでは completed が既定なので、それだけでは明確な完了意思を判定できない。
+一方、not_planned と duplicate は明示的に選ばれる値で、成果として数えない。GitHub由来の
+状態値に関する知識として、変化ログとスコア計算で共有する。
+"""
+
+
+def is_excluded_github_actor(login: str, actor_type: str | None = None) -> bool:
+    """貢献者・スコア・変化ログから除外するGitHub上の実行者か。"""
+    normalized_login = login.casefold()
+    normalized_type = actor_type.casefold() if actor_type is not None else None
+    return (
+        normalized_login == "unknown"
+        or normalized_login.endswith("[bot]")
+        or normalized_login in _KNOWN_BOT_LOGINS
+        or normalized_type == "bot"
+    )
+
 
 class GitHubClient:
     def __init__(self, token: str):
@@ -350,7 +375,9 @@ def _parse_story_points(labels: list[str]) -> int | None:
     for label in labels:
         m = _SP_LABEL_RE.match(label)
         if m:
-            return int(m.group(1))
+            story_points = int(m.group(1))
+            if story_points > 0:
+                return story_points
     return None
 
 

@@ -15,7 +15,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, query_expression, relationship
 
 from app.core.database import Base
 
@@ -57,6 +57,15 @@ class DistributionProposal(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    # 削除は物理削除にしない。#100 の抑止は「created_by が記録され編集履歴が全員に
+    # 公開される」ことで成り立っているので、行ごと消せると「案を作ってスコアを読み、
+    # 削除する」で痕跡がゼロになり、抑止の根拠自体が無くなる
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    deleted_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     items: Mapped[list["DistributionItem"]] = relationship(
         back_populates="proposal",
@@ -71,6 +80,9 @@ class DistributionProposal(Base):
     )
     creator: Mapped["User | None"] = relationship(foreign_keys=[created_by])  # noqa: F821
     finalizer: Mapped["User | None"] = relationship(foreign_keys=[finalized_by])  # noqa: F821
+    deleter: Mapped["User | None"] = relationship(foreign_keys=[deleted_by])  # noqa: F821
+    # 一覧専用の集計値。repository が with_expression() で配分変更ログだけを数える。
+    allocation_edit_count: Mapped[int] = query_expression(default_expr=0)
 
 
 class DistributionItem(Base):

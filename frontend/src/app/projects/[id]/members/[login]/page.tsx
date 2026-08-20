@@ -1,0 +1,169 @@
+"use client";
+
+import Link from "next/link";
+import { useParams, useSearchParams } from "next/navigation";
+import { AppShell } from "@/components/ui/AppShell";
+import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
+import { ActivityChart } from "@/features/members/ActivityChart";
+import { MemberChangeLog } from "@/features/members/ChangeLog";
+import { ContributionFacts } from "@/features/members/ContributionFacts";
+import { ContributionSummary } from "@/features/members/ContributionSummary";
+import { MemberSwitcher } from "@/features/members/MemberSwitcher";
+import { useMemberDetail } from "@/features/members/useMemberDetail";
+import { useMemberSummaries } from "@/features/members/useMemberSummaries";
+import { useAuth } from "@/hooks/useAuth";
+import { isRetryableChangeLogError } from "@/hooks/useChangeLog";
+import { useProject } from "@/hooks/useProject";
+import styles from "./page.module.css";
+
+/**
+ * メンバー詳細（画面5）。
+ *
+ * 主軸はそのメンバーの変化ログで、スコアはこの画面に出さない
+ * （docs/scoring_design.md「Goodhart対策とスコアの事後開示」。開示は画面7）。
+ *
+ * 想定する主な用途は「他人の成績を見に行く」ことではなく、**自分の貢献が正しく
+ * 記録されているかを検算する**こと（#13 で変化ログの絞り込みが自分を先頭に固定した
+ * 結果、その役割がこの画面に寄った）。だから数字は必ず下の一覧から数え直せる値に
+ * 限り、他のメンバーの数字とは並べない。
+ *
+ * 一方で人の切り替え自体は塞がない。無給の有志チームでは「誰が何をしているか」を
+ * 互いに知れることが協調の前提になるため。
+ */
+export default function MemberDetailPage() {
+  const { id, login } = useParams<{ id: string; login: string }>();
+  const fromDistribution = useSearchParams().get("from") === "distribution";
+
+  // リダイレクトは AppShell 側の useAuth が担う。ここでは認証確定を待つことと、
+  // 自分自身のページかどうかを見分けるためにログインを参照する
+  const { status, user } = useAuth({ required: false });
+  const authed = status === "authenticated";
+  const me = user?.github_login ?? null;
+  const isMe = me !== null && me === login;
+
+  const { project } = useProject(id, authed);
+  const {
+    changelog,
+    facts,
+    weeks,
+    latestAt,
+    countedEntries,
+    truncated,
+    members,
+    knownMember,
+  } = useMemberDetail(id, login, authed);
+  const summaryState = useMemberSummaries(id, login, authed);
+
+  // 記録が1件も無いときに0が並んだ集計とバーの無いグラフを出しても読むものがない。
+  // 「まだ記録がありません」は一覧の空表示が引き受ける。
+  // 取得に失敗したときも出さない。一覧が消えている横に数字だけ残ると、数えて
+  // 確かめられない数字を主張することになる（この画面が成り立たなくなる）
+  const hasRecords = changelog.error === null && changelog.entries.length > 0;
+  const canGenerateSummary = knownMember === true || hasRecords;
+  const generationDisabledMessage =
+    knownMember === false
+      ? `このプロジェクトに ${login} は見つからないため、サマリーを生成できません。`
+      : "プロジェクトのメンバーであることを確認できるまで、サマリーは生成できません。";
+
+  return (
+    <AppShell projectId={id} projectName={project?.name}>
+      {/* 戻る導線は識別情報の外に出す。中に入れると、アプリ内の移動とその人の
+          GitHubリンクが同じ「名前の下の補足」として並び、どちらも押せるものだと
+          気づけない。パンくずの定位置に、押せる見た目で置く */}
+      <Link
+        className={styles.back}
+        href={`/projects/${id}/${fromDistribution ? "distribution" : "dashboard"}`}
+      >
+        <span aria-hidden="true">←</span>{" "}
+        {fromDistribution ? "分配シミュレーションに戻る" : "ダッシュボードに戻る"}
+      </Link>
+
+      <header className={styles.header}>
+        <div className={styles.identity}>
+          <Avatar login={login} size={40} />
+          <div>
+            <h1 className={styles.title}>
+              <span className="num">{login}</span>
+              {isMe && <span className={styles.mine}>あなた</span>}
+            </h1>
+            <a
+              className={`num ${styles.profile}`}
+              href={`https://github.com/${encodeURIComponent(login)}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub ↗
+            </a>
+          </div>
+        </div>
+        <Button
+          variant="secondary"
+          size="s"
+          onClick={changelog.reload}
+          loading={changelog.loading}
+        >
+          再読み込み
+        </Button>
+      </header>
+
+      <MemberSwitcher
+        projectId={id}
+        members={members}
+        current={login}
+        me={me}
+        fromDistribution={fromDistribution}
+      />
+
+      {hasRecords && (
+        <div className={styles.overview}>
+          <ContributionFacts
+            facts={facts}
+            isMe={isMe}
+            countedEntries={countedEntries}
+            truncated={truncated}
+          />
+          <ActivityChart weeks={weeks} truncated={truncated} latestAt={latestAt} />
+        </div>
+      )}
+
+      <div className={styles.summary}>
+        <ContributionSummary
+          repoOwner={project?.repo_owner}
+          repoName={project?.repo_name}
+          summary={summaryState.summary}
+          prs={summaryState.prs}
+          memberJob={summaryState.memberJob}
+          loading={summaryState.loading}
+          error={summaryState.error}
+          startingMember={summaryState.startingMember}
+          startingPrs={summaryState.startingPrs}
+          memberUnchanged={summaryState.memberUnchanged}
+          canGenerate={canGenerateSummary}
+          generationDisabledMessage={generationDisabledMessage}
+          onGenerateMember={summaryState.generateMember}
+          onGeneratePr={summaryState.generatePr}
+          onRetry={summaryState.reload}
+        />
+      </div>
+
+      <MemberChangeLog
+        login={login}
+        isMe={isMe}
+        knownMember={knownMember}
+        entries={changelog.entries}
+        loading={changelog.loading}
+        error={changelog.error}
+        hasMore={changelog.hasMore}
+        onLoadMore={changelog.loadMore}
+        // 利用上限に当たっているときは再試行を出さない。押すと ensure_synced 経由で
+        // またGitHubを叩き、状況を悪化させるだけになる
+        onRetry={
+          isRetryableChangeLogError(changelog.errorCode)
+            ? changelog.reload
+            : undefined
+        }
+      />
+    </AppShell>
+  );
+}
