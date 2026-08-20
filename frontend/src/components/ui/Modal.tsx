@@ -62,7 +62,8 @@ export function Modal({ open, onClose, title, children, footer, width = 520 }: P
         type="button"
         className={styles.backdrop}
         onClick={onClose}
-        aria-label="閉じる"
+        tabIndex={-1}
+        aria-hidden="true"
       />
       <div
         ref={modalRef}

@@ -1,3 +1,4 @@
+import js from "@eslint/js";
 import nextPlugin from "@next/eslint-plugin-next";
 import tseslint from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
@@ -9,6 +10,7 @@ export default [
   {
     ignores: [
       ".next/**",
+      ".pnpm-store/**",
       "coverage/**",
       "node_modules/**",
       "next-env.d.ts",
@@ -16,7 +18,7 @@ export default [
     ],
   },
   {
-    files: ["**/*.{js,mjs,cjs,jsx,ts,tsx}"],
+    files: ["**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx}"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -43,6 +45,12 @@ export default [
       ...nextPlugin.configs.recommended.rules,
       ...nextPlugin.configs["core-web-vitals"].rules,
       ...tseslint.configs.recommended.rules,
+    },
+  },
+  {
+    files: ["**/*.{js,mjs,cjs,jsx}"],
+    rules: {
+      ...js.configs.recommended.rules,
     },
   },
 ];

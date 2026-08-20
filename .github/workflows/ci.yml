@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   backend:
@@ -21,12 +21,12 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: backend/requirements-dev.txt
+          cache-dependency-path: backend/requirements*.txt
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Run tests
@@ -40,16 +40,14 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v1
         with:
-          version: 11.5.3
-          run_install: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.14.0
-          cache: pnpm
+          package-json-file: frontend/package.json
+          runtime: node@22.14.0
+          cache: true
           cache-dependency-path: frontend/pnpm-lock.yaml
+          install: false
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Lint

@@ -14,11 +14,11 @@ describe("messageForError", () => {
     ).toBe("確定済みです");
   });
 
-  it("uses a status override when the code has no override", () => {
-    const error = new ApiError(404, "missing", "PROJECT_NOT_FOUND");
+  it("uses a status override before the shared status message", () => {
+    const error = new ApiError(401, "expired", "AUTH_INVALID_TOKEN");
 
-    expect(messageForError(error, { 404: "対象がありません" })).toBe(
-      "対象がありません",
+    expect(messageForError(error, { 401: "ログインし直してください" })).toBe(
+      "ログインし直してください",
     );
   });
 
@@ -39,6 +39,12 @@ describe("messageForError", () => {
   it("uses the network message for fetch failures", () => {
     expect(messageForError(new TypeError("Failed to fetch"))).toBe(
       "ネットワークに接続できませんでした。接続を確認してから再度お試しください。",
+    );
+  });
+
+  it("uses the generic message when no fallback is provided", () => {
+    expect(messageForError("boom")).toBe(
+      "問題が発生しました。時間をおいて再度お試しください。",
     );
   });
 });
