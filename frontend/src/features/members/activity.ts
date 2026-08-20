@@ -303,10 +303,15 @@ export function buildActivityWeeks(
 
   // 落とすのは、範囲の先頭が「データの端」でもあるときだけ。maxWeeks で切った先頭は
   // それより古い記録も手元にあるので、その週は欠けていない。
-  // 1週しか無いときは落とさない（何も残らないため。打ち切りは注記で伝える）
+  // 落とした後に活動のある週が残らないときは元の週を残し、打ち切りは注記で伝える。
   const startsAtDataEdge = from.getTime() === oldest.getTime();
+  const candidate = weeks.slice(1);
   const shown =
-    truncated && startsAtDataEdge && weeks.length > 1 ? weeks.slice(1) : weeks;
+    truncated &&
+    startsAtDataEdge &&
+    candidate.some((week) => weekTotal(week) > 0)
+      ? candidate
+      : weeks;
 
   // 記録はあるが、すべてこの窓より古い（長く休止している人・離脱した人のページ）
   return shown.some((week) => weekTotal(week) > 0) ? shown : [];
