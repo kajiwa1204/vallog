@@ -57,7 +57,14 @@ export function Modal({ open, onClose, title, children, footer, width = 520 }: P
   if (!open) return null;
 
   return (
-    <div className={styles.overlay} onClick={onClose} role="presentation">
+    <div className={styles.overlay}>
+      <button
+        type="button"
+        className={styles.backdrop}
+        onClick={onClose}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
       <div
         ref={modalRef}
         className={styles.modal}
@@ -65,7 +72,6 @@ export function Modal({ open, onClose, title, children, footer, width = 520 }: P
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        onClick={(e) => e.stopPropagation()}
       >
         <header className={styles.header}>
           <h2 className={styles.title}>{title}</h2>
