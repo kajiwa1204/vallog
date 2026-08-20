@@ -1,15 +1,17 @@
 "use client";
 
+import Link from "next/link";
 import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import { CATEGORIES } from "@/constants";
 import { formatElapsed } from "@/lib/duration";
 import type { MemberScore } from "@/types";
-import { PanelError } from "./PanelError";
 import type { ScoreState } from "./useDistribution";
 import styles from "./ScorePanel.module.css";
 
 type Props = {
+  projectId: string;
   state: ScoreState;
   onRetry: () => void;
   /** 選択中の案が確定済み。非開示に戻った理由を言い分けるために使う */
@@ -70,6 +72,7 @@ function Facts({ member }: { member: MemberScore }) {
  * （+0.06 等）ではなく事実の積み上げで示す、というのがこの画面の方針のため。
  */
 export function ScorePanel({
+  projectId,
   state,
   onRetry,
   selectedIsFinalized,
@@ -112,7 +115,7 @@ export function ScorePanel({
       )}
 
       {state.kind === "error" && (
-        <PanelError
+        <ErrorState
           message={state.message}
           onRetry={state.retryable ? onRetry : undefined}
         />
@@ -136,7 +139,13 @@ export function ScorePanel({
               {state.scores.members.map((member) => (
                 <li key={member.github_login} className={styles.member}>
                   <div className={styles.memberHead}>
-                    <span className={`num ${styles.login}`}>{member.github_login}</span>
+                    <Link
+                      className={`num ${styles.login}`}
+                      href={`/projects/${projectId}/members/${encodeURIComponent(member.github_login)}`}
+                      aria-label={`${member.github_login}の貢献記録を見る`}
+                    >
+                      {member.github_login} →
+                    </Link>
                     {/* カテゴリ値と同じ右揃え列に並ぶので、母数が違うことをラベルで
                         分ける（総合＝全員で100%、カテゴリ＝そのカテゴリで100%） */}
                     <span className={styles.totalWrap}>

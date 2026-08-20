@@ -5,13 +5,12 @@ import { useParams } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import { AllocationTable } from "@/features/distribution/AllocationTable";
-import { ChangeLogPanel } from "@/features/distribution/ChangeLogPanel";
 import { CreateProposalDialog } from "@/features/distribution/CreateProposalDialog";
 import { EditHistoryTimeline } from "@/features/distribution/EditHistoryTimeline";
 import { ProposalRecords } from "@/features/distribution/ProposalRecords";
-import { PanelError } from "@/features/distribution/PanelError";
 import { ProposalCompare } from "@/features/distribution/ProposalCompare";
 import { ProposalSwitcher } from "@/features/distribution/ProposalSwitcher";
 import { ScorePanel } from "@/features/distribution/ScorePanel";
@@ -19,7 +18,6 @@ import { SummaryPanel } from "@/features/distribution/SummaryPanel";
 import { useDistribution } from "@/features/distribution/useDistribution";
 import { DistributionWeightEditor } from "@/features/distribution/WeightEditor";
 import { useAuth } from "@/hooks/useAuth";
-import { isRetryableChangeLogError } from "@/hooks/useChangeLog";
 import { useProject } from "@/hooks/useProject";
 import styles from "./page.module.css";
 
@@ -29,9 +27,8 @@ import styles from "./page.module.css";
  * **スコアが現れる唯一の画面**（docs/scoring_design.md「Goodhart対策とスコアの事後
  * 開示」）。縦の並びがそのまま議論の順序になっている:
  *
- *   概観（スコアと貢献サマリーを同列に並べる）
+ *   概観（スコアからメンバーごとの記録へ辿れる）
  *     → 分配案（人が決める）
- *     → 変化ログ（根拠を1件ずつ確かめる）
  *     → 重み・編集履歴
  *
  * スコアと貢献サマリーを横並びの同列に置くのは、**どちらも同じ活動を別の粒度で
@@ -46,8 +43,8 @@ import styles from "./page.module.css";
  * 一方 ①ターゲット（スコアがそのまま分配額になる）への対策は位置とは無関係に効かせる
  * 必要があり、これは「分配の最終決定は人間」＝手動調整と理由必須の側が担う。
  *
- * 変化ログは高さに上限を掛けて内部スクロールにしてある。ここを伸びるままにすると、
- * この画面で実際にやること（配分を決める）に着くまでのスクロールが長くなりすぎる。
+ * 根拠となる個別の記録は画面5へ分ける。画面4と同じチーム変化ログを重複表示せず、
+ * スコア行から該当メンバーの記録へ1クリックで辿れるようにする。
  */
 export default function DistributionPage() {
   const { id } = useParams<{ id: string }>();
@@ -58,7 +55,6 @@ export default function DistributionPage() {
 
   const { project } = useProject(id, authed);
   const {
-    changelog,
     proposals,
     drafts,
     past,
@@ -137,7 +133,7 @@ export default function DistributionPage() {
           variant="secondary"
           size="s"
           onClick={reload}
-          loading={listLoading || changelog.loading}
+          loading={listLoading}
         >
           再読み込み
         </Button>
@@ -150,7 +146,7 @@ export default function DistributionPage() {
       {!listLoading && !hasProposals && (
         <div className={styles.intro}>
           <p className={styles.introLead}>
-            下の変化ログを読み、チームで話してから分配案を作ります。
+            ダッシュボードの変化ログを読み、チームで話してから分配案を作ります。
           </p>
           <p className={styles.introBody}>
             案を作ると、GitHubのスコアから計算した割合が出発点として入ります。そこから全員が自由に調整でき、
@@ -164,7 +160,7 @@ export default function DistributionPage() {
 
       {listError ? (
         <Card title="分配案">
-          <PanelError message={listError} onRetry={reload} retrying={listLoading} />
+          <ErrorState message={listError} onRetry={reload} retrying={listLoading} />
         </Card>
       ) : listLoading && !hasProposals ? (
         <Card>
@@ -186,7 +182,7 @@ export default function DistributionPage() {
           <Button loading={saving} onClick={() => setConfirmingCreate(true)}>
             分配案を作成する
           </Button>
-          {saveError && <PanelError message={saveError} />}
+          {saveError && <ErrorState message={saveError} />}
         </div>
       )}
 
@@ -207,6 +203,7 @@ export default function DistributionPage() {
           ない。横に置くと「なぜこの数字なのか」をその場で照らし合わせられる */}
       <div className={`${styles.overview} ${singleColumn ? styles.singleColumn : ""}`}>
         <ScorePanel
+          projectId={id}
           state={scoreState}
           onRetry={reloadScores}
           selectedIsFinalized={proposal?.finalized ?? false}
@@ -218,7 +215,7 @@ export default function DistributionPage() {
 
       {detailError ? (
         <Card title="分配案">
-          <PanelError
+          <ErrorState
             message={detailError}
             onRetry={() => selectedId && selectProposal(selectedId)}
           />
@@ -254,24 +251,6 @@ export default function DistributionPage() {
         pendingIds={detailPending}
         errorById={detailErrorById}
         onOpen={fetchDetail}
-      />
-
-      {/* 根拠。上の概観で見た数字が実際に何から来ているかを1件ずつ確かめる場所。
-          案の有無に関わらず常に出す（案を作る前の議論もここを読んで始まる） */}
-      <ChangeLogPanel
-        entries={changelog.entries}
-        loading={changelog.loading}
-        error={changelog.error}
-        hasMore={changelog.hasMore}
-        atLimit={changelog.atLimit}
-        onLoadMore={changelog.loadMore}
-        // 利用上限に当たっているときは再試行を出さない。押すと ensure_synced 経由で
-        // またGitHubを叩き、状況を悪化させるだけになる
-        onRetry={
-          isRetryableChangeLogError(changelog.errorCode)
-            ? changelog.reload
-            : undefined
-        }
       />
 
       {proposal && (

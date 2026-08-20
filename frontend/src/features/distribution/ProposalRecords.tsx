@@ -4,10 +4,10 @@ import { useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import type { Proposal, ProposalListItem } from "@/types";
 import { formatAmount, formatPercent, toTenths } from "./allocation";
-import { PanelError } from "./PanelError";
 import styles from "./ProposalRecords.module.css";
 
 /**
@@ -161,7 +161,7 @@ export function ProposalRecords({
               {open && (
                 <div className={styles.body}>
                   {errorById[p.id] ? (
-                    <PanelError
+                    <ErrorState
                       message={errorById[p.id]}
                       onRetry={() => onOpen(p.id)}
                       retrying={pendingIds.includes(p.id)}

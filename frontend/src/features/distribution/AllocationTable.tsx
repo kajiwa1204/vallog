@@ -5,6 +5,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Textarea } from "@/components/ui/Input";
 import type { Proposal } from "@/types";
 import {
@@ -24,7 +25,6 @@ import {
   TOTAL_TENTHS,
   type AllocationRow,
 } from "./allocation";
-import { PanelError } from "./PanelError";
 import styles from "./AllocationTable.module.css";
 
 type Props = {
@@ -458,7 +458,7 @@ export function AllocationTable({
         </div>
       )}
 
-      {saveError && <PanelError message={saveError} />}
+      {saveError && <ErrorState message={saveError} />}
 
       {!locked && (
         <div className={styles.finalize}>

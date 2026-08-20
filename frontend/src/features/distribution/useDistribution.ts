@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useChangeLog } from "@/hooks/useChangeLog";
 import { ApiError, api } from "@/lib/api";
 import { messageForError } from "@/lib/errorMessages";
 import type {
@@ -49,9 +48,6 @@ export type ScoreState =
   | { kind: "error"; message: string; retryable: boolean };
 
 export function useDistribution(projectId: string, enabled = true) {
-  // 主役の変化ログ。全メンバー分を出すので member は渡さない（絞り込みチップも置かない）
-  const changelog = useChangeLog(projectId, { enabled });
-
   const [proposals, setProposals] = useState<ProposalListItem[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [proposal, setProposal] = useState<Proposal | null>(null);
@@ -472,12 +468,10 @@ export function useDistribution(projectId: string, enabled = true) {
     loadProposals();
     loadScores();
     loadSummaries();
-    changelog.reload();
     if (selectedId !== null) loadProposal(selectedId);
-  }, [loadProposals, loadScores, loadSummaries, changelog, selectedId, loadProposal]);
+  }, [loadProposals, loadScores, loadSummaries, selectedId, loadProposal]);
 
   return {
-    changelog,
     proposals,
     drafts,
     past,

@@ -95,7 +95,6 @@ frontend/
 │   │   │   ├── Themes.tsx                        # チーム状況: 動いている領域（ラベル集計・名前空間で束ねる）
 │   │   │   └── useDashboard.ts
 │   │   ├── distribution/
-│   │   │   ├── ChangeLogPanel.tsx               # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
 │   │   │   ├── ProposalSwitcher.tsx              # 検討中の案の切り替え・新規作成・比較の開閉
 │   │   │   ├── CreateProposalDialog.tsx          # 案作成（名前・報酬総額の入力＋スコアが開示される旨の確認・#100）
 │   │   │   ├── ProposalRecords.tsx               # 分配の記録（確定済み・削除済み。新しい順・開いた案だけ配分を取得）
@@ -104,7 +103,7 @@ frontend/
 │   │   │   ├── ProposalCompare.tsx               # 選んだ案（最大4件）を並べて比較。重みの差も見出しに出す
 │   │   │   ├── SummaryPanel.tsx                  # 第2層: 変化ログの詳細（AIサマリー・読み取り専用）
 │   │   │   ├── EditHistoryTimeline.tsx           # 編集履歴（全員に公開・不正操作への抑止）
-│   │   │   ├── ScorePanel.tsx                    # スコアと生事実（アプリで唯一スコアが出る場所）。表示条件を満たさなければ説明に置き換わる（#100）
+│   │   │   ├── ScorePanel.tsx                    # スコアと生事実（アプリで唯一スコアが出る場所）。各行から画面5の記録へ遷移する
 │   │   │   ├── allocation.ts                     # 比率編集の純粋関数（千分率の整数・Reactに依存しない）
 │   │   │   └── useDistribution.ts
 │   │   ├── members/

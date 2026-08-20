@@ -1,10 +1,10 @@
 "use client";
 
 import { Card } from "@/components/ui/Card";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
 import type { Proposal, ProposalListItem } from "@/types";
 import { formatAmount, formatPercent, toTenths } from "./allocation";
-import { PanelError } from "./PanelError";
 import { MAX_COMPARE } from "./useDistribution";
 import styles from "./ProposalCompare.module.css";
 
@@ -104,7 +104,7 @@ export function ProposalCompare({
       </fieldset>
 
       {failed.map((id) => (
-        <PanelError
+        <ErrorState
           key={id}
           message={errorById[id]}
           onRetry={() => onRetry(id)}
