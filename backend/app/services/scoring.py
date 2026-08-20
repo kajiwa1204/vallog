@@ -18,6 +18,7 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 
 from fastapi import status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError, ErrorCode
@@ -477,7 +478,14 @@ def resolve_weights(
             ErrorCode.SCORES_WEIGHTS_INCOMPLETE,
             "weight_activity, weight_speed and weight_quality must be given together",
         )
-    return CategoryWeights(activity=activity, speed=speed, quality=quality)
+    try:
+        return CategoryWeights(activity=activity, speed=speed, quality=quality)
+    except ValidationError as exc:
+        raise AppError(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            ErrorCode.SCORES_WEIGHTS_INVALID,
+            "Score weights must each be between 0 and 100 and sum to 100",
+        ) from exc
 
 
 async def get_scores_for_disclosure(

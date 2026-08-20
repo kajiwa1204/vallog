@@ -34,7 +34,10 @@ type Props = {
   /** 未確定なのにスコアが非開示＝最終更新から30日を過ぎている（#100） */
   disclosureLapsed: boolean;
   onSaveItems: (rows: AllocationRow[], reason: string) => Promise<boolean>;
-  onSaveTotalAmount: (totalAmount: string, reason: string) => Promise<boolean>;
+  onSaveTotalAmount: (
+    totalAmount: string | null,
+    reason: string,
+  ) => Promise<boolean>;
   onFinalize: () => Promise<boolean>;
   onDelete: () => Promise<boolean>;
 };
@@ -145,7 +148,18 @@ export function AllocationTable({
    * その事実を記録として残す。抑止の考え方は既存の「編集履歴を全員に公開する」と同じで、
    * 禁止するのではなく見えるようにする。
    */
-  const untouched = proposal.edit_logs.length === 0;
+  const untouched = !proposal.edit_logs.some((log) => {
+    const before = log.before_items.items;
+    const after = log.after_items.items;
+    return (
+      before.length !== after.length ||
+      before.some(
+        (item, index) =>
+          item.github_login !== after[index]?.github_login ||
+          Number(item.ratio) !== Number(after[index]?.ratio),
+      )
+    );
+  });
 
   /**
    * 最終更新。作成日時と編集ログの最新の新しいほう（サーバの開示判定と同じ定義）。
@@ -269,7 +283,9 @@ export function AllocationTable({
             // ボタン次第になる。禁止すれば dirty のとき理由は配分の保存に、
             // そうでなければ総額の保存に、一意に紐づく
             disabled={dirty || reason.trim().length === 0}
-            onClick={() => onSaveTotalAmount(amountDraft.trim(), reason.trim())}
+            onClick={() =>
+              onSaveTotalAmount(amountDraft.trim() || null, reason.trim())
+            }
           >
             総額を保存
           </Button>
@@ -465,7 +481,7 @@ export function AllocationTable({
           {confirmingFinalize ? (
             <>
               <p className={styles.finalizeWarning}>
-                確定すると、この案は以降編集できません。スコアも表示されなくなります（確定した配分は上の表に残ります）。
+                確定すると、この案は以降編集できません。この案が最後の検討中の案なら、スコアも表示されなくなります（確定した配分は上の表に残ります）。
               </p>
               <div className={styles.actions}>
                 <Button loading={saving} disabled={!balanced} onClick={onFinalize}>
@@ -507,7 +523,7 @@ export function AllocationTable({
           {confirmingDelete ? (
             <>
               <p className={styles.dangerWarning}>
-                この案と、そこに積まれた調整の履歴を削除します。元に戻せません。
+                この案は検討中の一覧から外れます。誰がいつ削除したかと編集履歴は記録として残り、チームの全員が見られます。元に戻せません。
               </p>
               <div className={styles.actions}>
                 <Button variant="danger" size="s" loading={saving} onClick={onDelete}>

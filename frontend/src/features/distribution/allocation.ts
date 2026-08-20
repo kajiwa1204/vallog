@@ -65,9 +65,8 @@ export function isBalanced(rows: AllocationRow[]): boolean {
 /**
  * 合計100.0%まであといくつか（正なら足りない・負なら超過）。パーセント表示用。
  *
- * バックエンドは 0.5%ポイントの許容誤差を持つが、それはフロントの丸め由来のズレを
- * 吸収する保険であって入力の許容範囲ではない。常用すると「合計99.7%の案」が確定でき、
- * 分配の合計が報酬総額に一致しなくなる。画面はちょうど100.0%だけを通す。
+ * バックエンドも同じ0.1%刻みで合計1.0との厳密一致を要求する。両端で同じ整数精度を
+ * 使うことで、表示では100.0%なのにAPIで拒否される状態を作らない。
  */
 export function remainingPercent(rows: AllocationRow[]): string {
   return formatPercent(TOTAL_TENTHS - sumTenths(rows));

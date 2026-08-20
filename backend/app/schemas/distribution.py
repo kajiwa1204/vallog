@@ -85,7 +85,8 @@ class ProposalUpdate(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one_change(self) -> "ProposalUpdate":
-        if self.name is None and self.total_amount is None and self.weights is None:
+        amount_was_supplied = "total_amount" in self.model_fields_set
+        if self.name is None and not amount_was_supplied and self.weights is None:
             raise ValueError("At least one of name, total_amount, weights is required")
         return self
 
@@ -133,9 +134,8 @@ class ProposalListItem(BaseModel):
     finalized_by_github_login: str | None
     created_by_github_login: str | None
     created_at: datetime
-    # 0 なら一度も調整されずに確定した案。配分はスコアの計算結果そのままで、
-    # 「分配の記録」が畳まれた状態でもそれを示すために件数で持つ（#100 の可視化）
-    edit_log_count: int = 0
+    # 0 なら配分値は一度も手動変更されていない。名前・総額だけの編集は数えない。
+    allocation_edit_count: int = 0
     # 削除済みなら値が入る。物理削除しないのは #100 の抑止が痕跡の存在に依存するため
     deleted_at: datetime | None = None
     deleted_by_github_login: str | None = None

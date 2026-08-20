@@ -497,6 +497,52 @@ def test_resolve_weights_rejects_partial(given):
     assert e.value.code is ErrorCode.SCORES_WEIGHTS_INCOMPLETE
 
 
+@pytest.mark.parametrize(
+    "given",
+    [(50, 50, 50), (0, 0, 0), (100, 100, 100), (60, 30, 20)],
+)
+def test_resolve_weights_rejects_weights_not_summing_to_100(given):
+    with pytest.raises(AppError) as exc:
+        resolve_weights(*given)
+
+    assert exc.value.status_code == 422
+    assert exc.value.code is ErrorCode.SCORES_WEIGHTS_INVALID
+
+
+def test_scores_endpoint_returns_422_for_invalid_weight_sum():
+    from fastapi.testclient import TestClient
+
+    from app.core.database import get_db
+    from app.core.security import get_current_user
+    from app.main import app
+    from app.routers.deps import require_project_member
+
+    project_id = uuid.uuid4()
+    project = SimpleNamespace(id=project_id)
+    user = SimpleNamespace(id=uuid.uuid4(), github_access_token="token")
+    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[require_project_member] = lambda: project
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                f"/projects/{project_id}/scores",
+                params={
+                    "weight_activity": 50,
+                    "weight_speed": 50,
+                    "weight_quality": 50,
+                },
+            )
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 422
+    assert response.json() == {
+        "detail": "Score weights must each be between 0 and 100 and sum to 100",
+        "code": "SCORES_WEIGHTS_INVALID",
+    }
+
+
 # ---------------------------------------------------------------------------
 # _member_facts（レシート用の生事実・#18）
 # ---------------------------------------------------------------------------

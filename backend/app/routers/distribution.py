@@ -22,6 +22,10 @@ Avatars = dict[str, str | None]
 
 
 def _to_response(proposal: DistributionProposal, avatars: Avatars) -> ProposalResponse:
+    amounts = distribution_service.amounts_for(
+        proposal.total_amount,
+        [(item.github_login, item.ratio) for item in proposal.items],
+    )
     return ProposalResponse(
         id=proposal.id,
         project_id=proposal.project_id,
@@ -47,7 +51,7 @@ def _to_response(proposal: DistributionProposal, avatars: Avatars) -> ProposalRe
                 github_login=i.github_login,
                 avatar_url=avatars.get(i.github_login),
                 ratio=i.ratio,
-                amount=distribution_service.amount_for(proposal.total_amount, i.ratio),
+                amount=amounts[i.github_login],
             )
             for i in sorted(proposal.items, key=lambda i: i.ratio, reverse=True)
         ],
@@ -95,7 +99,7 @@ async def list_distributions(
             ),
             created_by_github_login=p.creator.github_login if p.creator else None,
             created_at=p.created_at,
-            edit_log_count=len(p.edit_logs),
+            allocation_edit_count=p.allocation_edit_count,
             deleted_at=p.deleted_at,
             deleted_by_github_login=p.deleter.github_login if p.deleter else None,
         )

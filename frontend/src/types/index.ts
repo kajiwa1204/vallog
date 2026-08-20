@@ -216,8 +216,8 @@ export type ProposalListItem = {
   finalized_by_github_login: string | null;
   created_by_github_login: string | null;
   created_at: string;
-  // 0 なら一度も調整されずに確定した案（配分はスコアの計算結果そのまま）
-  edit_log_count: number;
+  // 0 なら配分値は一度も変更されていない（名前・総額だけの編集は数えない）
+  allocation_edit_count: number;
   // 削除済みなら値が入る。物理削除しないのは、削除の痕跡が残ることに #100 の
   // 社会的抑止が依存しているため
   deleted_at: string | null;

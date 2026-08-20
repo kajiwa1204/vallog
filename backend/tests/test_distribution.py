@@ -100,8 +100,8 @@ async def test_update_items_logs_before_and_after_snapshots():
     assert log.reason == "デザイン対応を反映"
     assert log.edited_by == _USER.id
     assert log.before_items["items"] == [
-        {"github_login": "alice", "ratio": "0.6"},
-        {"github_login": "bob", "ratio": "0.4"},
+        {"github_login": "alice", "ratio": "0.600"},
+        {"github_login": "bob", "ratio": "0.400"},
     ]
     assert log.after_items["items"] == [
         {"github_login": "alice", "ratio": "0.500"},
@@ -245,6 +245,21 @@ async def test_update_total_amount_is_logged():
     log = repo.add_edit_log.await_args.args[0]
     assert log.before_items["total_amount"] == "100000.00"
     assert log.after_items["total_amount"] == "300000.00"
+    assert log.before_items["items"] == log.after_items["items"]
+
+
+async def test_total_amount_can_be_cleared():
+    proposal = _proposal({"alice": "1.0"})
+    repo = _repo_returning(proposal)
+    payload = ProposalUpdate(reason="割合だけに戻す", total_amount=None)
+
+    with patch.object(service, "DistributionRepository", return_value=repo):
+        await service.update_proposal(_db(), _PROJECT, proposal.id, _USER, payload)
+
+    assert proposal.total_amount is None
+    log = repo.add_edit_log.await_args.args[0]
+    assert log.before_items["total_amount"] == "100000.00"
+    assert log.after_items["total_amount"] is None
 
 
 async def test_update_proposal_rejects_finalized_proposal():
@@ -275,6 +290,7 @@ async def test_finalize_marks_proposal_finalized():
     assert proposal.finalized_by == _USER.id
     assert proposal.finalized_at is not None
     db.commit.assert_awaited()
+    assert repo.get_proposal.await_args_list[0].kwargs == {"for_update": True}
 
 
 @pytest.mark.parametrize("ratios", [{"alice": "0.6", "bob": "0.3"}, {}])
@@ -321,6 +337,7 @@ async def test_delete_marks_the_proposal_instead_of_removing_it():
     assert target is proposal
     assert user_id == _USER.id
     db.commit.assert_awaited()
+    assert repo.get_proposal.await_args.kwargs == {"for_update": True}
 
 
 async def test_delete_rejects_finalized_proposal():
@@ -350,6 +367,32 @@ async def test_deleted_proposal_is_not_found():
 
     assert exc.value.status_code == 404
     assert exc.value.code == ErrorCode.DISTRIBUTION_NOT_FOUND
+
+
+async def test_finalize_rejects_deleted_proposal():
+    proposal = _proposal({"alice": "1.0"})
+    proposal.deleted_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    repo = _repo_returning(proposal)
+
+    with patch.object(service, "DistributionRepository", return_value=repo):
+        with pytest.raises(AppError) as exc:
+            await service.finalize(_db(), _PROJECT, proposal.id, _USER)
+
+    assert exc.value.code == ErrorCode.DISTRIBUTION_NOT_FOUND
+    assert proposal.finalized is False
+
+
+async def test_delete_rejects_deleted_proposal():
+    proposal = _proposal({"alice": "1.0"})
+    proposal.deleted_at = datetime(2026, 8, 1, tzinfo=timezone.utc)
+    repo = _repo_returning(proposal)
+
+    with patch.object(service, "DistributionRepository", return_value=repo):
+        with pytest.raises(AppError) as exc:
+            await service.delete_proposal(_db(), _PROJECT, proposal.id, _USER)
+
+    assert exc.value.code == ErrorCode.DISTRIBUTION_NOT_FOUND
+    repo.mark_deleted.assert_not_awaited()
 
 
 async def test_delete_rejects_proposal_of_another_project():
@@ -535,14 +578,29 @@ async def test_normalize_spreads_the_remainder_instead_of_dumping_it():
 # ---------- 金額換算 ----------
 
 
-def test_amount_is_apportioned_by_ratio():
-    assert service.amount_for(Decimal("100000"), Decimal("0.333333")) == Decimal(
-        "33333.30"
+@pytest.mark.parametrize("members", [3, 27])
+def test_amounts_sum_to_total_amount(members):
+    ratios = [(f"m{i:02}", Decimal("0.037")) for i in range(members)]
+    if members == 3:
+        ratios = [("a", Decimal("0.333")), ("b", Decimal("0.333")), ("c", Decimal("0.334"))]
+    else:
+        ratios[-1] = (ratios[-1][0], Decimal("0.038"))
+
+    amounts = service.amounts_for(Decimal("12345"), ratios)
+
+    assert sum((value for value in amounts.values() if value is not None), Decimal(0)) == Decimal("12345.00")
+
+
+def test_amount_remainder_uses_stable_largest_remainder_order():
+    amounts = service.amounts_for(
+        Decimal("0.01"),
+        [("bob", Decimal("0.5")), ("alice", Decimal("0.5"))],
     )
+    assert amounts == {"bob": Decimal("0.00"), "alice": Decimal("0.01")}
 
 
-def test_amount_is_none_without_total():
-    assert service.amount_for(None, Decimal("0.5")) is None
+def test_amounts_are_none_without_total():
+    assert service.amounts_for(None, [("alice", Decimal("1"))]) == {"alice": None}
 
 
 # ---------- バリデーション ----------
@@ -580,6 +638,8 @@ def test_reason_must_not_be_blank():
 def test_proposal_update_requires_at_least_one_change():
     with pytest.raises(ValidationError):
         ProposalUpdate(reason="なにも変えない")
+    with pytest.raises(ValidationError):
+        ProposalUpdate(reason="名前なし", name=None)
 
 
 def test_items_update_requires_at_least_one_item():

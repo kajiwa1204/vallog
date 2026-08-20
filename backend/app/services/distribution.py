@@ -10,7 +10,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -111,7 +111,7 @@ async def update_items(
 ) -> DistributionProposal:
     """配分値を手動調整し、変更前後のスナップショットを編集ログに残す。"""
     repo = DistributionRepository(db)
-    proposal = await _load_proposal(db, project.id, proposal_id)
+    proposal = await _load_proposal(db, project.id, proposal_id, for_update=True)
     _reject_if_finalized(proposal)
 
     ratios = [(i.github_login, _quantize_ratio(i.ratio)) for i in payload.items]
@@ -136,13 +136,13 @@ async def update_proposal(
 ) -> DistributionProposal:
     """案の名前・報酬総額・重みを更新する。重みを変えたら分配比率を再計算する。"""
     repo = DistributionRepository(db)
-    proposal = await _load_proposal(db, project.id, proposal_id)
+    proposal = await _load_proposal(db, project.id, proposal_id, for_update=True)
     _reject_if_finalized(proposal)
 
     before = _snapshot(proposal)
     if payload.name is not None:
         proposal.name = payload.name
-    if payload.total_amount is not None:
+    if "total_amount" in payload.model_fields_set:
         proposal.total_amount = _quantize_amount(payload.total_amount)
     if payload.weights is not None:
         proposal.weight_activity = payload.weights.activity
@@ -171,7 +171,7 @@ async def finalize(
     db: AsyncSession, project: Project, proposal_id: uuid.UUID, user: User
 ) -> DistributionProposal:
     """分配案を合意確定して以降の編集を止める。"""
-    proposal = await _load_proposal(db, project.id, proposal_id)
+    proposal = await _load_proposal(db, project.id, proposal_id, for_update=True)
     _reject_if_finalized(proposal)
     _reject_if_ratios_do_not_total_one(
         [(item.github_login, item.ratio) for item in proposal.items]
@@ -203,7 +203,7 @@ async def delete_proposal(
     ロールによる制限は設けない（他の操作と同じ）。守るのは「誰が消せるか」ではなく
     「消しても記録は残る」ほうで、これは編集履歴の全員公開と同じ考え方。
     """
-    proposal = await _load_proposal(db, project.id, proposal_id)
+    proposal = await _load_proposal(db, project.id, proposal_id, for_update=True)
     if proposal.finalized:
         raise AppError(
             status.HTTP_409_CONFLICT,
@@ -216,17 +216,43 @@ async def delete_proposal(
     await db.commit()
 
 
-def amount_for(total_amount: Decimal | None, ratio: Decimal) -> Decimal | None:
-    """報酬総額を比率で按分した金額。総額未入力なら金額は出さない（比率のみ表示）。"""
+def amounts_for(
+    total_amount: Decimal | None, ratios: list[tuple[str, Decimal]]
+) -> dict[str, Decimal | None]:
+    """報酬総額を1銭単位で最大剰余配分し、行の合計を必ず総額に一致させる。"""
     if total_amount is None:
-        return None
-    return (total_amount * ratio).quantize(_AMOUNT_PLACES, rounding=ROUND_HALF_UP)
+        return {login: None for login, _ in ratios}
+
+    amount = _quantize_amount(total_amount)
+    assert amount is not None
+    raw = [(login, amount * ratio) for login, ratio in ratios]
+    allocated = {
+        login: value.quantize(_AMOUNT_PLACES, rounding=ROUND_FLOOR)
+        for login, value in raw
+    }
+    cents_left = int(
+        (amount - sum(allocated.values(), Decimal(0))) / _AMOUNT_PLACES
+    )
+    order = sorted(
+        raw,
+        key=lambda pair: (-(pair[1] - allocated[pair[0]]), pair[0]),
+    )
+    for login, _ in order[:cents_left]:
+        allocated[login] += _AMOUNT_PLACES
+    assert sum(allocated.values(), Decimal(0)) == amount
+    return allocated
 
 
 async def _load_proposal(
-    db: AsyncSession, project_id: uuid.UUID, proposal_id: uuid.UUID
+    db: AsyncSession,
+    project_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> DistributionProposal:
-    proposal = await DistributionRepository(db).get_proposal(proposal_id)
+    proposal = await DistributionRepository(db).get_proposal(
+        proposal_id, for_update=for_update
+    )
     # 他プロジェクトの案は存在を伏せて404にする（メンバーシップは project_id 側で検証済み）。
     # 削除済みも同じ扱い。記録としては一覧に残すが、取得・編集・確定の対象にはしない
     if (
@@ -337,8 +363,10 @@ def _spread_remainder_to_total_one(
     for n in range(count):
         index = order[n % len(order)]
         adjusted[index] += step if diff > 0 else -step
-    # 0未満は作らない（比率は ge=0 の契約）
-    adjusted = [max(Decimal(0), value) for value in adjusted]
+    # 量子化誤差は各行0.0005未満なので、差の解消で0未満には到達しない。
+    # ここでクランプすると合計1.0を黙って壊すため、構成上の不変条件として検査する。
+    assert all(value >= 0 for value in adjusted)
+    assert sum(adjusted, Decimal(0)) == Decimal(1)
     return [(login, adjusted[i]) for i, (login, _) in enumerate(ratios)]
 
 
@@ -355,7 +383,10 @@ def _snapshot(proposal: DistributionProposal) -> dict:
     """編集ログに残す案の状態。JSONBに入れるためDecimalは文字列にする。"""
     return {
         "items": [
-            {"github_login": item.github_login, "ratio": str(item.ratio)}
+            {
+                "github_login": item.github_login,
+                "ratio": str(_quantize_ratio(item.ratio)),
+            }
             for item in sorted(proposal.items, key=lambda i: i.github_login)
         ],
         "total_amount": (

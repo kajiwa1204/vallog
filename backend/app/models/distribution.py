@@ -15,7 +15,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, query_expression, relationship
 
 from app.core.database import Base
 
@@ -81,6 +81,8 @@ class DistributionProposal(Base):
     creator: Mapped["User | None"] = relationship(foreign_keys=[created_by])  # noqa: F821
     finalizer: Mapped["User | None"] = relationship(foreign_keys=[finalized_by])  # noqa: F821
     deleter: Mapped["User | None"] = relationship(foreign_keys=[deleted_by])  # noqa: F821
+    # 一覧専用の集計値。repository が with_expression() で配分変更ログだけを数える。
+    allocation_edit_count: Mapped[int] = query_expression(default_expr=0)
 
 
 class DistributionItem(Base):

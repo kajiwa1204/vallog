@@ -141,7 +141,7 @@ export function ScorePanel({
                   <div className={styles.memberHead}>
                     <Link
                       className={`num ${styles.login}`}
-                      href={`/projects/${projectId}/members/${encodeURIComponent(member.github_login)}`}
+                      href={`/projects/${projectId}/members/${encodeURIComponent(member.github_login)}?from=distribution`}
                       aria-label={`${member.github_login}の貢献記録を見る`}
                     >
                       {member.github_login} →

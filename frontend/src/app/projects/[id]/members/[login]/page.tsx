@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -31,6 +31,7 @@ import styles from "./page.module.css";
  */
 export default function MemberDetailPage() {
   const { id, login } = useParams<{ id: string; login: string }>();
+  const fromDistribution = useSearchParams().get("from") === "distribution";
 
   // リダイレクトは AppShell 側の useAuth が担う。ここでは認証確定を待つことと、
   // 自分自身のページかどうかを見分けるためにログインを参照する
@@ -62,8 +63,12 @@ export default function MemberDetailPage() {
       {/* 戻る導線は識別情報の外に出す。中に入れると、アプリ内の移動とその人の
           GitHubリンクが同じ「名前の下の補足」として並び、どちらも押せるものだと
           気づけない。パンくずの定位置に、押せる見た目で置く */}
-      <Link className={styles.back} href={`/projects/${id}/dashboard`}>
-        <span aria-hidden="true">←</span> ダッシュボードに戻る
+      <Link
+        className={styles.back}
+        href={`/projects/${id}/${fromDistribution ? "distribution" : "dashboard"}`}
+      >
+        <span aria-hidden="true">←</span>{" "}
+        {fromDistribution ? "分配シミュレーションに戻る" : "ダッシュボードに戻る"}
       </Link>
 
       <header className={styles.header}>
@@ -94,7 +99,13 @@ export default function MemberDetailPage() {
         </Button>
       </header>
 
-      <MemberSwitcher projectId={id} members={members} current={login} me={me} />
+      <MemberSwitcher
+        projectId={id}
+        members={members}
+        current={login}
+        me={me}
+        fromDistribution={fromDistribution}
+      />
 
       {hasRecords && (
         <div className={styles.overview}>

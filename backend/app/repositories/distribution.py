@@ -3,13 +3,35 @@ from datetime import datetime
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, with_expression
 
 from app.models.distribution import (
     DistributionEditLog,
     DistributionItem,
     DistributionProposal,
 )
+
+
+def unfinalized_exists_query(project_id: uuid.UUID, updated_after: datetime):
+    """#100 のスコア開示ゲートを構成するSQL。"""
+    last_edit = (
+        select(func.max(DistributionEditLog.created_at))
+        .where(DistributionEditLog.proposal_id == DistributionProposal.id)
+        .correlate(DistributionProposal)
+        .scalar_subquery()
+    )
+    return select(
+        exists().where(
+            DistributionProposal.project_id == project_id,
+            DistributionProposal.finalized.is_(False),
+            DistributionProposal.deleted_at.is_(None),
+            func.greatest(
+                DistributionProposal.created_at,
+                func.coalesce(last_edit, DistributionProposal.created_at),
+            )
+            >= updated_after,
+        )
+    )
 
 
 class DistributionRepository:
@@ -41,27 +63,46 @@ class DistributionRepository:
         )
         if not include_deleted:
             query = query.where(DistributionProposal.deleted_at.is_(None))
+        allocation_edit_count = (
+            select(func.count(DistributionEditLog.id))
+            .where(
+                DistributionEditLog.proposal_id == DistributionProposal.id,
+                DistributionEditLog.before_items["items"]
+                != DistributionEditLog.after_items["items"],
+            )
+            .correlate(DistributionProposal)
+            .scalar_subquery()
+        )
         rows = await self.db.scalars(
             query.options(
                 selectinload(DistributionProposal.creator),
                 selectinload(DistributionProposal.finalizer),
                 selectinload(DistributionProposal.deleter),
-                # 「調整なしで確定」の判定に件数だけ要る。配分や本文は詳細で取る
-                selectinload(DistributionProposal.edit_logs),
+                # 名前・総額だけの編集は除き、配分値が変わったログだけをDBで数える。
+                # JSONBスナップショット本体は、開いた案の詳細でのみ取得する。
+                with_expression(
+                    DistributionProposal.allocation_edit_count,
+                    allocation_edit_count,
+                ),
             ).order_by(DistributionProposal.created_at.desc())
         )
         return list(rows.all())
 
-    async def get_proposal(self, proposal_id: uuid.UUID) -> DistributionProposal | None:
+    async def get_proposal(
+        self, proposal_id: uuid.UUID, *, for_update: bool = False
+    ) -> DistributionProposal | None:
         # populate_existing() がないと、同じセッションで先に読んだ案のロード済み関連
         # （finalizer・edit_logs 等）が古いまま返る。確定・調整の直後に読み直す用途が
         # あるため必須
-        return await self.db.scalar(
+        query = (
             select(DistributionProposal)
             .where(DistributionProposal.id == proposal_id)
             .options(*self._DETAIL_LOADS)
             .execution_options(populate_existing=True)
         )
+        if for_update:
+            query = query.with_for_update()
+        return await self.db.scalar(query)
 
     async def exists_unfinalized(
         self, project_id: uuid.UUID, updated_after: datetime
@@ -76,31 +117,8 @@ class DistributionRepository:
         落ちてしまうため。逆に最終更新を見ないと、作りっぱなしの案が1件あるだけで
         スコアが永久に開いたままになる。
         """
-        last_edit = (
-            select(func.max(DistributionEditLog.created_at))
-            .where(DistributionEditLog.proposal_id == DistributionProposal.id)
-            .correlate(DistributionProposal)
-            .scalar_subquery()
-        )
-        return bool(
-            await self.db.scalar(
-                select(
-                    exists().where(
-                        DistributionProposal.project_id == project_id,
-                        DistributionProposal.finalized.is_(False),
-                        # 削除済みは議論が続いていないので開示条件に数えない
-                        DistributionProposal.deleted_at.is_(None),
-                        func.greatest(
-                            DistributionProposal.created_at,
-                            func.coalesce(
-                                last_edit, DistributionProposal.created_at
-                            ),
-                        )
-                        >= updated_after,
-                    )
-                )
-            )
-        )
+        query = unfinalized_exists_query(project_id, updated_after)
+        return bool(await self.db.scalar(query))
 
     async def mark_deleted(
         self, proposal: DistributionProposal, user_id: uuid.UUID, at: datetime

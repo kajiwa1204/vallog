@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { messageForError } from "@/lib/errorMessages";
 import type {
@@ -74,6 +74,16 @@ export function useDistribution(projectId: string, enabled = true) {
   // 一覧が一度でも返ったか。再読み込みで listLoading が立ち直っても戻さない
   const [proposalsLoaded, setProposalsLoaded] = useState(false);
   const [summaries, setSummaries] = useState<Summary[] | null>(null);
+  const [details, setDetails] = useState<Record<string, Proposal>>({});
+  const [detailPending, setDetailPending] = useState<string[]>([]);
+  const [detailErrorById, setDetailErrorById] = useState<Record<string, string>>({});
+  const [comparing, setComparing] = useState(false);
+  // 比較に選んだ案。多くても4件までにする（それ以上は横に並べても読めない）
+  const [compareIds, setCompareIds] = useState<string[]>([]);
+
+  // 古い応答が後から届いて最新の案・重みを上書きしないよう、要求ごとに世代を進める。
+  const proposalRequestId = useRef(0);
+  const scoreRequestId = useRef(0);
 
   /**
    * 触る対象は検討中の案だけ。確定済みは編集も削除もできないので、切り替えバーには
@@ -119,15 +129,17 @@ export function useDistribution(projectId: string, enabled = true) {
 
   const loadProposal = useCallback(
     async (proposalId: string) => {
+      const requestId = ++proposalRequestId.current;
       setDetailLoading(true);
       setDetailError(null);
       try {
-        setProposal(
-          await api.get<Proposal>(
-            `/projects/${projectId}/distributions/${proposalId}`,
-          ),
+        const data = await api.get<Proposal>(
+          `/projects/${projectId}/distributions/${proposalId}`,
         );
+        if (requestId !== proposalRequestId.current) return;
+        setProposal(data);
       } catch (e) {
+        if (requestId !== proposalRequestId.current) return;
         setProposal(null);
         setDetailError(
           messageForError(e, {
@@ -136,7 +148,7 @@ export function useDistribution(projectId: string, enabled = true) {
           }),
         );
       } finally {
-        setDetailLoading(false);
+        if (requestId === proposalRequestId.current) setDetailLoading(false);
       }
     },
     [projectId],
@@ -158,40 +170,47 @@ export function useDistribution(projectId: string, enabled = true) {
    */
   const loadScores = useCallback(
     async (weights: CategoryWeights | null = scoreWeights) => {
-    if (!enabled || !weightsSettled) return;
-    setScoreState({ kind: "loading" });
-    try {
-      // 選択中の案の重みで計算させる。案の配分比率は案の重みで算出されるので、
-      // スコアだけプロジェクト既定の重みで取ると、同じ画面の「配分」と「その根拠」が
-      // 別々の重みの産物になる（重みを 100/0/0 にすると根拠と配分が別の数字を出す）
-      const params = new URLSearchParams();
-      if (weights !== null) {
-        params.set("weight_activity", String(weights.activity));
-        params.set("weight_speed", String(weights.speed));
-        params.set("weight_quality", String(weights.quality));
+      const requestId = ++scoreRequestId.current;
+      if (!enabled || !weightsSettled) return;
+      setScoreState({ kind: "loading" });
+      try {
+        // 選択中の案の重みで計算させる。案の配分比率は案の重みで算出されるので、
+        // スコアだけプロジェクト既定の重みで取ると、同じ画面の「配分」と「その根拠」が
+        // 別々の重みの産物になる（重みを 100/0/0 にすると根拠と配分が別の数字を出す）
+        const params = new URLSearchParams();
+        if (weights !== null) {
+          params.set("weight_activity", String(weights.activity));
+          params.set("weight_speed", String(weights.speed));
+          params.set("weight_quality", String(weights.quality));
+        }
+        const query = params.toString();
+        const scores = await api.get<ScoreResponse>(
+          `/projects/${projectId}/scores${query ? `?${query}` : ""}`,
+        );
+        if (requestId !== scoreRequestId.current) return;
+        setScoreState({ kind: "ready", scores });
+      } catch (e) {
+        if (requestId !== scoreRequestId.current) return;
+        if (e instanceof ApiError && e.code === "SCORES_NOT_DISCLOSED") {
+          setScoreState({ kind: "undisclosed" });
+          return;
+        }
+        const code = e instanceof ApiError ? (e.code ?? null) : null;
+        setScoreState({
+          kind: "error",
+          message: messageForError(e, {
+            codes: {
+              ...GITHUB_MESSAGES,
+              SCORES_WEIGHTS_INVALID:
+                "重みの合計が100%になっていません。案を再読み込みしてください。",
+            },
+            fallback: "スコアを取得できませんでした",
+          }),
+          // 利用上限に当たっているときに再試行を出すと、押すたびにGitHubを叩いて
+          // 状況を悪化させる
+          retryable: code !== "GITHUB_RATE_LIMITED" && code !== "GITHUB_FORBIDDEN",
+        });
       }
-      const query = params.toString();
-      const scores = await api.get<ScoreResponse>(
-        `/projects/${projectId}/scores${query ? `?${query}` : ""}`,
-      );
-      setScoreState({ kind: "ready", scores });
-    } catch (e) {
-      if (e instanceof ApiError && e.code === "SCORES_NOT_DISCLOSED") {
-        setScoreState({ kind: "undisclosed" });
-        return;
-      }
-      const code = e instanceof ApiError ? (e.code ?? null) : null;
-      setScoreState({
-        kind: "error",
-        message: messageForError(e, {
-          codes: GITHUB_MESSAGES,
-          fallback: "スコアを取得できませんでした",
-        }),
-        // 利用上限に当たっているときに再試行を出すと、押すたびにGitHubを叩いて
-        // 状況を悪化させる
-        retryable: code !== "GITHUB_RATE_LIMITED" && code !== "GITHUB_FORBIDDEN",
-      });
-    }
     },
     [projectId, enabled, weightsSettled, scoreWeights],
   );
@@ -225,6 +244,7 @@ export function useDistribution(projectId: string, enabled = true) {
 
   useEffect(() => {
     if (selectedId === null) {
+      proposalRequestId.current += 1;
       setProposal(null);
       setDetailError(null);
       return;
@@ -272,6 +292,7 @@ export function useDistribution(projectId: string, enabled = true) {
       setSaveError(null);
       try {
         const updated = await run();
+        proposalRequestId.current += 1;
         setProposal(updated);
         // 配分が変わったら履歴・比較のキャッシュは古い。持ち越すと同じ案の
         // 違う数字が同じ画面に並ぶ
@@ -337,7 +358,12 @@ export function useDistribution(projectId: string, enabled = true) {
   const updateProposal = useCallback(
     (
       proposalId: string,
-      payload: { reason: string; name?: string; total_amount?: string; weights?: CategoryWeights },
+      payload: {
+        reason: string;
+        name?: string;
+        total_amount?: string | null;
+        weights?: CategoryWeights;
+      },
     ) =>
       mutate(() =>
         api.patch<Proposal>(
@@ -373,6 +399,7 @@ export function useDistribution(projectId: string, enabled = true) {
         setDetails({});
         setCompareIds((ids) => ids.filter((id) => id !== proposalId));
         // 選択を外してから読み直す。残したままだと詳細の取得が404を返す
+        proposalRequestId.current += 1;
         setSelectedId(null);
         setProposal(null);
         // 最後の未確定案を消すとスコアは非開示に戻る。案の状態を変える操作は
@@ -409,10 +436,6 @@ export function useDistribution(projectId: string, enabled = true) {
    * 取得済みは保持して、開き直しや選び直しで投げ直さない。書き込みのたびに捨てる
    * （mutate 側）ので、古い配分が履歴に残ることはない。
    */
-  const [details, setDetails] = useState<Record<string, Proposal>>({});
-  const [detailPending, setDetailPending] = useState<string[]>([]);
-  const [detailErrorById, setDetailErrorById] = useState<Record<string, string>>({});
-
   const fetchDetail = useCallback(
     async (proposalId: string) => {
       setDetailPending((ids) =>
@@ -437,10 +460,6 @@ export function useDistribution(projectId: string, enabled = true) {
     },
     [projectId],
   );
-
-  const [comparing, setComparing] = useState(false);
-  // 比較に選んだ案。多くても4件までにする（それ以上は横に並べても読めない）
-  const [compareIds, setCompareIds] = useState<string[]>([]);
 
   const toggleCompare = useCallback(
     (proposalId: string) => {

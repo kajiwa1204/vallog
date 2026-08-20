@@ -141,7 +141,7 @@ export function ProposalRecords({
                       あちらは確定した本人のその場のセッションでしか見えない（再読込
                       すると選択が検討中の案に戻る）。**後から読む人が見るのはここ**
                       なので、畳んだ状態でも出す（#100 の可視化） */}
-                  {!removed && p.edit_log_count === 0 && (
+                  {!removed && p.allocation_edit_count === 0 && (
                     <span className={styles.untouched}>調整なしで確定</span>
                   )}
                 </span>
