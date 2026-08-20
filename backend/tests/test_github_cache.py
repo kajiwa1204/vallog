@@ -18,6 +18,7 @@ from app.services.github import (
     _build_pull_request_rows,
     _build_review_rows,
     _count_comments_by_review,
+    is_excluded_github_actor,
     _parse_dt,
     _parse_dt_required,
     _parse_story_points,
@@ -33,6 +34,24 @@ def _mock_response(json_body, status_code: int = 200, headers: dict | None = Non
     # _request が X-OAuth-Scopes を読むため、実物同様に添字アクセスできる dict を渡す
     res.headers = headers or {}
     return res
+
+
+# ---------------------------------------------------------------------------
+# is_excluded_github_actor
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "login,actor_type,expected",
+    [
+        ("copilot", None, True),
+        ("COPILOT", None, True),
+        ("Dependabot[BOT]", None, True),
+        ("some-service", "BOT", True),
+        ("alice", None, False),
+    ],
+)
+def test_excluded_github_actor_is_case_insensitive(login, actor_type, expected):
+    assert is_excluded_github_actor(login, actor_type) is expected
 
 
 # ---------------------------------------------------------------------------

@@ -23,8 +23,12 @@ from app.repositories.github_cache import GitHubCacheRepository
 from app.repositories.project import ProjectRepository
 from app.schemas.project import CategoryWeights
 from app.schemas.score import CategoryScores, MemberScore, ScoreResponse
-from app.services.changelog import NOT_DONE_STATE_REASONS
-from app.services.github import ensure_synced, fetch_and_store, is_excluded_github_actor
+from app.services.github import (
+    NOT_DONE_STATE_REASONS,
+    ensure_synced,
+    fetch_and_store,
+    is_excluded_github_actor,
+)
 
 _APPROVE_OR_CHANGES = {"APPROVED", "CHANGES_REQUESTED"}
 
