@@ -1,2 +1,8 @@
 allowBuilds:
   sharp: true
+  unrs-resolver: true
+overrides:
+  "brace-expansion@^1.0.0": 1.1.18
+  "js-yaml@^4.0.0": 4.3.1
+  next>postcss: 8.5.23
+  next>sharp: 0.35.0
