@@ -48,10 +48,6 @@
   background: none;
 }
 
-.right {
-  text-align: right;
-}
-
 .marker {
   color: var(--ink-3);
   font-size: 11px;

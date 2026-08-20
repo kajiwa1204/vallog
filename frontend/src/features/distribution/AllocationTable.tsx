@@ -374,10 +374,17 @@ export function AllocationTable({
         <tfoot>
           <tr>
             <th scope="row">合計</th>
-            <td
-              className={`num ${styles.right} ${balanced ? "" : styles.invalid}`}
-            >
-              {formatPercent(total)}%
+            {/* 行と同じ構造（数値ブロック＋別の「%」）にする。連続テキストにすると
+                「%」の外側でしか揃わず、桁を縦に読む列で肝心の数値がずれる */}
+            <td className={styles.right}>
+              <span className={styles.percentField}>
+                <span
+                  className={`num ${styles.totalValue} ${balanced ? "" : styles.invalid}`}
+                >
+                  {formatPercent(total)}
+                </span>
+                <span className={styles.unit}>%</span>
+              </span>
             </td>
             <td className={styles.right} />
           </tr>
