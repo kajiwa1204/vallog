@@ -1,7 +1,6 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(21, 33, 28, 0.45);
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -10,7 +9,16 @@
   animation: fadeIn 0.15s ease;
 }
 
+.backdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(21, 33, 28, 0.45);
+  cursor: default;
+}
+
 .modal {
+  position: relative;
   width: 100%;
   background: var(--surface);
   border-radius: var(--radius-l);
