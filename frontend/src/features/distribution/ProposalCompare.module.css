@@ -75,8 +75,8 @@
   font-weight: 500;
 }
 
-.proposalHead {
-  display: table-cell;
+/* .table th/td（0-1-1）に負けないよう .table 配下で指定する */
+.table .proposalHead {
   text-align: right;
   min-width: 128px;
 }
@@ -114,7 +114,7 @@
   white-space: nowrap;
 }
 
-.cell {
+.table .cell {
   text-align: right;
 }
 

@@ -38,9 +38,12 @@ function Allocation({ proposal }: { proposal: Proposal }) {
           const amount = item.amount === null ? null : Number(item.amount);
           return (
             <tr key={item.github_login}>
-              <th scope="row" className={styles.member}>
-                <Avatar login={item.github_login} url={item.avatar_url} size={20} />
-                <span className="num">{item.github_login}</span>
+              <th scope="row">
+                {/* flex はセルではなく内側に当てる（AllocationTable と同じ理由） */}
+                <span className={styles.member}>
+                  <Avatar login={item.github_login} url={item.avatar_url} size={20} />
+                  <span className="num">{item.github_login}</span>
+                </span>
               </th>
               <td className={`num ${styles.percent}`}>
                 {formatPercent(toTenths(item.ratio))}%

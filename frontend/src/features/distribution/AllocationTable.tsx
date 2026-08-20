@@ -150,6 +150,19 @@ export function AllocationTable({
   // サーバが返した配分と金額。行が編集されていなければこちらを表示する
   const savedByLogin = new Map(proposal.items.map((item) => [item.github_login, item]));
 
+  /** 行に出す金額。保存済みならサーバの値、編集中なら保存後の見込み。
+   *
+   * サーバの値を優先するのは、フロントで計算し直すと合意する金額と記録に残る金額が
+   * 食い違うため。編集中の行と、総額を書き換えている間だけは、サーバに存在しない値
+   * なので保存後の見込みを出す。 */
+  const amountOf = (row: AllocationRow): number | null => {
+    const saved = savedByLogin.get(row.github_login);
+    const untouchedRow =
+      !amountChanged && saved !== undefined && toTenths(saved.ratio) === row.tenths;
+    if (untouchedRow) return saved.amount === null ? null : Number(saved.amount);
+    return amountFor(amountDraft.trim() || null, row.tenths);
+  };
+
   return (
     <Card
       title={`分配案: ${proposal.name}`}
@@ -260,34 +273,29 @@ export function AllocationTable({
         <thead>
           <tr>
             <th scope="col">メンバー</th>
-            <th scope="col" className={styles.right}>
+            <th scope="col" className={`${styles.right} ${styles.allocCol}`}>
               配分
             </th>
-            <th scope="col" className={styles.right}>
+            <th scope="col" className={`${styles.right} ${styles.amountCol}`}>
               金額
             </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row) => {
-            // 保存済みの値はサーバが計算した金額をそのまま出す。フロントで計算し直すと
-            // 合意する金額と記録に残る金額が食い違う。編集中の行と、総額を書き換えて
-            // いる間だけは、サーバに存在しない値なので保存後の見込みを出す
-            const saved = savedByLogin.get(row.github_login);
-            const untouchedRow =
-              !amountChanged && saved !== undefined && toTenths(saved.ratio) === row.tenths;
-            const amount = untouchedRow
-              ? saved.amount === null
-                ? null
-                : Number(saved.amount)
-              : amountFor(amountDraft.trim() || null, row.tenths);
+            const amount = amountOf(row);
             // この行に寄せれば合計がちょうど100.0%になる差分。合計が合っていれば null
             const remainder = locked ? null : remainderFor(rows, row.github_login);
             return (
               <tr key={row.github_login}>
-                <th scope="row" className={styles.member}>
-                  <Avatar login={row.github_login} url={row.avatar_url} size={24} />
-                  <span className="num">{row.github_login}</span>
+                <th scope="row">
+                  {/* flex はセルではなく内側に当てる。<th> に display:flex を当てると
+                      テーブルセルでなくなり行の高さに追従しないため、この列だけ
+                      border-bottom が数px上にズレる */}
+                  <span className={styles.member}>
+                    <Avatar login={row.github_login} url={row.avatar_url} size={24} />
+                    <span className="num">{row.github_login}</span>
+                  </span>
                 </th>
                 <td className={styles.right}>
                   {locked ? (

@@ -86,6 +86,16 @@
   border-collapse: collapse;
 }
 
+/* 数字の列は幅を固定して右端を揃える。可変にするとメンバー名の長さで列幅が動き、
+   金額が広い列の左端に取り残されて右側が大きく空く */
+.allocCol {
+  width: 170px;
+}
+
+.amountCol {
+  width: 150px;
+}
+
 .table th,
 .table td {
   padding: 9px 8px;
@@ -108,12 +118,16 @@
   font-size: 13px;
 }
 
-.right {
+/* `.table th, .table td` の text-align:left は詳細度 0-1-1 で、単独クラスの 0-1-0 に
+   勝ってしまう。同じ土俵に乗せないと右揃えが効かない（金額の右端がバラついていた） */
+.table .right {
   text-align: right;
 }
 
+/* セル（<th>）ではなく内側の span に当てる。セルに display:flex を当てると
+   テーブルセルでなくなって行の高さに追従せず、この列の罫線だけ上にズレる */
 .member {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 9px;
   font-size: 13px;
