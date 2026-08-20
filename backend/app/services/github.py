@@ -375,7 +375,9 @@ def _parse_story_points(labels: list[str]) -> int | None:
     for label in labels:
         m = _SP_LABEL_RE.match(label)
         if m:
-            return int(m.group(1))
+            story_points = int(m.group(1))
+            if story_points > 0:
+                return story_points
     return None
 
 

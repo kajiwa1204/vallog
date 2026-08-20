@@ -212,7 +212,7 @@ def _sp_totals(
     sp_sum = {login: 0 for login in logins}
     hours_sum = {login: 0.0 for login in logins}
     for issue in issues:
-        if issue.story_points is None or issue.closed_at is None:
+        if issue.story_points is None or issue.story_points <= 0 or issue.closed_at is None:
             continue
         if issue.state_reason in NOT_DONE_STATE_REASONS:
             continue

@@ -65,6 +65,8 @@ def test_excluded_github_actor_is_case_insensitive(login, actor_type, expected):
     (["bug", "SP:2", "priority:high"], 2),
     (["bug", "priority:high"], None),
     ([], None),
+    (["SP:0"], None),
+    (["SP:0", "SP:5"], 5),
     (["SP:13"], 13),  # 規定の1/2/3/5/8以外も無条件で受け入れる（意図的な設計判断）
     (["SP:2", "SP:5"], 2),  # 複数のSPラベルが付いた場合は先勝ち
 ])

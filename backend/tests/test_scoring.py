@@ -165,9 +165,71 @@ def test_speed_values_skips_when_no_sp_or_not_closed():
 
 
 def test_speed_values_excludes_not_planned_issues():
-    """Close as not planned で中止されたIssueは成果ではないためSPを計上しない。"""
-    issues = [_issue(10, "alice", sp=5, closed_day=3, assignees=[("alice", 1)], state_reason="not_planned")]
+    """not_planned は成果でも完了時間でもないため、速度計算から除外する。"""
+    issues = [
+        _issue(
+            10,
+            "alice",
+            sp=5,
+            closed_day=30,
+            assignees=[("alice", 1)],
+            state_reason="not_planned",
+        )
+    ]
     assert _speed_values(issues, {"alice"})["alice"] == 0.0
+
+
+def test_not_planned_issue_does_not_change_existing_speeds_or_shares():
+    """却下を減点にせず、長期not_plannedを足しても本人・他人の取り分を動かさない。"""
+    baseline = [
+        _issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)]),  # 48h
+        _issue(11, "bob", sp=3, closed_day=2, assignees=[("bob", 1)]),  # 24h
+        _issue(12, "bob", sp=3, closed_day=4, assignees=[("bob", 1)]),  # 72h
+    ]
+    with_rejected = baseline + [
+        _issue(
+            13,
+            "alice",
+            sp=5,
+            closed_day=30,
+            assignees=[("alice", 1)],
+            state_reason="not_planned",
+        )
+    ]
+
+    baseline_values = _speed_values(baseline, {"alice", "bob"})
+    rejected_values = _speed_values(with_rejected, {"alice", "bob"})
+
+    assert rejected_values == baseline_values
+    assert _shares(rejected_values) == _shares(baseline_values)
+
+
+def test_zero_story_points_do_not_add_elapsed_time():
+    """旧キャッシュ等にSP:0が残っても、0SPのIssueで速度を下げない。"""
+    baseline = [
+        _issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)])
+    ]
+    with_zero = baseline + [
+        _issue(11, "alice", sp=0, closed_day=30, assignees=[("alice", 1)])
+    ]
+
+    assert _speed_values(with_zero, {"alice"}) == _speed_values(
+        baseline, {"alice"}
+    )
+
+
+def test_speed_values_use_actual_elapsed_time_without_team_wide_cap():
+    """第三者のIssueで時間軸を変えず、完了Issueは各担当者の実経過時間で測る。"""
+    issues = [
+        _issue(10, "alice", sp=3, closed_day=30, assignees=[("alice", 1)]),  # 696h
+        _issue(11, "bob", sp=3, closed_day=2, assignees=[("bob", 1)]),  # 24h
+        _issue(12, "bob", sp=3, closed_day=3, assignees=[("bob", 1)]),  # 48h
+    ]
+
+    values = _speed_values(issues, {"alice", "bob"})
+
+    assert values["alice"] == pytest.approx(3 / 696)
+    assert values["bob"] == pytest.approx(6 / 72)
 
 
 def test_speed_values_excludes_duplicate_issues():
