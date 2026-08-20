@@ -38,8 +38,9 @@ class Settings(BaseSettings):
     # OpenAI-compatible (Ollama /v1, Gemini free tier, etc.)
     openai_base_url: str = "https://api.openai.com/v1"
     openai_api_key: str = ""
-    openai_pr_model: str = "gpt-4o-mini"
-    openai_member_model: str = "gpt-4o-mini"
+    openai_pr_model: str = "gpt-5-nano"
+    openai_member_model: str = "gpt-5-nano"
+    openai_reasoning_effort: Literal["minimal", "low", "medium", "high"] = "minimal"
     openai_pr_concurrency: int = 5
     openai_member_concurrency: int = 3
 

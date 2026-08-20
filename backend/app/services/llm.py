@@ -179,7 +179,7 @@ class _OpenAIClient(_BaseClient):
         return settings.openai_member_model
 
     async def _call(self, system: str, user: str, model: str) -> str:
-        body = {
+        body: dict = {
             "model": model,
             "messages": [
                 {"role": "system", "content": system},
@@ -187,6 +187,14 @@ class _OpenAIClient(_BaseClient):
             ],
             "max_tokens": 2048,
         }
+        legacy_gpt5_models = ("gpt-5", "gpt-5-mini", "gpt-5-nano")
+        if any(
+            model == name or model.startswith(f"{name}-20")
+            for name in legacy_gpt5_models
+        ):
+            body["messages"][0]["role"] = "developer"
+            body["max_completion_tokens"] = body.pop("max_tokens")
+            body["reasoning_effort"] = settings.openai_reasoning_effort
         headers: dict[str, str] = {"content-type": "application/json"}
         # 空のAPIキーで "Authorization: Bearer " を送ると不正ヘッダになるため省略する
         if settings.openai_api_key:
