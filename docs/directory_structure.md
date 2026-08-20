@@ -69,6 +69,7 @@ frontend/
 │   │   │       ├── settings/page.tsx             # プロジェクト設定（画面3）
 │   │   │       ├── dashboard/page.tsx            # ダッシュボード（画面4）
 │   │   │       ├── members/[login]/page.tsx      # メンバー詳細（画面5）
+│   │   │       ├── summaries/page.tsx            # 貢献サマリーの生成・進捗・メンバー別一覧
 │   │   │       └── distribution/page.tsx         # 分配シミュレーション（画面7）
 │   │   └── invite/[token]/page.tsx               # 招待リンク経由
 │   ├── components/
@@ -114,7 +115,12 @@ frontend/
 │   │   │   ├── MemberSwitcher.tsx                # 人を切り替える導線
 │   │   │   ├── activity.ts                       # 集計の純粋関数（Reactに依存しない・テスト可能）
 │   │   │   ├── ContributionSummary.tsx           # 第2層: 変化ログの詳細（AIサマリー・#16）
+│   │   │   ├── useMemberSummaries.ts             # メンバー/PR単位の生成・3秒ポーリング
 │   │   │   └── useMemberDetail.ts
+│   │   ├── summaries/
+│   │   │   ├── SummaryList.tsx                   # メンバー別サマリーと生成状態の一覧
+│   │   │   ├── SummaryText.tsx                   # 本文の #番号をGitHub一次情報へリンク化
+│   │   │   └── useSummaries.ts                   # 全員生成・ジョブ進捗ポーリング
 │   │   └── projects/
 │   │       ├── ProjectCard.tsx
 │   │       ├── ProjectCard.module.css

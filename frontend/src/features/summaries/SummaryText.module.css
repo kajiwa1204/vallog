@@ -1,0 +1,19 @@
+.content {
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+
+.reference {
+  color: var(--green-strong);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+}
+
+.reference:hover {
+  text-decoration-color: currentColor;
+}

@@ -4,22 +4,22 @@
 
 2026-08-24 の提出締め切りまでに、MVP の主要導線を `main` に統合し、本番環境で審査員が操作できる状態にする。ローカルの設計書、ブランチ、実装、テスト設定を 2026-08-20 時点で照合した。タスクは GitHub Projects で管理する方針のため、この文書は依存関係と実施順の索引とし、`tasks/todo.md` は作らない。
 
-GitHub CLI の認証が切れており、Issue / Project の現在ステータスは取得できなかった。Issue 番号は `docs/roadmap.md` とコミット履歴に基づくため、再認証後に Projects 上の状態を照合する。
+GitHub CLI は再認証済みで、Issue / Project / PR の状態を 2026-08-20 に照合した。本番インフラは別メンバーが担当するため、本計画ではアプリ機能・CI・スコア不正対策・優先セキュリティ更新に集中する。
 
 ## Current State
 
-- `feat/14-member-detail` には画面5と修正一式が実装済みだが、現在の `feat/18-distribution` には未統合。
-- `feat/18-distribution` には画面7と分配API、スコア開示ゲートが実装済み。
+- PR #113 はレビュー指摘3件を修正・検証・push済みで、他メンバーの承認待ち。
+- PR #117 は #113 を取り込み、#118（画面5への根拠導線）と #120（共通ErrorState）まで反映済みで、#113の先行マージ待ち。
 - `origin/main` には本番 Compose 修正と `scripts/deploy.sh` が入っている。
-- サイドバーの「サマリー生成」は未実装の `/projects/{id}/summaries` を指しており、404になる。
+- #16 の専用サマリー画面・画面5のメンバー/PR単位生成・画面7の読み取り表示を実装中。
 - フロントエンドの自動テストと `.github/workflows/` は存在しない。
 - README のセットアップ・起動手順は「準備中」のまま。
 - LLM の入力サイズ上限はあるが、利用回数・総コストの運用上限は未実装。
 
 ## Architecture Decisions
 
-- 提出までのクリティカルパスは「AIなしの変化ログ + 分配 + 本番公開」とし、AIサマリーUIは後回しにできる。
-- 未実装画面への導線は出さない。404を残したまま将来機能を予告しない。
+- AIなしの変化ログを常に土台として残しつつ、ユーザー判断によりAIサマリーUIも提出版へ含める。
+- サマリー生成は手動起動とし、停止・失敗時も変化ログ・スコア・分配へ波及させない。
 - 完成済みの機能ブランチは再実装せず、`main` を基点に順番に統合して競合を解消する。
 - 本番化前の検証は、ログイン → プロジェクト → ダッシュボード → メンバー詳細 → 分配の1本を最優先にする。
 
@@ -37,11 +37,11 @@ GitHub CLI の認証が切れており、Issue / Project の現在ステータ�
   - Verification: backend pytest、frontend typecheck/build、主要操作の手動確認。
   - Dependencies: #14 の統合順を先に確定し、双方が触る changelog / docs の競合を一度だけ解く。
   - Scope: branch integration.
-- [x] **未実装サマリー画面への常設導線を外す**
-  - Acceptance: サイドバーから存在しない `/summaries` に遷移できない。
-  - Verification: frontend typecheck/build。
-  - Dependencies: None.
-  - Scope: XS, 1–2 files.
+- [x] **#16 貢献サマリー画面と生成UIを追加**
+  - Acceptance: 専用画面、画面5、画面7で既存結果を表示し、メンバー/PR単位の生成・3秒ポーリング・失敗・再生成・根拠リンクを扱える。
+  - Verification: frontend typecheck/build、APIモック付きPlaywright（1440px/320px）。
+  - Dependencies: #14 / #18 の統合ブランチ。
+  - Scope: frontend + docs。
 
 ### Checkpoint: Integrated MVP
 
@@ -73,7 +73,7 @@ GitHub CLI の認証が切れており、Issue / Project の現在ステータ�
 - [ ] AI停止時にもダッシュボードと分配が動く。
 - [ ] マイグレーションが空DBと既存DBの両方で `head` まで通る。
 
-### Phase 2: Production and Submission — P0
+### Phase 2: Production and Submission — P0（別メンバー担当）
 
 - [ ] **#37 本番デプロイ検証**
   - Acceptance: Cloudflare Tunnel + nginx + Next.js + FastAPI + PostgreSQL が再起動後も稼働する。
@@ -93,11 +93,6 @@ GitHub CLI の認証が切れており、Issue / Project の現在ステータ�
 
 ### Phase 3: Cuttable / Post-submission — P1/P2
 
-- [ ] **#16 サマリー生成UI**
-  - Acceptance: メンバー/PR単位の生成、進捗、失敗、再生成、既存結果を表示できる。
-  - Verification: provider未設定・生成成功・部分失敗・再試行を確認。
-  - Dependencies: #39 を同時に有効化。
-  - Scope: M; 画面をメンバー/PR単位に縦断分割する。
 - [ ] **#38 運用ドキュメントとREADME更新**
   - Acceptance: 初回セットアップ、起動、デプロイ、LLM設定、障害時の確認手順が再現可能。
   - Verification: 新しい環境で文書だけを使って起動できる。
@@ -114,13 +109,12 @@ GitHub CLI の認証が切れており、Issue / Project の現在ステータ�
 | Risk | Impact | Mitigation |
 |---|---|---|
 | #14 と #18 が別ブランチで長く分岐 | High | `main` を基点に1本ずつ統合し、各統合直後に全品質ゲートを通す |
-| GitHub Projects の状態を取得できない | Medium | `gh auth login` 後に本計画とIssueのDone/In Progressを照合する |
+| PR #113 / #117 が他メンバー承認待ち | High | 修正・検証・再レビュー依頼まで先行し、承認後に依存順でマージする |
 | シェルのPATH次第でPython 3.6 / Node 19が選ばれ品質ゲートが失敗する | Medium | Python 3.11 / Node 20+を明示し、CIではバージョンを固定する |
 | AI生成がコスト超過・障害を起こす | Medium | #16を提出版から外すか、#39とセットで有効化する |
 | 提出直前の初回デプロイ | High | 8/20中に外部URLで検証し、残日を修正と予備日に使う |
 
 ## Open Questions
 
-- GitHub Projects 上で #14 / #18 / #37 が現在どのレビュー・マージ状態か。
-- 提出版で #16 を有効にするか。期限優先なら導線を閉じたまま提出する。
-- 本番VM、ドメイン、OAuth App、Cloudflare Tunnel、LLM key の準備状況。
+- PR #113 / #117 の他メンバー承認時刻。
+- 本番担当メンバー側の公開・OAuth・LLM key準備状況（アプリ実装とは分離）。
