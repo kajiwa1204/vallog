@@ -1,0 +1,74 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* 自分のページであることの目印。序列ではなく居場所を示すだけなので彩度を上げない */
+.mine {
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: var(--ink-3);
+  background: var(--surface-dim);
+}
+
+/* 戻る導線。人の属性（GitHubリンク）と同じ見た目にしない。
+   --ink-3 は補足情報の色で操作には弱いので --ink-2 まで濃くし、下線を常時出して
+   「押せる」ことを形で示す。
+   ピル型（枠＋背景）にはしない。すぐ下のメンバー切替チップと同じ見た目になり、
+   今度は「チップの一種」に見えてしまうため。パンくずはパンくずの形にする */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 14px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line-strong);
+}
+
+.back:hover {
+  color: var(--green-strong);
+  text-decoration-color: var(--green);
+}
+
+/* GitHubは外部への移動。押せるが、この画面の操作ではないので控えめに置く */
+.profile {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.profile:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+
+.overview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 16px;
+}

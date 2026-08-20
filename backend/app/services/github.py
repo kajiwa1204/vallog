@@ -53,6 +53,23 @@ _SP_LABEL_RE = re.compile(r"^SP:(\d+)$", re.IGNORECASE)
 
 logger = logging.getLogger(__name__)
 
+# GitHubのBotは通常 ``[bot]`` 接尾辞を持つが、Copilotのcontributors応答は
+# login="Copilot", type="Bot" になる。キャッシュ済み活動にはtypeを保存していないため、
+# 接尾辞なしで現れる既知のBotだけloginでも判定できるようにする。
+_KNOWN_BOT_LOGINS = frozenset({"copilot"})
+
+
+def is_excluded_github_actor(login: str, actor_type: str | None = None) -> bool:
+    """貢献者・スコア・変化ログから除外するGitHub上の実行者か。"""
+    normalized_login = login.casefold()
+    normalized_type = actor_type.casefold() if actor_type is not None else None
+    return (
+        normalized_login == "unknown"
+        or normalized_login.endswith("[bot]")
+        or normalized_login in _KNOWN_BOT_LOGINS
+        or normalized_type == "bot"
+    )
+
 
 class GitHubClient:
     def __init__(self, token: str):

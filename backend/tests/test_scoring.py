@@ -79,7 +79,10 @@ def _review(number, reviewer, state, *, submitted_day=1, submitted_hour=1, comme
 def test_collect_logins_unions_all_roles_and_drops_bots():
     prs = [_pr(1, "alice")]
     issues = [_issue(10, "bob", assignees=[("carol", 1)])]
-    reviews = [_review(1, "dependabot[bot]", "APPROVED")]
+    reviews = [
+        _review(1, "dependabot[bot]", "APPROVED"),
+        _review(1, "Copilot", "APPROVED"),
+    ]
     assert _collect_logins(prs, issues, reviews) == {"alice", "bob", "carol"}
 
 
@@ -164,6 +167,12 @@ def test_speed_values_skips_when_no_sp_or_not_closed():
 def test_speed_values_excludes_not_planned_issues():
     """Close as not planned で中止されたIssueは成果ではないためSPを計上しない。"""
     issues = [_issue(10, "alice", sp=5, closed_day=3, assignees=[("alice", 1)], state_reason="not_planned")]
+    assert _speed_values(issues, {"alice"})["alice"] == 0.0
+
+
+def test_speed_values_excludes_duplicate_issues():
+    """Close as duplicate も成果ではない。changelog と同じ定数で判定する。"""
+    issues = [_issue(11, "alice", sp=5, closed_day=3, assignees=[("alice", 1)], state_reason="duplicate")]
     assert _speed_values(issues, {"alice"})["alice"] == 0.0
 
 

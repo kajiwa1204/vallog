@@ -9,7 +9,24 @@ import type { DashboardResponse } from "@/types";
 // バックエンドの既定値と揃える（backend/app/services/dashboard.py の DEFAULT_PULSE_DAYS）
 const PULSE_DAYS = 14;
 
-const LAST_SEEN_KEY = (projectId: string) => `vallog:lastSeen:${projectId}`;
+const LAST_SEEN_KEY = (projectId: string, viewerId: string) =>
+  `vallog:lastSeen:${viewerId}:${projectId}`;
+
+/**
+ * この「訪問」で確定した新着基準（viewerId + projectId → newSince）。
+ *
+ * **モジュール変数なのが要点。** 保持したい寿命が「1回の訪問」だから。
+ *
+ * - フック内の ref だと、ページ遷移でアンマウントされた時点で失われる。
+ *   ダッシュボード⇄メンバー詳細の往復（#14 で主要動線になった）で戻るたびに
+ *   基準が「今」に更新され、新着の印が全部消えていた
+ * - かといって sessionStorage に置くと、今度は**リロードしても生き残る**ので
+ *   何度読み直しても印が消えなくなる（振り切りすぎ）
+ *
+ * モジュール変数は SPA 内の遷移では生き、ページの再読み込みと別タブでは消える。
+ * これがちょうど「1回の訪問」の粒度になる。
+ */
+const settledNewSince = new Map<string, string | null>();
 
 /**
  * 前回このダッシュボードを見た時刻を読み、いまの時刻で上書きする。
@@ -18,15 +35,28 @@ const LAST_SEEN_KEY = (projectId: string) => `vallog:lastSeen:${projectId}`;
  * 新規テーブルを足すほどの情報ではないため。端末をまたげないのは承知の上で、
  * 「毎日開く理由」を作る最小の一手として置く。必要になったらサーバへ移せる。
  */
-function readAndBumpLastSeen(projectId: string): string | null {
+function readAndBumpLastSeen(
+  projectId: string,
+  viewerId: string,
+): string | null {
   if (typeof window === "undefined") return null;
+  const key = LAST_SEEN_KEY(projectId, viewerId);
+
+  // この訪問で確定済みなら、その基準を返すだけにして上書きしない。
+  // 上書きすると往復のたびに基準が「今」になり、新着の印が消える
+  if (settledNewSince.has(key)) {
+    return settledNewSince.get(key) ?? null;
+  }
+
   try {
-    const key = LAST_SEEN_KEY(projectId);
     const previous = window.localStorage.getItem(key);
     window.localStorage.setItem(key, new Date().toISOString());
+    settledNewSince.set(key, previous);
     return previous;
   } catch {
-    // プライベートモード等で localStorage が使えない場合は印を出さないだけにする
+    // プライベートモード等でストレージが使えない場合は印を出さないだけにする。
+    // 確定済みとして記録し、遷移のたびに例外を踏み直さない
+    settledNewSince.set(key, null);
     return null;
   }
 }
@@ -42,7 +72,11 @@ function readAndBumpLastSeen(projectId: string): string | null {
  * スコア（GET /scores）は呼ばない。ダッシュボードにスコアは載せない方針
  * （docs/scoring_design.md「Goodhart対策とスコアの事後開示」）。
  */
-export function useDashboard(projectId: string, enabled = true) {
+export function useDashboard(
+  projectId: string,
+  viewerId: string | null,
+  enabled = true,
+) {
   const [selectedMember, setSelectedMember] = useState<string | null>(null);
 
   // パネルの取得が済むまで変化ログを止める。両方が ensure_synced を通るため、
@@ -75,11 +109,18 @@ export function useDashboard(projectId: string, enabled = true) {
   const [newSince, setNewSince] = useState<string | null>(null);
   const bumpedFor = useRef<string | null>(null);
   useEffect(() => {
-    if (!enabled || changelog.loading || changelog.error !== null) return;
-    if (bumpedFor.current === projectId) return;
-    bumpedFor.current = projectId;
-    setNewSince(readAndBumpLastSeen(projectId));
-  }, [projectId, enabled, changelog.loading, changelog.error]);
+    if (
+      !enabled ||
+      viewerId === null ||
+      changelog.loading ||
+      changelog.error !== null
+    )
+      return;
+    const visitKey = LAST_SEEN_KEY(projectId, viewerId);
+    if (bumpedFor.current === visitKey) return;
+    bumpedFor.current = visitKey;
+    setNewSince(readAndBumpLastSeen(projectId, viewerId));
+  }, [projectId, viewerId, enabled, changelog.loading, changelog.error]);
 
   const loadPanels = useCallback(async () => {
     if (!enabled) return;
