@@ -110,7 +110,11 @@ export function AllocationTable({
   };
 
   const commitDraft = (login: string) => {
-    setDrafts(({ [login]: _dropped, ...rest }) => rest);
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[login];
+      return next;
+    });
   };
 
   /**
@@ -368,7 +372,11 @@ export function AllocationTable({
                             );
                             // 入力中の文字列を消さないと、寄せた値がこの欄だけ
                             // 反映されて見えない
-                            setDrafts(({ [row.github_login]: _d, ...rest }) => rest);
+                            setDrafts((current) => {
+                              const next = { ...current };
+                              delete next[row.github_login];
+                              return next;
+                            });
                             // このボタンは直後に消える。フォーカスを同じ行に残す
                             percentInputs.current[row.github_login]?.focus();
                           }}
