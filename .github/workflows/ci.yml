@@ -41,7 +41,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/setup@v1
+      - uses: pnpm/setup@v2
         with:
           package-json-file: frontend/package.json
           runtime: node@22.14.0
