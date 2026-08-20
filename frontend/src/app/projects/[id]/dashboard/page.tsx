@@ -47,7 +47,7 @@ export default function DashboardPage() {
     selectMember,
     syncing,
     reload,
-  } = useDashboard(id, authed);
+  } = useDashboard(id, user?.id ?? null, authed);
 
   // 同期は終わっているのにデータが1件も無い＝活動がまだ無いチーム。初めて開いた人には
   // 空のパネルが並ぶだけになるので、この画面が何をする場所なのかを言う

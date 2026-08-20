@@ -83,7 +83,7 @@ function median(values: number[]): number | null {
   const sorted = [...values].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   if (sorted.length % 2 === 1) return sorted[mid];
-  return Math.round(((sorted[mid - 1] + sorted[mid]) / 2) * 10) / 10;
+  return (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 /**
