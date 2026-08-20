@@ -339,8 +339,34 @@ async def test_claude_timeout_raises_502(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# _OpenAIClient — Authorization ヘッダの空キー対策
+# _OpenAIClient — GPT-5パラメータとAuthorizationヘッダ
 # ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_openai_gpt5_nano_uses_reasoning_parameters(monkeypatch):
+    monkeypatch.setattr("app.services.llm.settings.openai_api_key", "sk-test")
+    monkeypatch.setattr(
+        "app.services.llm.settings.openai_base_url", "https://api.openai.com/v1"
+    )
+    monkeypatch.setattr("app.services.llm.settings.openai_reasoning_effort", "minimal")
+
+    captured: dict = {}
+
+    async def spy(self, url, **kwargs):
+        captured["url"] = url
+        captured["body"] = kwargs.get("json", {})
+        raise httpx.ConnectError("spy")
+
+    with patch("httpx.AsyncClient.post", spy):
+        with pytest.raises(Exception):
+            await _OpenAIClient()._call("sys", "user", "gpt-5-nano")
+
+    assert captured["url"] == "https://api.openai.com/v1/chat/completions"
+    assert captured["body"]["messages"][0]["role"] == "developer"
+    assert captured["body"]["max_completion_tokens"] == 2048
+    assert captured["body"]["reasoning_effort"] == "minimal"
+    assert "max_tokens" not in captured["body"]
+
 
 @pytest.mark.asyncio
 async def test_openai_empty_api_key_omits_auth_header(monkeypatch):
