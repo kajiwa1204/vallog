@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api } from "@/lib/api";
 import { messageForError } from "@/lib/errorMessages";
 import type { ChangeLogEntry, ChangeLogResponse } from "@/types";
@@ -64,6 +64,9 @@ export function useChangeLog(
   // 文言に潰す前の原因。呼び出し側が再試行を出すかどうかを決めるために返す
   const [errorCode, setErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // 同じフックで対象メンバーや limit が変わったとき、古い応答が新しい一覧を
+  // 上書きしないよう、最後に開始したリクエストだけが state を更新する。
+  const requestGeneration = useRef(0);
 
   // member が変わったら別の一覧になるので、広げた limit を持ち越さない。
   // entries も捨てる。残すと取得が終わるまで前のメンバーの行が並んだままになり、
@@ -75,6 +78,7 @@ export function useChangeLog(
   }, [member, size]);
 
   const load = useCallback(async () => {
+    const generation = ++requestGeneration.current;
     if (!enabled) return;
     setLoading(true);
     setError(null);
@@ -86,9 +90,11 @@ export function useChangeLog(
       const res = await api.get<ChangeLogResponse>(
         `/projects/${projectId}/changelog?${params}`,
       );
+      if (generation !== requestGeneration.current) return;
       setEntries(res.entries);
       setHasMore(res.has_more);
     } catch (e) {
+      if (generation !== requestGeneration.current) return;
       setErrorCode(e instanceof ApiError ? (e.code ?? null) : null);
       setError(
         // GitHub由来の失敗は全部 502 に写るため、ステータスだけだと「サーバーで
@@ -111,12 +117,16 @@ export function useChangeLog(
         }),
       );
     } finally {
-      setLoading(false);
+      if (generation === requestGeneration.current) setLoading(false);
     }
   }, [projectId, member, limit, enabled]);
 
   useEffect(() => {
-    load();
+    void load();
+    return () => {
+      // 依存値が変わって次の load が始まるまでの間も、旧応答を無効にする。
+      requestGeneration.current += 1;
+    };
   }, [load]);
 
   const loadMore = useCallback(() => {
@@ -128,8 +138,8 @@ export function useChangeLog(
     // 上限に達していたら「続きがある」と言わない。言うと押せるボタンが出て、
     // 押した先に 422 しかない
     hasMore: hasMore && limit < MAX_LIMIT,
-    // 上限で打ち切られていて、これ以上は取れない。呼び出し側が母数の説明に使う
-    atLimit: hasMore && limit >= MAX_LIMIT,
+    // API が続きの存在を返したか。呼び出し側が集計の打ち切り表示に使う
+    truncated: hasMore,
     error,
     errorCode,
     loading,

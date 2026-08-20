@@ -21,27 +21,14 @@ from app.models.github_cache import GitHubIssue, GitHubPullRequest, GitHubReview
 from app.models.project import Project
 from app.repositories.github_cache import GitHubCacheRepository
 from app.schemas.changelog import ChangeLogEntry, ChangeLogNotes, ChangeLogResponse
-from app.services.github import ensure_synced, fetch_and_store, is_excluded_github_actor
+from app.services.github import (
+    NOT_DONE_STATE_REASONS,
+    ensure_synced,
+    fetch_and_store,
+    is_excluded_github_actor,
+)
 
 DEFAULT_LIMIT = 50
-
-
-NOT_DONE_STATE_REASONS = frozenset({"not_planned", "duplicate"})
-"""成果として数えないクローズ理由（GitHubの state_reason）。
-
-GitHubのクローズUIは「Close as completed」が既定なので、`completed` が付いていることは
-「完了と判断された」を意味しない（既定のまま閉じただけ）。逆にここに挙げた値は、
-ドロップダウンを開いて選んだときにしか付かないため、**付いていること自体が明確な意思表示**
-になる。誤操作では付かない。
-
-`duplicate` を含めるのが要点。state_reason は completed/reopened/not_planned/duplicate/null
-を取るが、長らく not_planned しか見ていなかったため、重複としてクローズしたIssueが「完了」
-として数えられ、そのSPがスコアの根拠にも流れ込んでいた。主要OSS 11リポジトリのクローズ済み
-Issue 3,300件を実測したところ、duplicate は全リポジトリで使われており（167件・5.1%）、
-起こらない想定は成り立たなかった。
-
-scoring.py と共有する知識なので、片方だけ直されないよう1箇所に置く。
-"""
 
 
 def _reviews_by_pr(reviews: list[GitHubReview]) -> dict[int, list[GitHubReview]]:

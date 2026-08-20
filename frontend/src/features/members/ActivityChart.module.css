@@ -57,7 +57,7 @@
 /* 狭い幅では目盛りを1週おきに間引く。末尾から数えるのは、今週のラベルを
    必ず残すため（TeamPulse と同じ規則） */
 @media (max-width: 760px) {
-  .column:nth-last-child(even) .tick {
+  .chart:has(.column:nth-child(5)) .column:nth-last-child(even) .tick {
     visibility: hidden;
   }
 }

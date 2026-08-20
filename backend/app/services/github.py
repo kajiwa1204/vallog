@@ -58,6 +58,14 @@ logger = logging.getLogger(__name__)
 # 接尾辞なしで現れる既知のBotだけloginでも判定できるようにする。
 _KNOWN_BOT_LOGINS = frozenset({"copilot"})
 
+NOT_DONE_STATE_REASONS = frozenset({"not_planned", "duplicate"})
+"""成果として数えないGitHub Issueのクローズ理由。
+
+GitHubのクローズUIでは completed が既定なので、それだけでは明確な完了意思を判定できない。
+一方、not_planned と duplicate は明示的に選ばれる値で、成果として数えない。GitHub由来の
+状態値に関する知識として、変化ログとスコア計算で共有する。
+"""
+
 
 def is_excluded_github_actor(login: str, actor_type: str | None = None) -> bool:
     """貢献者・スコア・変化ログから除外するGitHub上の実行者か。"""

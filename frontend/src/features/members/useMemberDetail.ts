@@ -60,9 +60,8 @@ export function useMemberDetail(projectId: string, login: string, enabled = true
 
   const { entries } = changelog;
 
-  // サーバがまだ続きがあると言っている。もう取りに行けない（atLimit）場合も含めて
-  // 「数えた範囲が全部ではない」ことに変わりはないので、まとめて打ち切り扱いにする
-  const truncated = changelog.hasMore || changelog.atLimit;
+  // サーバがまだ続きがあると言っているなら、表示中の母数は打ち切られている。
+  const truncated = changelog.truncated;
 
   const facts = useMemo(
     () => summarizeContribution(entries, login),
@@ -83,11 +82,11 @@ export function useMemberDetail(projectId: string, login: string, enabled = true
   const latestAt = entries.length > 0 ? entries[0].occurred_at : null;
 
   /**
-   * このログインがプロジェクトの顔ぶれに居るか。顔ぶれを引けていなければ null（不明）。
+   * このログインが取得できた貢献者一覧に居るか。一覧を引けていなければ null（不明）。
    *
    * URLは共有される前提（「自分の記録を見せる」ための画面）なので、綴り違いや
-   * 大文字小文字違いで開かれうる。バックエンドの絞り込みは大文字小文字を区別するため、
-   * 実在しないログインは0件になり「記録が消えた」と見分けが付かない
+   * 大文字小文字違いで開かれうる。false でも contributors API の取得上限外や
+   * コミットの無いメンバーは実在しうるため、存在しないとは断定しない
    */
   const knownMember =
     members === null ? null : members.some((m) => m.github_login === login);

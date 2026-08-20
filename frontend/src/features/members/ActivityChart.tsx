@@ -100,6 +100,32 @@ export function ActivityChart({ weeks, truncated, latestAt }: Props) {
             })}
           </div>
 
+          <table className="visually-hidden">
+            <caption>週別の活動件数</caption>
+            <thead>
+              <tr>
+                <th scope="col">週</th>
+                {KINDS.map((kind) => (
+                  <th key={kind.key} scope="col">
+                    {kind.label}
+                  </th>
+                ))}
+                <th scope="col">合計</th>
+              </tr>
+            </thead>
+            <tbody>
+              {weeks.map((week) => (
+                <tr key={week.weekStart}>
+                  <th scope="row">{formatWeek(week.weekStart)} の週</th>
+                  <td>{week.pullRequests}</td>
+                  <td>{week.issues}</td>
+                  <td>{week.reviews}</td>
+                  <td>{weekTotal(week)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
           <div className={styles.legend}>
             {KINDS.map((kind) => (
               <span key={kind.key} className={styles.legendItem}>
