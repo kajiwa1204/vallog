@@ -14,6 +14,7 @@
 """
 
 from collections.abc import Iterable
+from statistics import median_low
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -169,16 +170,18 @@ _MIN_ELAPSED_HOURS = 0.1
 
 
 def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, float]:
-    """タスク完了スピード（35%）の生値。獲得SP ÷ 経過時間（アサイン〜完了）。
+    """タスク完了スピード（35%）の生値。獲得SP ÷ クランプ後の経過時間。
 
     タスク分割に中立にするため、メンバー単位で「総獲得SP ÷ 総経過時間」を取る。
     Issueごとに SP/時間 を出して足し上げると、同じ仕事を細かく分割するほどスコアが
     膨らむ（SP5×1件=0.1 に対し SP1×5件=0.5）ため、分割数に依存しない総量比にする。
     物量は活動量（起票数）と品質（マージPR数）で既に報われている。
 
-    Issueのclosed_atを完了時刻の代理とする（GitHubはPRマージ時に紐づくIssueを自動クローズするため）。
-    not_planned でクローズされたIssue（着手せず却下・重複等）は成果ではないため除外する。
-    state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として計上する。
+    経過時間は、SP付きクローズIssueの担当者単位のチーム中央値を上限にする。偶数件では
+    2つの中央候補のうち小さい値を採り、少数データで長期Issueが上限を急増させるのを防ぐ。
+    not_planned は成果ではないためSPを加えず、同じ中央値だけ分母に加える。中央値の母集団は
+    state_reason に依存しないため、同じIssueを完了へ変えても上限は変わらず、完了が必ず有利になる。
+    state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として扱う。
     複数アサインの場合は各担当者を満額で評価する。
 
     assigned_at は /issues/events から集計するが、取得件数に上限（MAX_EVENT_PAGES）があるため、
@@ -186,20 +189,35 @@ def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, floa
     代替する。資料の計測区間「アサインから」からは外れ、アサイン待ち時間の分だけ経過時間が
     長く出るが、完了した獲得SPが丸ごとスコアから消えるより実態に近い。
     """
-    sp_sum = {login: 0 for login in logins}
-    hours_sum = {login: 0.0 for login in logins}
+    samples: list[tuple[str, int, float, bool]] = []
     for issue in issues:
         if issue.story_points is None or issue.closed_at is None:
             continue
-        if issue.state_reason == "not_planned":
-            continue
         for a in issue.assignees:
-            if a.login not in sp_sum:
+            if a.login not in logins:
                 continue
             start = a.assigned_at or issue.gh_created_at
             elapsed_hours = (issue.closed_at - start).total_seconds() / 3600
-            sp_sum[a.login] += issue.story_points
-            hours_sum[a.login] += max(elapsed_hours, _MIN_ELAPSED_HOURS)
+            samples.append(
+                (
+                    a.login,
+                    issue.story_points,
+                    max(elapsed_hours, _MIN_ELAPSED_HOURS),
+                    issue.state_reason == "not_planned",
+                )
+            )
+
+    if not samples:
+        return {login: 0.0 for login in logins}
+    elapsed_cap = median_low(hours for _, _, hours, _ in samples)
+
+    sp_sum = {login: 0 for login in logins}
+    hours_sum = {login: 0.0 for login in logins}
+    for login, story_points, elapsed_hours, stopped in samples:
+        hours_sum[login] += elapsed_cap if stopped else min(elapsed_hours, elapsed_cap)
+        if not stopped:
+            sp_sum[login] += story_points
+
     return {
         login: sp_sum[login] / hours_sum[login] if hours_sum[login] > 0 else 0.0
         for login in logins

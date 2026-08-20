@@ -151,10 +151,90 @@ def test_speed_values_skips_when_no_sp_or_not_closed():
     assert _speed_values(not_closed, logins)["alice"] == 0.0
 
 
-def test_speed_values_excludes_not_planned_issues():
-    """Close as not planned で中止されたIssueは成果ではないためSPを計上しない。"""
-    issues = [_issue(10, "alice", sp=5, closed_day=3, assignees=[("alice", 1)], state_reason="not_planned")]
-    assert _speed_values(issues, {"alice"})["alice"] == 0.0
+def test_speed_values_charges_team_median_for_not_planned_issue():
+    """not_planned はSPを増やさず、クローズIssueのチーム中央値だけ分母へ加える。"""
+    issues = [
+        _issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)]),  # 48h
+        _issue(11, "bob", sp=3, closed_day=2, assignees=[("bob", 1)]),  # 24h
+        _issue(12, "bob", sp=3, closed_day=4, assignees=[("bob", 1)]),  # 72h
+        _issue(
+            13,
+            "alice",
+            sp=5,
+            closed_day=30,
+            assignees=[("alice", 1)],
+            state_reason="not_planned",
+        ),
+    ]
+
+    assert _speed_values(issues, {"alice", "bob"})["alice"] == pytest.approx(
+        3 / (48 + 48)
+    )
+
+
+def test_speed_values_clamps_completed_elapsed_to_team_median():
+    """長期Issueもチーム中央値でクランプし、1件で速度が桁違いに落ちない。"""
+    issues = [
+        _issue(10, "bob", sp=3, closed_day=2, assignees=[("bob", 1)]),  # 24h
+        _issue(11, "bob", sp=3, closed_day=3, assignees=[("bob", 1)]),  # 48h
+        _issue(12, "alice", sp=3, closed_day=30, assignees=[("alice", 1)]),
+    ]
+
+    assert _speed_values(issues, {"alice", "bob"})["alice"] == pytest.approx(3 / 48)
+
+
+def test_speed_values_completing_stalled_issue_beats_not_planned():
+    """同じ停滞Issueなら、not_planned で閉じるより完了する方が必ず高い。"""
+    baseline = [
+        _issue(10, "bob", sp=3, closed_day=2, assignees=[("bob", 1)]),  # 24h
+        _issue(11, "alice", sp=3, closed_day=3, assignees=[("alice", 1)]),  # 48h
+        _issue(12, "bob", sp=3, closed_day=4, assignees=[("bob", 1)]),  # 72h
+    ]
+    abandoned = baseline + [
+        _issue(
+            13,
+            "alice",
+            sp=3,
+            closed_day=30,
+            assignees=[("alice", 1)],
+            state_reason="not_planned",
+        )
+    ]
+    completed = baseline + [
+        _issue(13, "alice", sp=3, closed_day=30, assignees=[("alice", 1)])
+    ]
+
+    abandoned_speed = _speed_values(abandoned, {"alice", "bob"})["alice"]
+    completed_speed = _speed_values(completed, {"alice", "bob"})["alice"]
+
+    assert completed_speed > abandoned_speed
+    assert abandoned_speed >= _speed_values(baseline, {"alice", "bob"})["alice"] / 2
+
+
+def test_speed_values_completion_advantage_survives_small_sample_median_shift():
+    """完了サンプルが1件しかなくても、状態変更による中央値の移動で逆転しない。"""
+    baseline = [
+        _issue(10, "alice", sp=3, closed_day=3, assignees=[("alice", 1)])
+    ]
+    abandoned = baseline + [
+        _issue(
+            11,
+            "alice",
+            sp=3,
+            closed_day=30,
+            assignees=[("alice", 1)],
+            state_reason="not_planned",
+        )
+    ]
+    completed = baseline + [
+        _issue(11, "alice", sp=3, closed_day=30, assignees=[("alice", 1)])
+    ]
+
+    abandoned_speed = _speed_values(abandoned, {"alice"})["alice"]
+    completed_speed = _speed_values(completed, {"alice"})["alice"]
+
+    assert completed_speed > abandoned_speed
+    assert abandoned_speed >= _speed_values(baseline, {"alice"})["alice"] / 2
 
 
 def test_speed_values_counts_state_reason_none_as_completed():
