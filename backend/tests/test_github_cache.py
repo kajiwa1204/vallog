@@ -18,6 +18,7 @@ from app.services.github import (
     _build_pull_request_rows,
     _build_review_rows,
     _count_comments_by_review,
+    is_excluded_github_actor,
     _parse_dt,
     _parse_dt_required,
     _parse_story_points,
@@ -36,6 +37,24 @@ def _mock_response(json_body, status_code: int = 200, headers: dict | None = Non
 
 
 # ---------------------------------------------------------------------------
+# is_excluded_github_actor
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "login,actor_type,expected",
+    [
+        ("copilot", None, True),
+        ("COPILOT", None, True),
+        ("Dependabot[BOT]", None, True),
+        ("some-service", "BOT", True),
+        ("alice", None, False),
+    ],
+)
+def test_excluded_github_actor_is_case_insensitive(login, actor_type, expected):
+    assert is_excluded_github_actor(login, actor_type) is expected
+
+
+# ---------------------------------------------------------------------------
 # _parse_story_points
 # ---------------------------------------------------------------------------
 
@@ -46,6 +65,8 @@ def _mock_response(json_body, status_code: int = 200, headers: dict | None = Non
     (["bug", "SP:2", "priority:high"], 2),
     (["bug", "priority:high"], None),
     ([], None),
+    (["SP:0"], None),
+    (["SP:0", "SP:5"], 5),
     (["SP:13"], 13),  # 規定の1/2/3/5/8以外も無条件で受け入れる（意図的な設計判断）
     (["SP:2", "SP:5"], 2),  # 複数のSPラベルが付いた場合は先勝ち
 ])

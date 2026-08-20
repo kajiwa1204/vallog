@@ -13,30 +13,35 @@
 設定値そのものは画面3の重み編集が参照するため書き換えない。
 """
 
+import uuid
 from collections.abc import Iterable
-from statistics import median_low
+from datetime import datetime, timedelta, timezone
 
+from fastapi import status
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.errors import AppError, ErrorCode
 from app.models.github_cache import GitHubIssue, GitHubPullRequest, GitHubReview
 from app.models.project import Project
+from app.repositories.distribution import DistributionRepository
 from app.repositories.github_cache import GitHubCacheRepository
 from app.repositories.project import ProjectRepository
 from app.schemas.project import CategoryWeights
-from app.schemas.score import CategoryScores, MemberScore, ScoreResponse
-from app.services.github import ensure_synced, fetch_and_store
+from app.schemas.score import (
+    CategoryScores,
+    MemberFacts,
+    MemberScore,
+    ScoreResponse,
+)
+from app.services.github import (
+    NOT_DONE_STATE_REASONS,
+    ensure_synced,
+    fetch_and_store,
+    is_excluded_github_actor,
+)
 
 _APPROVE_OR_CHANGES = {"APPROVED", "CHANGES_REQUESTED"}
-
-
-def _is_excluded(login: str) -> bool:
-    """スコア対象外のログイン。
-
-    "unknown" は services/github.py の _actor_login が、GitHubアカウント削除等で login を
-    取得できなかったときに入れるフォールバック値。実在の貢献者ではないため、複数の削除済み
-    アカウントの活動が1人分に合算された幽霊メンバーになるのを防ぐ。
-    """
-    return login.endswith("[bot]") or login == "unknown"
 
 
 def _collect_logins(
@@ -59,7 +64,7 @@ def _collect_logins(
             logins.add(a.login)
     for r in reviews:
         logins.add(r.reviewer_login)
-    return {login for login in logins if not _is_excluded(login)}
+    return {login for login in logins if not is_excluded_github_actor(login)}
 
 
 def _shares(values: dict[str, float]) -> dict[str, float] | None:
@@ -128,13 +133,15 @@ def _is_self_review(review: GitHubReview, pr_author: dict[int, str]) -> bool:
     return review.reviewer_login == pr_author.get(review.pr_number)
 
 
-def _turnaround_values(
+def _turnaround_totals(
     prs: list[GitHubPullRequest], reviews: list[GitHubReview], logins: set[str]
-) -> dict[str, float]:
-    """レビューのターンアラウンドタイムを「速いほど高い」応答性の値に変換する。
+) -> tuple[dict[str, float], dict[str, int]]:
+    """レビュアーごとの (レビュー応答時間の合計, 対象レビュー件数)。
 
-    PR到着→レビュー提出までの時間を時間単位で平均し、1/(1+平均時間)で0〜1に写像する。
-    正規化（個人÷チーム合計）に載せられるよう「多い/速いほど高い」向きに揃える。
+    スコア（_turnaround_values）と生事実の平均TAT（_member_facts）が**同じ集計から**
+    値を取るために切り出してある。数え直すと、除外条件（セルフレビュー・submitted_at
+    欠落・負の経過時間）が片方だけ直された日に、同じ画面でスコアの根拠と表示中の事実が
+    食い違う。
     """
     pr_created = {pr.number: pr.gh_created_at for pr in prs}
     pr_author = {pr.number: pr.author_login for pr in prs}
@@ -153,6 +160,18 @@ def _turnaround_values(
             continue
         total_hours[r.reviewer_login] += hours
         counts[r.reviewer_login] += 1
+    return total_hours, counts
+
+
+def _turnaround_values(
+    prs: list[GitHubPullRequest], reviews: list[GitHubReview], logins: set[str]
+) -> dict[str, float]:
+    """レビューのターンアラウンドタイムを「速いほど高い」応答性の値に変換する。
+
+    PR到着→レビュー提出までの時間を時間単位で平均し、1/(1+平均時間)で0〜1に写像する。
+    正規化（個人÷チーム合計）に載せられるよう「多い/速いほど高い」向きに揃える。
+    """
+    total_hours, counts = _turnaround_totals(prs, reviews, logins)
 
     responsiveness: dict[str, float] = {}
     for login in logins:
@@ -169,55 +188,53 @@ def _turnaround_values(
 _MIN_ELAPSED_HOURS = 0.1
 
 
-def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, float]:
-    """タスク完了スピード（35%）の生値。獲得SP ÷ クランプ後の経過時間。
+def _sp_totals(
+    issues: list[GitHubIssue], logins: set[str]
+) -> tuple[dict[str, int], dict[str, float]]:
+    """担当者ごとの (完了Issueで獲得したSPの合計, 経過時間の合計)。
 
-    タスク分割に中立にするため、メンバー単位で「総獲得SP ÷ 総経過時間」を取る。
-    Issueごとに SP/時間 を出して足し上げると、同じ仕事を細かく分割するほどスコアが
-    膨らむ（SP5×1件=0.1 に対し SP1×5件=0.5）ため、分割数に依存しない総量比にする。
-    物量は活動量（起票数）と品質（マージPR数）で既に報われている。
-
-    経過時間は、SP付きクローズIssueの担当者単位のチーム中央値を上限にする。偶数件では
-    2つの中央候補のうち小さい値を採り、少数データで長期Issueが上限を急増させるのを防ぐ。
-    not_planned は成果ではないためSPを加えず、同じ中央値だけ分母に加える。中央値の母集団は
-    state_reason に依存しないため、同じIssueを完了へ変えても上限は変わらず、完了が必ず有利になる。
-    state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として扱う。
+    Issueのclosed_atを完了時刻の代理とする（GitHubはPRマージ時に紐づくIssueを自動クローズするため）。
+    却下・重複でクローズされたIssue（NOT_DONE_STATE_REASONS）は成果ではないため除外する。
+    判定は services/changelog.py と同じ定数を引く（片方だけ直されると、同じデータから
+    画面とスコアで違う事実が出る）。
+    state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として計上する。
     複数アサインの場合は各担当者を満額で評価する。
 
     assigned_at は /issues/events から集計するが、取得件数に上限（MAX_EVENT_PAGES）があるため、
     アサイン済みでもイベントが窓から溢れて None になりうる。その場合は起点をIssue作成時刻に
     代替する。資料の計測区間「アサインから」からは外れ、アサイン待ち時間の分だけ経過時間が
     長く出るが、完了した獲得SPが丸ごとスコアから消えるより実態に近い。
+
+    スコア（_speed_values）と生事実の獲得SP（_member_facts）が**同じ集計から**値を取る
+    ために切り出してある。SPが「担当者にのみ配られる」ことは両者で必ず一致していなければ
+    ならず、数え直すとその一致が偶然に頼ることになる。
     """
-    samples: list[tuple[str, int, float, bool]] = []
+    sp_sum = {login: 0 for login in logins}
+    hours_sum = {login: 0.0 for login in logins}
     for issue in issues:
-        if issue.story_points is None or issue.closed_at is None:
+        if issue.story_points is None or issue.story_points <= 0 or issue.closed_at is None:
+            continue
+        if issue.state_reason in NOT_DONE_STATE_REASONS:
             continue
         for a in issue.assignees:
-            if a.login not in logins:
+            if a.login not in sp_sum:
                 continue
             start = a.assigned_at or issue.gh_created_at
             elapsed_hours = (issue.closed_at - start).total_seconds() / 3600
-            samples.append(
-                (
-                    a.login,
-                    issue.story_points,
-                    max(elapsed_hours, _MIN_ELAPSED_HOURS),
-                    issue.state_reason == "not_planned",
-                )
-            )
+            sp_sum[a.login] += issue.story_points
+            hours_sum[a.login] += max(elapsed_hours, _MIN_ELAPSED_HOURS)
+    return sp_sum, hours_sum
 
-    if not samples:
-        return {login: 0.0 for login in logins}
-    elapsed_cap = median_low(hours for _, _, hours, _ in samples)
 
-    sp_sum = {login: 0 for login in logins}
-    hours_sum = {login: 0.0 for login in logins}
-    for login, story_points, elapsed_hours, stopped in samples:
-        hours_sum[login] += elapsed_cap if stopped else min(elapsed_hours, elapsed_cap)
-        if not stopped:
-            sp_sum[login] += story_points
+def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, float]:
+    """タスク完了スピード（35%）の生値。獲得SP ÷ 経過時間（アサイン〜完了）。
 
+    タスク分割に中立にするため、メンバー単位で「総獲得SP ÷ 総経過時間」を取る。
+    Issueごとに SP/時間 を出して足し上げると、同じ仕事を細かく分割するほどスコアが
+    膨らむ（SP5×1件=0.1 に対し SP1×5件=0.5）ため、分割数に依存しない総量比にする。
+    物量は活動量（起票数）と品質（マージPR数）で既に報われている。
+    """
+    sp_sum, hours_sum = _sp_totals(issues, logins)
     return {
         login: sp_sum[login] / hours_sum[login] if hours_sum[login] > 0 else 0.0
         for login in logins
@@ -254,6 +271,66 @@ def _quality_values(
     return {login: max(0.0, v) for login, v in values.items()}
 
 
+def _member_facts(
+    prs: list[GitHubPullRequest],
+    issues: list[GitHubIssue],
+    reviews: list[GitHubReview],
+    logins: set[str],
+) -> dict[str, MemberFacts]:
+    """スコアに潰す前の生事実（画面7の「レシート」）。
+
+    振り返りの根拠を点数分解（+0.06 等）ではなく事実の積み上げで示すために公開する。
+    ここに並ぶのは相対化も重み付けもしない実数なので、他のカテゴリの値に引きずられない。
+
+    各値は上のスコア計算が使うのと同じ関数・同じ除外条件から取る（_sp_totals /
+    _turnaround_totals / _is_self_review）。ここで数え直さないのは、除外条件が
+    片方だけ更新された日に、同じ画面で「スコアの根拠」と「並んでいる事実」が
+    静かに食い違うため。
+
+    ただし件数の内訳ではないので「和＝合計」の関係は無い。**この関数が答えるのは
+    「誰の何を数えたか」だけ**で、それは MemberFacts のフィールド名に書いてある。
+    """
+    pr_author = {pr.number: pr.author_login for pr in prs}
+    sp_sum, _ = _sp_totals(issues, logins)
+    total_hours, review_counts = _turnaround_totals(prs, reviews, logins)
+
+    authored = {login: 0 for login in logins}
+    reopened = {login: 0 for login in logins}
+    for pr in prs:
+        if pr.author_login not in authored:
+            continue
+        authored[pr.author_login] += 1
+        reopened[pr.author_login] += pr.reopened_count
+
+    # 出したレビューの件数。活動量スコアはこれを「コメント付き」と「Approve/変更要求」の
+    # 2つのサブ指標に分けて使っているため、総数そのものはスコアに現れない。事実としては
+    # 「何本レビューしたか」のほうが読めるので、除外条件だけスコアと揃えて総数を出す
+    submitted = {login: 0 for login in logins}
+    for r in reviews:
+        if r.reviewer_login not in submitted:
+            continue
+        if _is_self_review(r, pr_author):
+            continue
+        submitted[r.reviewer_login] += 1
+
+    return {
+        login: MemberFacts(
+            story_points_earned=sp_sum[login],
+            pull_requests_authored=authored[login],
+            reviews_submitted=submitted[login],
+            pull_requests_reopened=reopened[login],
+            # 対象レビューが0件のときに0.0を返すと「即座に返した」と読めてしまう。
+            # 平均が定義できないことは NULL で言う
+            avg_review_turnaround_hours=(
+                total_hours[login] / review_counts[login]
+                if review_counts[login] > 0
+                else None
+            ),
+        )
+        for login in logins
+    }
+
+
 def compute_scores(
     project: Project,
     prs: list[GitHubPullRequest],
@@ -278,6 +355,7 @@ def compute_scores(
     activity = _activity_relative(prs, issues, reviews, logins)
     speed = _shares(_speed_values(issues, logins)) or zeros
     quality = _shares(_quality_values(prs, reviews, logins)) or zeros
+    facts = _member_facts(prs, issues, reviews, logins)
 
     # データが無いカテゴリ（例: SPラベル未運用でスピードが全員0）はその重みを配分せず、
     # 値を持つカテゴリだけで重みを正規化する。全員のスコアを同じ定数で割ることと等価なので
@@ -310,6 +388,7 @@ def compute_scores(
                 quality=quality[login],
             ),
             total=_total_for(login),
+            facts=facts[login],
         )
         for login in sorted(logins)
     ]
@@ -344,3 +423,102 @@ async def get_project_scores(
         registered_logins=[u.github_login for u in members],
         weights=weights,
     )
+
+
+# 未確定の案が「分配を議論している最中」と見なされる期間。最終更新からこの日数を
+# 過ぎるとスコアは非開示に戻る。
+#
+# 期限を設けないと、誰かが案を作って放置しただけでスコアが**永久に開いたまま**になる。
+# #100 は「1回目の分配以降ずっと見えたまま」を避けるために finalized を条件に入れたが、
+# 確定されない案はその条件をすり抜けるため、次の作業期間がまるごと汚染される。
+#
+# 30日にしたのは、分配の議論が数週間に及ぶことはあっても月をまたいで続くことは想定
+# しないため。長い議論の途中で落ちないだけの余裕を持たせつつ、放置された案が次の
+# 作業期間まで開示を引きずらない長さにしている。
+SCORE_DISCLOSURE_WINDOW_DAYS = 30
+
+
+async def can_disclose_scores(db: AsyncSession, project_id: uuid.UUID) -> bool:
+    """スコアをクライアントに開示してよい状態か（#100）。
+
+    「振り返りのとき」を、**最近動いた未確定の分配案**が存在することで判定する。
+
+        案が0件                    → 非開示（作業期間中）
+        未確定で最近動いた案がある → 開示（分配を議論している最中）
+        全部確定済み               → 非開示（議論が終わった）
+        未確定だが30日動いていない → 非開示（議論が立ち消えた）
+
+    新しいテーブルもフェーズ状態も持たないのは、分配案の作成をトリガーにすると
+    「変化ログを読む → 議論する → 案を作る → 初めてスコアが見える」という順序まで
+    構造で強制できるため（docs/scoring_design.md「Goodhart対策とスコアの事後開示」）。
+    フェーズ状態は単なるスイッチで、この順序までは担保しない。
+
+    確定済みに戻して非開示にしても情報は失われない。確定した案は DistributionItem に
+    当時の数値を保持しており、隠れるのはライブのスコアだけ。放置で閉じた場合も、案を
+    編集すればまた開く（最終更新が動くため）。
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=SCORE_DISCLOSURE_WINDOW_DAYS)
+    return await DistributionRepository(db).exists_unfinalized(project_id, cutoff)
+
+
+def resolve_weights(
+    activity: int | None, speed: int | None, quality: int | None
+) -> CategoryWeights | None:
+    """クエリで渡された重みを CategoryWeights にする。3つ揃っていなければ拒否する。
+
+    **足りない分を既定値で埋めない。** 埋めると、利用者が指定していない重みが黙って
+    混ざったスコアが 200 で返る。画面7は「配分」と「その根拠」が同じ重みの産物である
+    ことに依存しているので、片方だけ別の重みで計算された値が正しい根拠として並び、
+    誰も気づけない。3つ揃わないなら答えを返さないほうが安全。
+
+    1つも指定が無いのは「プロジェクト既定で計算せよ」という正当な指定なので None を返す。
+    """
+    given = (activity, speed, quality)
+    if all(w is None for w in given):
+        return None
+    if any(w is None for w in given):
+        raise AppError(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            ErrorCode.SCORES_WEIGHTS_INCOMPLETE,
+            "weight_activity, weight_speed and weight_quality must be given together",
+        )
+    try:
+        return CategoryWeights(activity=activity, speed=speed, quality=quality)
+    except ValidationError as exc:
+        raise AppError(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            ErrorCode.SCORES_WEIGHTS_INVALID,
+            "Score weights must each be between 0 and 100 and sum to 100",
+        ) from exc
+
+
+async def get_scores_for_disclosure(
+    db: AsyncSession,
+    project: Project,
+    access_token: str,
+    weights: CategoryWeights | None = None,
+) -> ScoreResponse:
+    """クライアントへ返すスコア。開示条件を満たさなければ 403 で拒否する。
+
+    ゲートを get_project_scores() の中ではなくこの関数に置くのが要点。
+    services/distribution.py が案の作成・重み変更時に get_project_scores() を呼んで
+    初期比率を作っているため、そこまで塞ぐと鶏卵問題になる（案を作れないので
+    スコアが見えず、スコアが見えないので案が作れない）。制限するのは**クライアントへの
+    開示**であって、サーバ内部の計算ではない。
+
+    誰でも分配案を作れるので、ダミーの案を作ればスコアは見られる。これは技術的な壁では
+    なく、受け入れた制約（#100）。created_by が記録され編集履歴は全員に公開されるため、
+    見えるかたちで意図的な行為をする必要がある、という社会的抑止で担保する。
+
+    weights は分配案ごとの重みの上書き。**指定を受け取れるようにしてあるのが重要**で、
+    案の配分比率は案の重みで計算されるのに、スコアだけプロジェクト既定の重みで返すと、
+    同じ画面に並ぶ「配分」と「その根拠」が別々の重みの産物になる。重みを動かして複数案を
+    比較すること自体が②固定を折る施策なので、そこで根拠が食い違うと施策ごと壊れる。
+    """
+    if not await can_disclose_scores(db, project.id):
+        raise AppError(
+            status.HTTP_403_FORBIDDEN,
+            ErrorCode.SCORES_NOT_DISCLOSED,
+            "Scores are disclosed only while an unfinalized distribution proposal exists",
+        )
+    return await get_project_scores(db, project, access_token, weights=weights)

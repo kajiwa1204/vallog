@@ -1,0 +1,62 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-s);
+  overflow: hidden;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--surface);
+  min-width: 0;
+}
+
+.label {
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+/* 数字は帳簿の精度感で出す（globals.css の .num と揃える）。
+   序列を作らないため、どの項目も同じ大きさにする */
+.value {
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.detail {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* 「見られていない自分のPR」への気づき。責める色にはしない */
+.callout {
+  margin-top: 12px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  background: var(--ochre-tint);
+  border-radius: var(--radius-s);
+}
+
+/* この数字がどこから来たかの明示。検算できることがこの画面の要点なので、
+   補助テキストだが省略しない */
+.source {
+  margin-top: 12px;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

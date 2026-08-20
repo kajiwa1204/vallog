@@ -81,19 +81,22 @@ export type JoinResponse = {
   project_id: string;
 };
 
-export type MetricRaw = {
-  issues_opened: number;
-  prs_opened: number;
-  prs_merged: number;
-  reviews_commented: number;
-  approvals: number;
-  changes_requested: number;
-  avg_review_tat_hours: number | null;
-  sp_earned: number;
-  sp_hours: number;
-  sp_throughput: number | null;
-  bugs_assigned: number;
-  prs_reopened: number;
+// スコアに潰す前の生事実（backend/app/schemas/score.py の MemberFacts と対応）。
+//
+// フィールド名が母集合を言い切っている。スコアはSPを担当者にのみ配る一方、変化ログの
+// 絞り込みはIssueだけ起票者∪担当者なので、母集合を落として「SP」とだけ表示すると
+// 同じ名前で違う数が並ぶ。画面のラベルはこの名前から外れないように書くこと
+export type MemberFacts = {
+  // 担当した完了Issueで獲得したSPの合計。起票しただけのIssueは入らない
+  story_points_earned: number;
+  // 自分が作成したPRの件数。Issueの起票は含まない
+  pull_requests_authored: number;
+  // 自分が出したレビューの件数。セルフレビューは除く
+  reviews_submitted: number;
+  // 自分が作成したPRの再オープン回数の合計（手戻り）
+  pull_requests_reopened: number;
+  // 対象レビューが無ければ null。0 は「即座に返した」の意味になるので使わない
+  avg_review_turnaround_hours: number | null;
 };
 
 export type CategoryScores = {
@@ -104,16 +107,15 @@ export type CategoryScores = {
 
 export type MemberScore = {
   github_login: string;
-  avatar_url: string | null;
-  is_registered: boolean;
-  total: number;
   categories: CategoryScores;
-  metrics: MetricRaw;
+  // カテゴリ重みを適用した総合スコア。メンバー間の合計は1.0（＝そのまま分配比率）
+  total: number;
+  facts: MemberFacts;
 };
 
 export type ScoreResponse = {
-  synced_at: string | null;
   weights: CategoryWeights;
+  // total の降順
   members: MemberScore[];
 };
 
@@ -150,43 +152,76 @@ export type MemberDetail = {
   summary: Summary | null;
 };
 
+// 分配シミュレーション（画面7）。backend/app/schemas/distribution.py と対応する。
+//
+// 比率・金額は number ではなく string で受ける。バックエンドは Decimal で扱っており
+// （分配は金額に直結するので合計100%の判定を浮動小数の誤差で揺らさない）、JSON化の
+// 時点で number にすると桁落ちがここで起きる。表示・計算は allocation.ts が担う
 export type DistributionItem = {
   github_login: string;
+  // Vallog未登録の貢献者は null（GitHubのidenticonにフォールバックする）
   avatar_url: string | null;
+  // 0〜1。案の中で合計1.0になる
   ratio: string;
+  // 報酬総額が入力されていれば按分後の金額。未入力なら null
   amount: string | null;
 };
 
-export type Proposal = {
-  id: string;
-  title: string;
-  status: "draft" | "agreed";
+// 編集ログが持つ案のスナップショット。差分ではなく状態をまるごと持つので、
+// ログ1件だけでその時点の案を復元できる
+export type ProposalSnapshot = {
+  items: { github_login: string; ratio: string }[];
   total_amount: string | null;
   weights: CategoryWeights;
-  items: DistributionItem[];
-  creator_login: string;
-  created_at: string;
-  agreed_at: string | null;
-};
-
-export type ProposalListItem = {
-  id: string;
-  title: string;
-  status: "draft" | "agreed";
-  total_amount: string | null;
-  creator_login: string;
-  created_at: string;
-  agreed_at: string | null;
 };
 
 export type EditLog = {
   id: string;
-  editor_login: string;
-  editor_avatar_url: string | null;
+  // 編集者が退会済みなら null
+  edited_by_github_login: string | null;
+  edited_by_avatar_url: string | null;
   reason: string;
-  before_items: { items: { github_login: string; ratio: string }[] };
-  after_items: { items: { github_login: string; ratio: string }[] };
+  before_items: ProposalSnapshot;
+  after_items: ProposalSnapshot;
   created_at: string;
+};
+
+export type Proposal = {
+  id: string;
+  project_id: string;
+  name: string;
+  // 案ごとの重み。プロジェクトのデフォルト重みとは独立
+  weights: CategoryWeights;
+  total_amount: string | null;
+  // 確定すると以降は編集できない
+  finalized: boolean;
+  finalized_at: string | null;
+  finalized_by_github_login: string | null;
+  created_by_github_login: string | null;
+  created_at: string;
+  // 配分の多い順
+  items: DistributionItem[];
+  // 新しい編集から順。全員に公開する
+  edit_logs: EditLog[];
+};
+
+// 一覧では配分値・編集履歴は返らない（詳細で取る）
+export type ProposalListItem = {
+  id: string;
+  name: string;
+  total_amount: string | null;
+  finalized: boolean;
+  finalized_at: string | null;
+  // 確定した人。作成者とは別人になりうるので両方来る
+  finalized_by_github_login: string | null;
+  created_by_github_login: string | null;
+  created_at: string;
+  // 0 なら配分値は一度も変更されていない（名前・総額だけの編集は数えない）
+  allocation_edit_count: number;
+  // 削除済みなら値が入る。物理削除しないのは、削除の痕跡が残ることに #100 の
+  // 社会的抑止が依存しているため
+  deleted_at: string | null;
+  deleted_by_github_login: string | null;
 };
 
 export type SummaryJob = {

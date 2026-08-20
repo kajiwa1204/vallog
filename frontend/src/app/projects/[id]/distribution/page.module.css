@@ -1,0 +1,77 @@
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.subtitle {
+  margin-top: 2px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+/* 縦の並びがそのまま議論の順序（概観 → 決定 → 根拠 → 重み・履歴）。
+   間隔は一括で持つ。各カードが自分の外側の余白を持つと並び替えで崩れる */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 24px;
+}
+
+/* 概観の2カラム。スコア（数値）と貢献サマリー（文章）を同列に置く。
+   align-items: start で、中身の少ない側が相手の高さに引き伸ばされないようにする */
+.overview {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+/* サマリーが1件も無いときは並べる相手がいない。2カラムのまま出すと右が大きく空き、
+   「同列に置く」という主張だけが残る */
+.singleColumn {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* 横に並べる余地が無くなったら縦積みに戻す。画面4のパネルと同じ境界にしてある */
+@media (max-width: 900px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.intro {
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-m);
+}
+
+.introLead {
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.introBody {
+  margin-top: 6px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+.createRow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+}

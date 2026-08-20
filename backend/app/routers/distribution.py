@@ -22,6 +22,10 @@ Avatars = dict[str, str | None]
 
 
 def _to_response(proposal: DistributionProposal, avatars: Avatars) -> ProposalResponse:
+    amounts = distribution_service.amounts_for(
+        proposal.total_amount,
+        [(item.github_login, item.ratio) for item in proposal.items],
+    )
     return ProposalResponse(
         id=proposal.id,
         project_id=proposal.project_id,
@@ -47,7 +51,7 @@ def _to_response(proposal: DistributionProposal, avatars: Avatars) -> ProposalRe
                 github_login=i.github_login,
                 avatar_url=avatars.get(i.github_login),
                 ratio=i.ratio,
-                amount=distribution_service.amount_for(proposal.total_amount, i.ratio),
+                amount=amounts[i.github_login],
             )
             for i in sorted(proposal.items, key=lambda i: i.ratio, reverse=True)
         ],
@@ -71,9 +75,18 @@ def _to_edit_log(log: DistributionEditLog, avatars: Avatars) -> EditLogResponse:
 @router.get(
     "/projects/{project_id}/distributions", response_model=list[ProposalListItem]
 )
-async def list_distributions(project: MemberProject, db: DB):
-    """案の一覧。配分値・編集履歴は詳細で取得する。"""
-    proposals = await distribution_service.list_proposals(db, project.id)
+async def list_distributions(
+    project: MemberProject, db: DB, include_deleted: bool = False
+):
+    """案の一覧。配分値・編集履歴は詳細で取得する。
+
+    include_deleted=true で削除済みも返す。画面7の「分配の記録」が、確定した案と
+    削除された案を同じ履歴として並べるために使う（#100 の抑止は削除の痕跡が残ることに
+    依存しているので、消したら見えなくなる、にはしない）。
+    """
+    proposals = await distribution_service.list_proposals(
+        db, project.id, include_deleted=include_deleted
+    )
     return [
         ProposalListItem(
             id=p.id,
@@ -81,8 +94,14 @@ async def list_distributions(project: MemberProject, db: DB):
             total_amount=p.total_amount,
             finalized=p.finalized,
             finalized_at=p.finalized_at,
+            finalized_by_github_login=(
+                p.finalizer.github_login if p.finalizer else None
+            ),
             created_by_github_login=p.creator.github_login if p.creator else None,
             created_at=p.created_at,
+            allocation_edit_count=p.allocation_edit_count,
+            deleted_at=p.deleted_at,
+            deleted_by_github_login=p.deleter.github_login if p.deleter else None,
         )
         for p in proposals
     ]
@@ -144,6 +163,20 @@ async def update_distribution_items(
         db, project, proposal_id, user, payload
     )
     return _to_response(proposal, await _avatars(db, project.id))
+
+
+@router.delete(
+    "/projects/{project_id}/distributions/{proposal_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_distribution(
+    proposal_id: uuid.UUID, project: MemberProject, user: CurrentUser, db: DB
+):
+    """検討中の案を削除する。確定済みの案は 409（合意の記録は消せない）。
+
+    行は残し、誰がいつ消したかを記録する（#100 の抑止が痕跡の存在に依存しているため）。
+    """
+    await distribution_service.delete_proposal(db, project, proposal_id, user)
 
 
 @router.post(

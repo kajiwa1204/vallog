@@ -9,7 +9,7 @@ frontend/out/
 frontend/node_modules/
 
 # pnpm
-frontend/.pnpm-store/
+.pnpm-store/
 
 # Python
 backend/__pycache__/

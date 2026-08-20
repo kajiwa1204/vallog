@@ -41,6 +41,7 @@ backend/
 │   │   ├── scoring.py               # スコア計算ロジック
 │   │   ├── changelog.py             # 変化ログ整形（PR/Issue/レビューを時系列マージ・既存キャッシュから読み取り）
 │   │   ├── dashboard.py             # チーム状況パネル4種の集計（既存キャッシュから読み取り）
+│   │   ├── members.py               # GitHub貢献者とVallog登録メンバーの照合
 │   │   └── claude.py                # 貢献サマリー生成（Claude API）
 │   └── repositories/                # DBアクセス層
 │       ├── project.py               # ProjectRepository
@@ -78,6 +79,10 @@ frontend/
 │   │       ├── Button.module.css
 │   │       ├── Modal.tsx
 │   │       ├── Modal.module.css
+│   │       ├── WeightSliders.tsx                 # カテゴリ重みの入力（画面3のデフォルト重みと画面7の案ごとの重みで共有）
+│   │       ├── WeightSliders.module.css
+│   │       ├── ErrorState.tsx                    # カード内エラー（タイトルを残し、その場に再試行）
+│   │       ├── ErrorState.module.css
 │   │       ├── Input.tsx
 │   │       └── Input.module.css
 │   ├── features/                                 # 機能別コンポーネント（画面内フラット）
@@ -90,20 +95,28 @@ frontend/
 │   │   │   ├── Themes.tsx                        # チーム状況: 動いている領域（ラベル集計・名前空間で束ねる）
 │   │   │   └── useDashboard.ts
 │   │   ├── distribution/
-│   │   │   ├── ChangeLogPanel.tsx               # 主役: ChangeLogList を包む薄いラッパー（全メンバー）
-│   │   │   ├── ChangeLogPanel.module.css
-│   │   │   ├── AllocationTable.tsx
-│   │   │   ├── AllocationTable.module.css
-│   │   │   ├── SummaryPanel.tsx                  # 第2層: 変化ログの詳細（AIサマリー）
-│   │   │   ├── SummaryPanel.module.css
-│   │   │   ├── EditHistoryTimeline.tsx
-│   │   │   ├── EditHistoryTimeline.module.css
+│   │   │   ├── ProposalSwitcher.tsx              # 検討中の案の切り替え・新規作成・比較の開閉
+│   │   │   ├── CreateProposalDialog.tsx          # 案作成（名前・報酬総額の入力＋スコアが開示される旨の確認・#100）
+│   │   │   ├── ProposalRecords.tsx               # 分配の記録（確定済み・削除済み。新しい順・開いた案だけ配分を取得）
+│   │   │   ├── AllocationTable.tsx               # 分配比率の手動調整（理由必須）・報酬総額・合意確定
+│   │   │   ├── WeightEditor.tsx                  # 案ごとの重み（WeightSliders を使う・変更で比率を再計算）
+│   │   │   ├── ProposalCompare.tsx               # 選んだ案（最大4件）を並べて比較。重みの差も見出しに出す
+│   │   │   ├── SummaryPanel.tsx                  # 第2層: 変化ログの詳細（AIサマリー・読み取り専用）
+│   │   │   ├── EditHistoryTimeline.tsx           # 編集履歴（全員に公開・不正操作への抑止）
+│   │   │   ├── ScorePanel.tsx                    # スコアと生事実（アプリで唯一スコアが出る場所）。各行から画面5の記録へ遷移する
+│   │   │   ├── allocation.ts                     # 比率編集の純粋関数（千分率の整数・Reactに依存しない）
 │   │   │   └── useDistribution.ts
 │   │   ├── members/
 │   │   │   ├── ChangeLog.tsx                     # 主軸: ChangeLogList を包む薄いラッパー（単一メンバー）
 │   │   │   ├── ChangeLog.module.css
-│   │   │   ├── ContributionSummary.tsx           # 第2層: 変化ログの詳細（AIサマリー）
-│   │   │   ├── ContributionSummary.module.css
+│   │   │   ├── ContributionFacts.tsx             # 各指標の生データ（表示中の変化ログを数えた値）
+│   │   │   ├── ContributionFacts.module.css
+│   │   │   ├── ActivityChart.tsx                 # 活動量の推移（週次バケット）
+│   │   │   ├── ActivityChart.module.css
+│   │   │   ├── MemberSwitcher.tsx                # 人を切り替える導線
+│   │   │   ├── MemberSwitcher.module.css
+│   │   │   ├── activity.ts                       # 集計の純粋関数（Reactに依存しない・テスト可能）
+│   │   │   ├── ContributionSummary.tsx           # 第2層: 変化ログの詳細（AIサマリー・#16）
 │   │   │   └── useMemberDetail.ts
 │   │   └── projects/
 │   │       ├── ProjectCard.tsx

@@ -10,7 +10,7 @@
 
 import uuid
 from datetime import datetime, timezone
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_FLOOR, ROUND_HALF_UP, Decimal
 
 from fastapi import status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,17 +29,27 @@ from app.schemas.distribution import ItemsUpdate, ProposalCreate, ProposalUpdate
 from app.schemas.project import CategoryWeights
 from app.services import scoring
 
-_RATIO_PLACES = Decimal("0.000001")
+# 分配比率の刻み。画面7の入力刻み（0.1%）と一致させる。
+#
+# 以前は 0.000001（0.0001%）まで保持していたが、**画面がその精度を表現できない**。
+# 0.1%刻みでしか編集できないので、画面は比率を丸めて表示し、丸めた値から金額を
+# 計算していた。結果、画面の金額とAPIが返す金額が実データで最大¥50ずれ、しかも
+# 丸めの和が1にならないと画面の合計が100.0%にならず、作りたての案を確定できなかった
+# （3人均等 = 0.333333 × 3 = 99.9%）。
+#
+# 保存できる精度を画面の精度に合わせることで、この一致を構成上の帰結にする。
+# 実際、ユーザーが一度でも配分を保存すれば全比率は0.1%刻みになるので、6桁の精度は
+# 「一度も編集されていない案」にしか存在しない見せかけの精度だった。
+_RATIO_PLACES = Decimal("0.001")
 _AMOUNT_PLACES = Decimal("0.01")
-# 合計比率の許容誤差。フロントがパーセント表示で丸めた値を送ってくるため、
-# 厳密一致は要求しない（画面7の入力刻みは0.1%）
-_RATIO_TOTAL_TOLERANCE = Decimal("0.005")
 
 
 async def list_proposals(
-    db: AsyncSession, project_id: uuid.UUID
+    db: AsyncSession, project_id: uuid.UUID, include_deleted: bool = False
 ) -> list[DistributionProposal]:
-    return await DistributionRepository(db).list_proposals(project_id)
+    return await DistributionRepository(db).list_proposals(
+        project_id, include_deleted=include_deleted
+    )
 
 
 async def get_proposal(
@@ -101,7 +111,7 @@ async def update_items(
 ) -> DistributionProposal:
     """配分値を手動調整し、変更前後のスナップショットを編集ログに残す。"""
     repo = DistributionRepository(db)
-    proposal = await _load_proposal(db, project.id, proposal_id)
+    proposal = await _load_proposal(db, project.id, proposal_id, for_update=True)
     _reject_if_finalized(proposal)
 
     ratios = [(i.github_login, _quantize_ratio(i.ratio)) for i in payload.items]
@@ -126,13 +136,13 @@ async def update_proposal(
 ) -> DistributionProposal:
     """案の名前・報酬総額・重みを更新する。重みを変えたら分配比率を再計算する。"""
     repo = DistributionRepository(db)
-    proposal = await _load_proposal(db, project.id, proposal_id)
+    proposal = await _load_proposal(db, project.id, proposal_id, for_update=True)
     _reject_if_finalized(proposal)
 
     before = _snapshot(proposal)
     if payload.name is not None:
         proposal.name = payload.name
-    if payload.total_amount is not None:
+    if "total_amount" in payload.model_fields_set:
         proposal.total_amount = _quantize_amount(payload.total_amount)
     if payload.weights is not None:
         proposal.weight_activity = payload.weights.activity
@@ -161,7 +171,7 @@ async def finalize(
     db: AsyncSession, project: Project, proposal_id: uuid.UUID, user: User
 ) -> DistributionProposal:
     """分配案を合意確定して以降の編集を止める。"""
-    proposal = await _load_proposal(db, project.id, proposal_id)
+    proposal = await _load_proposal(db, project.id, proposal_id, for_update=True)
     _reject_if_finalized(proposal)
     _reject_if_ratios_do_not_total_one(
         [(item.github_login, item.ratio) for item in proposal.items]
@@ -174,19 +184,82 @@ async def finalize(
     return await _load_proposal(db, project.id, proposal_id)
 
 
-def amount_for(total_amount: Decimal | None, ratio: Decimal) -> Decimal | None:
-    """報酬総額を比率で按分した金額。総額未入力なら金額は出さない（比率のみ表示）。"""
+async def delete_proposal(
+    db: AsyncSession, project: Project, proposal_id: uuid.UUID, user: User
+) -> None:
+    """検討中の案を削除する。**行は消さず、削除済みとして記録に残す。**
+
+    物理削除にしないのは、#100 の社会的抑止が「`created_by` が記録され編集履歴は
+    全員に公開されるため、見えるかたちで意図的な行為をする必要がある」ことで成り立って
+    いるため。行ごと消せると「案を作る → 全員のスコアを読む → 重みを変えて別の切り口でも
+    読む → 削除する」で痕跡がゼロになり（編集ログも ON DELETE CASCADE で道連れ）、
+    抑止の根拠そのものが無くなる。誰がいつ何を消したかが残れば、削除も「見えるかたちの
+    行為」に留まる。
+
+    **確定済みの案は削除できない。** 確定は「チームで合意した分配をVallog上に永続化」
+    した記録であり（docs/screen_design.md 画面7「合意の記録」）、削除済みの印を付ける
+    ことすら合意の記録を濁す。
+
+    ロールによる制限は設けない（他の操作と同じ）。守るのは「誰が消せるか」ではなく
+    「消しても記録は残る」ほうで、これは編集履歴の全員公開と同じ考え方。
+    """
+    proposal = await _load_proposal(db, project.id, proposal_id, for_update=True)
+    if proposal.finalized:
+        raise AppError(
+            status.HTTP_409_CONFLICT,
+            ErrorCode.DISTRIBUTION_FINALIZED,
+            "Finalized distribution proposals cannot be deleted",
+        )
+    await DistributionRepository(db).mark_deleted(
+        proposal, user.id, datetime.now(timezone.utc)
+    )
+    await db.commit()
+
+
+def amounts_for(
+    total_amount: Decimal | None, ratios: list[tuple[str, Decimal]]
+) -> dict[str, Decimal | None]:
+    """報酬総額を1銭単位で最大剰余配分し、行の合計を必ず総額に一致させる。"""
     if total_amount is None:
-        return None
-    return (total_amount * ratio).quantize(_AMOUNT_PLACES, rounding=ROUND_HALF_UP)
+        return {login: None for login, _ in ratios}
+
+    amount = _quantize_amount(total_amount)
+    assert amount is not None
+    raw = [(login, amount * ratio) for login, ratio in ratios]
+    allocated = {
+        login: value.quantize(_AMOUNT_PLACES, rounding=ROUND_FLOOR)
+        for login, value in raw
+    }
+    cents_left = int(
+        (amount - sum(allocated.values(), Decimal(0))) / _AMOUNT_PLACES
+    )
+    order = sorted(
+        raw,
+        key=lambda pair: (-(pair[1] - allocated[pair[0]]), pair[0]),
+    )
+    for login, _ in order[:cents_left]:
+        allocated[login] += _AMOUNT_PLACES
+    assert sum(allocated.values(), Decimal(0)) == amount
+    return allocated
 
 
 async def _load_proposal(
-    db: AsyncSession, project_id: uuid.UUID, proposal_id: uuid.UUID
+    db: AsyncSession,
+    project_id: uuid.UUID,
+    proposal_id: uuid.UUID,
+    *,
+    for_update: bool = False,
 ) -> DistributionProposal:
-    proposal = await DistributionRepository(db).get_proposal(proposal_id)
-    # 他プロジェクトの案は存在を伏せて404にする（メンバーシップは project_id 側で検証済み）
-    if proposal is None or proposal.project_id != project_id:
+    proposal = await DistributionRepository(db).get_proposal(
+        proposal_id, for_update=for_update
+    )
+    # 他プロジェクトの案は存在を伏せて404にする（メンバーシップは project_id 側で検証済み）。
+    # 削除済みも同じ扱い。記録としては一覧に残すが、取得・編集・確定の対象にはしない
+    if (
+        proposal is None
+        or proposal.project_id != project_id
+        or proposal.deleted_at is not None
+    ):
         raise AppError(
             status.HTTP_404_NOT_FOUND,
             ErrorCode.DISTRIBUTION_NOT_FOUND,
@@ -232,17 +305,69 @@ def _reject_if_no_members(ratios: list[tuple[str, Decimal]]) -> None:
 
 
 def _reject_if_ratios_do_not_total_one(ratios: list[tuple[str, Decimal]]) -> None:
+    """合計はちょうど1.0でなければならない。**許容誤差は設けない。**
+
+    以前は0.005（0.5%ポイント）の窓があったが、比率の精度をフロントの入力刻みと
+    揃えた時点で意味を失った。比率は量子化後に必ず0.001の倍数なので、1との差も0.001の
+    倍数にしかならず、**0.001未満の許容値はすべて完全一致と等価**。つまりこの窓は
+    「合計99.5%〜100.5%の案を確定できる」ためだけに存在していて、総額¥300,000なら
+    ¥1,500の取りこぼしが 200 で通る。分配額に直結する値でそれは許容できない。
+
+    サーバが生成する比率は _spread_remainder_to_total_one() でちょうど1になり、画面も
+    合計がちょうど100.0%でなければ保存させない（frontend allocation.ts の isBalanced）
+    ので、正当な経路はどちらもこの条件を満たす。
+    """
     total = sum((ratio for _, ratio in ratios), Decimal(0))
-    if abs(total - Decimal(1)) > _RATIO_TOTAL_TOLERANCE:
+    if total != Decimal(1):
         raise AppError(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             ErrorCode.DISTRIBUTION_RATIO_TOTAL_INVALID,
-            f"Distribution ratios must sum to 1.0 (got {total})",
+            f"Distribution ratios must sum to exactly 1.0 (got {total})",
         )
 
 
 def _quantize_ratio(ratio: Decimal) -> Decimal:
     return ratio.quantize(_RATIO_PLACES, rounding=ROUND_HALF_UP)
+
+
+def _spread_remainder_to_total_one(
+    ratios: list[tuple[str, Decimal]],
+) -> list[tuple[str, Decimal]]:
+    """丸めた比率の合計をちょうど1.0にする。
+
+    各値を独立に丸めると和が1にならない。3人均等なら 0.333×3 = 0.999、6人なら
+    0.167×6 = 1.002 になり、**サーバが作った直後の案が確定できない**（画面は合計
+    100.0%ちょうどでないと保存させない）。
+
+    過不足を**配分の少ない順（超過なら多い順）に0.1%ずつ**配る。1人に丸ごと押し付ける
+    より差が小さく、同点なら並び順で決まるので結果が安定する。
+
+    最大剰余法ではない。ここに渡ってくるのは既に _quantize_ratio() を通った値で、
+    **どれだけ切り捨てられたかの情報は残っていない**ため、剰余では並べられない。
+    配分の少ない人に不足を寄せるのは差を縮める方向なので、分配のポリシーとしては
+    妥当だと判断している。剰余で配りたくなったら、量子化前の真値をここに渡す形に
+    変えること（呼び出しは _score_based_ratios の2箇所だけ）。
+    """
+    if not ratios:
+        return ratios
+
+    step = _RATIO_PLACES
+    diff = Decimal(1) - sum((ratio for _, ratio in ratios), Decimal(0))
+    if diff == 0:
+        return ratios
+
+    # 不足は配分の少ない順に足し、超過は多い順から引く
+    count = int(abs(diff) / step)
+    order = sorted(range(len(ratios)), key=lambda i: ratios[i][1], reverse=diff < 0)
+    adjusted = [ratio for _, ratio in ratios]
+    for n in range(count):
+        index = order[n % len(order)]
+        adjusted[index] += step if diff > 0 else -step
+    # 量子化誤差は各行0.0005未満なので、差の解消で0未満には到達しない。
+    # ここでクランプすると合計1.0を黙って壊すため、構成上の不変条件として検査する。
+    assert all(value >= 0 for value in adjusted)
+    assert sum(adjusted, Decimal(0)) == Decimal(1)
+    return [(login, adjusted[i]) for i, (login, _) in enumerate(ratios)]
 
 
 def _quantize_amount(amount: Decimal | None) -> Decimal | None:
@@ -258,7 +383,10 @@ def _snapshot(proposal: DistributionProposal) -> dict:
     """編集ログに残す案の状態。JSONBに入れるためDecimalは文字列にする。"""
     return {
         "items": [
-            {"github_login": item.github_login, "ratio": str(item.ratio)}
+            {
+                "github_login": item.github_login,
+                "ratio": str(_quantize_ratio(item.ratio)),
+            }
             for item in sorted(proposal.items, key=lambda i: i.github_login)
         ],
         "total_amount": (
@@ -289,11 +417,15 @@ async def _score_based_ratios(
         if count == 0:
             return []
         equal = _quantize_ratio(Decimal(1) / Decimal(count))
-        return [(m.github_login, equal) for m in scores.members]
-    return [
-        (
-            m.github_login,
-            _quantize_ratio(Decimal(str(m.total)) / Decimal(str(grand_total))),
+        return _spread_remainder_to_total_one(
+            [(m.github_login, equal) for m in scores.members]
         )
-        for m in scores.members
-    ]
+    return _spread_remainder_to_total_one(
+        [
+            (
+                m.github_login,
+                _quantize_ratio(Decimal(str(m.total)) / Decimal(str(grand_total))),
+            )
+            for m in scores.members
+        ]
+    )
