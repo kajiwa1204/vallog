@@ -1,0 +1,300 @@
+.badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 出発点であることの注記。読み飛ばされると①ターゲットが折れないので、
+   周囲の説明文より一段強い面で出す */
+.startNote {
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  background: var(--green-tint);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+}
+
+/* 事実の記録であって警告ではない。バッジと同じく中立の面に置く */
+.stampNote {
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  background: var(--surface-dim);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.lapsedNote {
+  padding: 11px 13px;
+  margin-bottom: 14px;
+  background: var(--surface-dim);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.amountRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  background: var(--surface-dim);
+  border-radius: var(--radius-s);
+}
+
+.amountLabel {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.amountInput {
+  width: 160px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  text-align: right;
+  background: var(--surface);
+}
+
+.amountInput:focus {
+  outline: none;
+  border-color: var(--green);
+}
+
+.amountHint {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+/* 数字の列は幅を固定して右端を揃える。可変にするとメンバー名の長さで列幅が動き、
+   金額が広い列の左端に取り残されて右側が大きく空く */
+.allocCol {
+  width: 170px;
+}
+
+.amountCol {
+  width: 150px;
+}
+
+/* 基底を :where() で包んで詳細度を 0-1-0 に落とす。`.table th, .table td` だと
+   0-1-1 になり、単独クラスの `.right` などが**必ず負ける**（実際に金額の右揃えが
+   死んでいた）。0-1-0 同士ならソース順で後勝ちになるので、以降のクラスが素直に効く。
+   規則を1つにするため3ファイルとも同じ形にしてある */
+.table :where(th, td) {
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-weight: 400;
+}
+
+.table thead th {
+  font-size: 11.5px;
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.table tfoot th,
+.table tfoot td {
+  border-bottom: none;
+  border-top: 1px solid var(--line-strong);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* `.table th, .table td` の text-align:left は詳細度 0-1-1 で、単独クラスの 0-1-0 に
+   勝ってしまう。同じ土俵に乗せないと右揃えが効かない（金額の右端がバラついていた） */
+.right {
+  text-align: right;
+}
+
+/* セル（<th>）ではなく内側の span に当てる。セルに display:flex を当てると
+   テーブルセルでなくなって行の高さに追従せず、この列の罫線だけ上にズレる */
+.member {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+}
+
+.percentField {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 合計行の数値。行の input と同じ幅・同じ右揃えにして桁を縦に揃える */
+.totalValue {
+  display: inline-block;
+  width: 78px;
+  padding-right: 6px;
+  text-align: right;
+}
+
+.percentInput {
+  width: 78px;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  text-align: right;
+}
+
+.percentInput:focus {
+  outline: none;
+  border-color: var(--green);
+}
+
+.unit {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.amount {
+  color: var(--ink-2);
+}
+
+.invalid {
+  color: var(--red);
+}
+
+.balanceHint {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--red-strong);
+}
+
+/* 行の過不足ボタン。押すとその人に残りが寄る。合計がズレている間だけ出る */
+.remainder {
+  min-width: 46px;
+  padding: 1px 6px;
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  background: var(--green-tint);
+  font: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--green-strong);
+  cursor: pointer;
+}
+
+.remainder:hover {
+  background: var(--green);
+  color: #fff;
+}
+
+.remainder:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* 説明文の中に出す見本。押せないので枠だけ揃える */
+.remainderSample {
+  display: inline-block;
+  margin: 0 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  background: var(--green-tint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--green-strong);
+}
+
+/* 均等割りは方針の選択なので、保存系のボタンより弱い見た目に留める */
+.equalize {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-3);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.equalize:hover {
+  color: var(--green);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.finalize {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.finalizeWarning {
+  margin-bottom: 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.finalizeHint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* 破壊的な操作は他の導線と同じ強さで並べない。押す前は控えめなリンクに留める */
+.danger {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.deleteLink {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  color: var(--ink-3);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.deleteLink:hover {
+  color: var(--red-strong);
+}
+
+.dangerWarning {
+  margin-bottom: 10px;
+  font-size: 12.5px;
+  color: var(--red-strong);
+}

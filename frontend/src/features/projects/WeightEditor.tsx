@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { CATEGORIES } from "@/constants";
+import { WeightSliders, weightTotal } from "@/components/ui/WeightSliders";
 import type { CategoryWeights } from "@/types";
 import styles from "./WeightEditor.module.css";
 
@@ -20,7 +20,7 @@ export function WeightEditor({ weights, saving, onSave }: Props) {
     setDraft(weights);
   }, [weights]);
 
-  const total = draft.activity + draft.speed + draft.quality;
+  const total = weightTotal(draft);
   const dirty =
     draft.activity !== weights.activity ||
     draft.speed !== weights.speed ||
@@ -28,61 +28,7 @@ export function WeightEditor({ weights, saving, onSave }: Props) {
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.bar}>
-        {CATEGORIES.map((c) => (
-          <span
-            key={c.key}
-            className={styles.barSegment}
-            style={{
-              flexGrow: draft[c.key],
-              background: c.color,
-            }}
-          >
-            {draft[c.key] >= 12 && (
-              <span className={`num ${styles.barLabel}`}>{draft[c.key]}%</span>
-            )}
-          </span>
-        ))}
-      </div>
-
-      <div className={styles.rows}>
-        {CATEGORIES.map((c) => (
-          <label key={c.key} className={styles.row}>
-            <span className={styles.label}>
-              <span className={styles.swatch} style={{ background: c.color }} />
-              {c.label}
-            </span>
-            <input
-              className={styles.slider}
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={draft[c.key]}
-              onChange={(e) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  [c.key]: parseInt(e.target.value, 10),
-                }))
-              }
-              style={{ accentColor: c.color }}
-            />
-            <input
-              className={`num ${styles.numInput}`}
-              type="number"
-              min={0}
-              max={100}
-              value={draft[c.key]}
-              onChange={(e) =>
-                setDraft((prev) => ({
-                  ...prev,
-                  [c.key]: Math.min(100, Math.max(0, parseInt(e.target.value, 10) || 0)),
-                }))
-              }
-            />
-          </label>
-        ))}
-      </div>
+      <WeightSliders value={draft} onChange={setDraft} idPrefix="project-weight" />
 
       <div className={styles.footer}>
         <span

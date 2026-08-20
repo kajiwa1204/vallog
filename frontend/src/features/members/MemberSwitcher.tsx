@@ -11,6 +11,7 @@ type Props = {
   members: Member[] | null;
   current: string;
   me: string | null;
+  fromDistribution?: boolean;
 };
 
 /**
@@ -21,7 +22,13 @@ type Props = {
  * 活動量順に並べ替えると、この画面が出さないと決めた序列がここに現れる。
  * 自分の定位置が誰の画面でも先頭なのは序列にならない。
  */
-export function MemberSwitcher({ projectId, members, current, me }: Props) {
+export function MemberSwitcher({
+  projectId,
+  members,
+  current,
+  me,
+  fromDistribution = false,
+}: Props) {
   // 顔ぶれを引けていない、または自分1人しか居ない（＝切り替え先が無い）ときは
   // 何も出さない。切り替え先の無い切り替え欄は、置くだけで「壊れている」に見える
   if (members === null) return null;
@@ -64,7 +71,9 @@ export function MemberSwitcher({ projectId, members, current, me }: Props) {
           ) : (
             <Link
               key={login}
-              href={`/projects/${projectId}/members/${encodeURIComponent(login)}`}
+              href={`/projects/${projectId}/members/${encodeURIComponent(login)}${
+                fromDistribution ? "?from=distribution" : ""
+              }`}
               className={styles.chip}
             >
               {content}

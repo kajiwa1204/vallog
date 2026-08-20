@@ -1,0 +1,190 @@
+.lead {
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.empty {
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.undisclosed {
+  padding: 14px 16px;
+  background: var(--surface-dim);
+  border-radius: var(--radius-s);
+}
+
+.undisclosedLead {
+  font-size: 13px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.undisclosedBody {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.member {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.member:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.memberHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.totalWrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.totalLabel {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
+.login {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  text-decoration: none;
+}
+
+.login:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 総合スコアはログイン名と同じ強さに留める。ここだけ大きくすると、行が
+   「誰が何位か」に読めて順位表になる（この画面が出すのは配分の出発点） */
+.total {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+/* カテゴリ3本を縦に並べる。1本の積み上げバーだと flexGrow で必ず全幅が埋まって
+   長さが何も意味せず、セグメントの開始位置も人ごとに違って横に読めなかった */
+.categories {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+/* **列幅を固定するのが要点。** 中身に合わせて可変にすると、メンバーごとにトラックの
+   左端がずれて「このカテゴリで誰が多いか」を縦に読めなくなる */
+/* トラックに上限を掛ける。1カラム時は800px超になり、0.2%が1.7pxで0.0%と見分けが
+   付かないうえ、ラベルと数値が両端に離れて読みにくい */
+.category {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 420px) 46px;
+  align-items: center;
+  gap: 8px;
+}
+
+.categoryLabel {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+.categoryValue {
+  font-size: 11px;
+  color: var(--ink-2);
+  text-align: right;
+}
+
+/* ラベルは母集合を言い切るぶん長い（「担当した完了IssueのSP」など。types の
+   MemberFacts と揃える必要があり短縮できない）。flex-wrap で流すと行ごとに要素数が
+   変わって段が揃わず、縦にも伸びる。auto-fit のグリッドなら幅に応じて列数だけが
+   変わり、段が揃ったまま最小の高さに収まる */
+/* 全幅で5項目を横一杯に伸ばすとラベルと数値の間が大きく開く（「出したPR ……… 21」）。
+   幅の上限を掛けて、広い画面では列数だけが増えるようにする */
+.facts {
+  list-style: none;
+  margin: 9px 0 0;
+  padding: 0;
+  max-width: 760px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 1px 14px;
+}
+
+.fact {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.factLabel {
+  color: var(--ink-3);
+}
+
+.factValue {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.factsNote {
+  margin-top: 14px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--ink-3);
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}

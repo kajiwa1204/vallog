@@ -1,0 +1,44 @@
+.lead {
+  margin-bottom: 16px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 0;
+}
+
+.total {
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.invalid {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.warning {
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: var(--ochre-tint);
+  border-radius: var(--radius-s);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.locked {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
