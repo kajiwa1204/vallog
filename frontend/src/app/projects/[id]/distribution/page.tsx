@@ -99,7 +99,10 @@ export default function DistributionPage() {
    * 主張が見た目で崩れる（実測でスコア758px に対しサマリー170px、右が588px空く）。
    * 生成はまだ #16 の担当で、1件も無いチームのほうが多い。
    */
-  const hasSummaries = (summaries?.length ?? 0) > 0;
+  // **読み込み中（null）を「0件」と同じ扱いにしない。** summaries は非同期に埋まるので、
+  // null を0件と見なすとサマリーを持つチームでは毎回 1カラム→2カラム の切り替えが起き、
+  // スコアカードの幅が変わって全メンバーのバーが引き直される
+  const singleColumn = summaries !== null && summaries.length === 0;
 
   /**
    * 案を作る操作がスコアの開示スイッチを兼ねているかどうか。
@@ -202,7 +205,7 @@ export default function DistributionPage() {
       {/* 概観。数値（スコアと生事実）と文章（貢献サマリー）を同列に並べる。
           どちらも同じ活動を別の粒度で言い直したものなので、片方を先に読ませる理由が
           ない。横に置くと「なぜこの数字なのか」をその場で照らし合わせられる */}
-      <div className={`${styles.overview} ${hasSummaries ? "" : styles.singleColumn}`}>
+      <div className={`${styles.overview} ${singleColumn ? styles.singleColumn : ""}`}>
         <ScorePanel
           state={scoreState}
           onRetry={reloadScores}

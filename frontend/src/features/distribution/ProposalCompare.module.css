@@ -60,8 +60,11 @@
   min-width: 420px;
 }
 
-.table th,
-.table td {
+/* 基底を :where() で包んで詳細度を 0-1-0 に落とす。`.table th, .table td` だと
+   0-1-1 になり、単独クラスの `.right` などが**必ず負ける**（実際に金額の右揃えが
+   死んでいた）。0-1-0 同士ならソース順で後勝ちになるので、以降のクラスが素直に効く。
+   規則を1つにするため3ファイルとも同じ形にしてある */
+.table :where(th, td) {
   padding: 9px 10px;
   border-bottom: 1px solid var(--line);
   text-align: left;
@@ -75,8 +78,7 @@
   font-weight: 500;
 }
 
-/* .table th/td（0-1-1）に負けないよう .table 配下で指定する */
-.table .proposalHead {
+.proposalHead {
   text-align: right;
   min-width: 128px;
 }
@@ -114,7 +116,7 @@
   white-space: nowrap;
 }
 
-.table .cell {
+.cell {
   text-align: right;
 }
 

@@ -46,6 +46,8 @@ class DistributionRepository:
                 selectinload(DistributionProposal.creator),
                 selectinload(DistributionProposal.finalizer),
                 selectinload(DistributionProposal.deleter),
+                # 「調整なしで確定」の判定に件数だけ要る。配分や本文は詳細で取る
+                selectinload(DistributionProposal.edit_logs),
             ).order_by(DistributionProposal.created_at.desc())
         )
         return list(rows.all())

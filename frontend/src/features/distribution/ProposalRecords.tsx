@@ -102,13 +102,16 @@ export function ProposalRecords({
         合意して確定した分配と、検討の途中で削除された案です。確定した分配は編集も削除もできません。
       </p>
 
-      {/* 見出しが無いと、末尾に並ぶ名前が作成者なのか確定者なのか読めない */}
+      {/* 見出しが無いと、末尾に並ぶ名前が作成者なのか確定者なのか読めない。
+          **項目行と同じクラスを当てる。** 素の span だと、狭い画面で項目行だけが
+          列を落とす（.total / .by が display:none）のに見出しは5要素のまま折り返し、
+          「報酬総額」が日付の列の真上に来る */}
       <div className={`${styles.head} ${styles.columns}`} aria-hidden="true">
         <span />
-        <span>案の名前</span>
-        <span className={styles.right}>報酬総額</span>
-        <span className={styles.right}>日付</span>
-        <span className={styles.right}>操作した人</span>
+        <span className={styles.name}>案の名前</span>
+        <span className={styles.total}>報酬総額</span>
+        <span className={styles.at}>日付</span>
+        <span className={styles.by}>操作した人</span>
       </div>
 
       <ul className={styles.list}>
@@ -134,6 +137,13 @@ export function ProposalRecords({
                 <span className={styles.name}>
                   {p.name}
                   {removed && <span className={styles.removed}>削除済み</span>}
+                  {/* 一度も調整されずに確定した案。分配案カードにも同じ表示があるが、
+                      あちらは確定した本人のその場のセッションでしか見えない（再読込
+                      すると選択が検討中の案に戻る）。**後から読む人が見るのはここ**
+                      なので、畳んだ状態でも出す（#100 の可視化） */}
+                  {!removed && p.edit_log_count === 0 && (
+                    <span className={styles.untouched}>調整なしで確定</span>
+                  )}
                 </span>
                 <span className={`num ${styles.total}`}>
                   {p.total_amount === null

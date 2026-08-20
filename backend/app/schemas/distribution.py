@@ -133,6 +133,9 @@ class ProposalListItem(BaseModel):
     finalized_by_github_login: str | None
     created_by_github_login: str | None
     created_at: datetime
+    # 0 なら一度も調整されずに確定した案。配分はスコアの計算結果そのままで、
+    # 「分配の記録」が畳まれた状態でもそれを示すために件数で持つ（#100 の可視化）
+    edit_log_count: int = 0
     # 削除済みなら値が入る。物理削除しないのは #100 の抑止が痕跡の存在に依存するため
     deleted_at: datetime | None = None
     deleted_by_github_login: str | None = None

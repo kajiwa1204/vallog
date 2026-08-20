@@ -95,6 +95,7 @@ async def list_distributions(
             ),
             created_by_github_login=p.creator.github_login if p.creator else None,
             created_at=p.created_at,
+            edit_log_count=len(p.edit_logs),
             deleted_at=p.deleted_at,
             deleted_by_github_login=p.deleter.github_login if p.deleter else None,
         )

@@ -96,8 +96,11 @@
   width: 150px;
 }
 
-.table th,
-.table td {
+/* 基底を :where() で包んで詳細度を 0-1-0 に落とす。`.table th, .table td` だと
+   0-1-1 になり、単独クラスの `.right` などが**必ず負ける**（実際に金額の右揃えが
+   死んでいた）。0-1-0 同士ならソース順で後勝ちになるので、以降のクラスが素直に効く。
+   規則を1つにするため3ファイルとも同じ形にしてある */
+.table :where(th, td) {
   padding: 9px 8px;
   border-bottom: 1px solid var(--line);
   text-align: left;
@@ -120,7 +123,7 @@
 
 /* `.table th, .table td` の text-align:left は詳細度 0-1-1 で、単独クラスの 0-1-0 に
    勝ってしまう。同じ土俵に乗せないと右揃えが効かない（金額の右端がバラついていた） */
-.table .right {
+.right {
   text-align: right;
 }
 
@@ -137,6 +140,14 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+/* 合計行の数値。行の input と同じ幅・同じ右揃えにして桁を縦に揃える */
+.totalValue {
+  display: inline-block;
+  width: 78px;
+  padding-right: 6px;
+  text-align: right;
 }
 
 .percentInput {

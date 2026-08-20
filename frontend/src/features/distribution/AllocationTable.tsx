@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -79,15 +79,31 @@ export function AllocationTable({
    */
   const [drafts, setDrafts] = useState<Record<string, string>>({});
 
+  /**
+   * 配分%の入力欄。**「残りを寄せる」を押した後のフォーカスの行き先**に使う。
+   *
+   * 押すと合計がちょうど100.0%になり、全行のボタンが同時に消える。押した要素がDOMから
+   * 消えるのでフォーカスが <body> に落ち、キーボード操作だと Tab 順の先頭（サイドバー）
+   * まで戻される。同じ行の入力欄へ移せば、作業位置も、値が変わったことも保たれる。
+   */
+  const percentInputs = useRef<Record<string, HTMLInputElement | null>>({});
+
   const onPercentChange = (login: string, raw: string) => {
-    setDrafts((current) => ({ ...current, [login]: raw }));
     // 空欄や "12." のような途中の文字列は数値にできない。0扱いにせず値を据え置く
     // （0にすると、消して打ち直すたびに合計が崩れて赤くなる）
     const parsed = parseFloat(raw);
-    if (Number.isNaN(parsed)) return;
-    setRows((current) =>
-      setRowTenths(current, login, Math.round(parsed * 10)),
-    );
+    if (Number.isNaN(parsed)) {
+      setDrafts((current) => ({ ...current, [login]: raw }));
+      return;
+    }
+    // 範囲外は欄の表示ごと丸める。tenths だけ丸めると「−5 と出ているのに 0 として
+    // 計算されている」状態が blur するまで続く（type=number の min は入力を止めない）
+    const clamped = Math.min(100, Math.max(0, parsed));
+    setDrafts((current) => ({
+      ...current,
+      [login]: clamped === parsed ? raw : String(clamped),
+    }));
+    setRows((current) => setRowTenths(current, login, Math.round(clamped * 10)));
   };
 
   const commitDraft = (login: string) => {
@@ -223,7 +239,7 @@ export function AllocationTable({
 
       {!locked && disclosureLapsed && (
         <p className={styles.lapsedNote}>
-          この案は<span className="num">30</span>日以上更新されていないため、スコアが表示されていません。配分か重みを保存すると、また表示されます。
+          この案は<span className="num">30</span>日以上更新されていません。配分か重みを保存すると、上のスコアがまた表示されます。
         </p>
       )}
 
@@ -309,6 +325,9 @@ export function AllocationTable({
                         max={100}
                         step={0.1}
                         inputMode="decimal"
+                        ref={(el) => {
+                          percentInputs.current[row.github_login] = el;
+                        }}
                         aria-label={`${row.github_login}の配分（%）`}
                         // 打っている最中は入力文字列をそのまま出す。tenths から
                         // 作り直すと1文字打つたびに小数1桁へ丸め直され、2文字目
@@ -334,6 +353,8 @@ export function AllocationTable({
                             // 入力中の文字列を消さないと、寄せた値がこの欄だけ
                             // 反映されて見えない
                             setDrafts(({ [row.github_login]: _d, ...rest }) => rest);
+                            // このボタンは直後に消える。フォーカスを同じ行に残す
+                            percentInputs.current[row.github_login]?.focus();
                           }}
                         >
                           {remainder > 0 ? "+" : "−"}

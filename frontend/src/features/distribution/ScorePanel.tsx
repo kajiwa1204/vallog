@@ -137,8 +137,13 @@ export function ScorePanel({
                 <li key={member.github_login} className={styles.member}>
                   <div className={styles.memberHead}>
                     <span className={`num ${styles.login}`}>{member.github_login}</span>
-                    <span className={`num ${styles.total}`}>
-                      {percent(member.total)}
+                    {/* カテゴリ値と同じ右揃え列に並ぶので、母数が違うことをラベルで
+                        分ける（総合＝全員で100%、カテゴリ＝そのカテゴリで100%） */}
+                    <span className={styles.totalWrap}>
+                      <span className={styles.totalLabel}>総合</span>
+                      <span className={`num ${styles.total}`}>
+                        {percent(member.total)}
+                      </span>
                     </span>
                   </div>
 
@@ -152,11 +157,9 @@ export function ScorePanel({
                       return (
                         <div key={c.key} className={styles.category}>
                           <span className={styles.categoryLabel}>{c.short}</span>
-                          <span
-                            className={styles.track}
-                            role="img"
-                            aria-label={`${c.label} ${percent(share)}`}
-                          >
+                          {/* 左右に「活動量」「61.1%」が地の文であるので、バーに
+                              aria-label を付けると三重に読まれる。バーは装飾に徹する */}
+                          <span className={styles.track} aria-hidden="true">
                             <span
                               className={styles.fill}
                               style={{ width: `${share * 100}%`, background: c.color }}
@@ -190,6 +193,13 @@ export function ScorePanel({
               説明が無いと分配の席で最初に突かれる */}
           <p className={styles.factsNote}>
             下段の数字は重み付けをしていない実数です。総合スコアは3カテゴリを相対化して重みで合成した値なので、順位が一致しないことがあります。
+          </p>
+
+          {/* 寄与の小さい人ほど空のトラックが並ぶ。正確さは落とさないが、この画面は
+              face-to-face の分配の席で開かれるので、数字に現れない貢献の受け皿が
+              ここにも要る（分配案カードの出発点ノートと理由欄にしか無かった） */}
+          <p className={styles.factsNote}>
+            設計の相談・ドキュメント・運用など、GitHubに残らない貢献はここには出ません。下の分配案で理由を添えて反映できます。
           </p>
 
           <p className={styles.legend}>

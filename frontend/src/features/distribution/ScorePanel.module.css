@@ -52,6 +52,17 @@
   gap: 10px;
 }
 
+.totalWrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.totalLabel {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+
 .login {
   font-size: 12.5px;
 }
@@ -74,9 +85,11 @@
 
 /* **列幅を固定するのが要点。** 中身に合わせて可変にすると、メンバーごとにトラックの
    左端がずれて「このカテゴリで誰が多いか」を縦に読めなくなる */
+/* トラックに上限を掛ける。1カラム時は800px超になり、0.2%が1.7pxで0.0%と見分けが
+   付かないうえ、ラベルと数値が両端に離れて読みにくい */
 .category {
   display: grid;
-  grid-template-columns: 62px minmax(0, 1fr) 46px;
+  grid-template-columns: 62px minmax(0, 420px) 46px;
   align-items: center;
   gap: 8px;
 }
@@ -110,10 +123,13 @@
    MemberFacts と揃える必要があり短縮できない）。flex-wrap で流すと行ごとに要素数が
    変わって段が揃わず、縦にも伸びる。auto-fit のグリッドなら幅に応じて列数だけが
    変わり、段が揃ったまま最小の高さに収まる */
+/* 全幅で5項目を横一杯に伸ばすとラベルと数値の間が大きく開く（「出したPR ……… 21」）。
+   幅の上限を掛けて、広い画面では列数だけが増えるようにする */
 .facts {
   list-style: none;
   margin: 9px 0 0;
   padding: 0;
+  max-width: 760px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 1px 14px;
