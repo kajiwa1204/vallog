@@ -23,20 +23,14 @@ from app.repositories.github_cache import GitHubCacheRepository
 from app.repositories.project import ProjectRepository
 from app.schemas.project import CategoryWeights
 from app.schemas.score import CategoryScores, MemberScore, ScoreResponse
-from app.services.github import ensure_synced, fetch_and_store
+from app.services.github import (
+    NOT_DONE_STATE_REASONS,
+    ensure_synced,
+    fetch_and_store,
+    is_excluded_github_actor,
+)
 
 _APPROVE_OR_CHANGES = {"APPROVED", "CHANGES_REQUESTED"}
-
-
-def _is_excluded(login: str) -> bool:
-    """スコア対象外のログイン。
-
-    "unknown" は services/github.py の _actor_login が、GitHubアカウント削除等で login を
-    取得できなかったときに入れるフォールバック値。実在の貢献者ではないため、複数の削除済み
-    アカウントの活動が1人分に合算された幽霊メンバーになるのを防ぐ。
-    """
-    return login.endswith("[bot]") or login == "unknown"
-
 
 def _collect_logins(
     prs: list[GitHubPullRequest],
@@ -58,7 +52,7 @@ def _collect_logins(
             logins.add(a.login)
     for r in reviews:
         logins.add(r.reviewer_login)
-    return {login for login in logins if not _is_excluded(login)}
+    return {login for login in logins if not is_excluded_github_actor(login)}
 
 
 def _shares(values: dict[str, float]) -> dict[str, float] | None:
@@ -177,7 +171,9 @@ def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, floa
     物量は活動量（起票数）と品質（マージPR数）で既に報われている。
 
     Issueのclosed_atを完了時刻の代理とする（GitHubはPRマージ時に紐づくIssueを自動クローズするため）。
-    not_planned でクローズされたIssue（着手せず却下・重複等）は成果ではないため除外する。
+    却下・重複でクローズされたIssue（NOT_DONE_STATE_REASONS）は成果ではないため除外する。
+    判定は services/changelog.py と同じ定数を引く（片方だけ直されると、同じデータから
+    画面とスコアで違う事実が出る）。
     state_reason 未取得（NULL、次回同期前の既存キャッシュ）は completed 相当として計上する。
     複数アサインの場合は各担当者を満額で評価する。
 
@@ -191,7 +187,7 @@ def _speed_values(issues: list[GitHubIssue], logins: set[str]) -> dict[str, floa
     for issue in issues:
         if issue.story_points is None or issue.closed_at is None:
             continue
-        if issue.state_reason == "not_planned":
+        if issue.state_reason in NOT_DONE_STATE_REASONS:
             continue
         for a in issue.assignees:
             if a.login not in sp_sum:

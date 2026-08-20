@@ -41,8 +41,8 @@ from app.schemas.dashboard import (
     Theme,
     Themes,
 )
-from app.services.changelog import build_changelog, is_excluded_login, roster_logins
-from app.services.github import ensure_synced, fetch_and_store
+from app.services.changelog import build_changelog, roster_logins
+from app.services.github import ensure_synced, fetch_and_store, is_excluded_github_actor
 
 DEFAULT_PULSE_DAYS = 14
 STALLED_ISSUE_DAYS = 7
@@ -161,7 +161,7 @@ def _latest_decisive_review(
     """
     latest: dict[int, GitHubReview] = {}
     for review in reviews:
-        if review.submitted_at is None or is_excluded_login(review.reviewer_login):
+        if review.submitted_at is None or is_excluded_github_actor(review.reviewer_login):
             continue
         if review.state.upper() not in _DECISIVE_REVIEW_STATES:
             continue
@@ -233,7 +233,7 @@ def _attention(
         for assignee in issue.assignees:
             # 除外はassigneeにだけかける。botが起票したIssueでも、人間が担当して
             # 止まっているなら気にかける対象であることに変わりはない
-            if assignee.assigned_at is None or is_excluded_login(assignee.login):
+            if assignee.assigned_at is None or is_excluded_github_actor(assignee.login):
                 continue
             if assignee.assigned_at > stalled_threshold:
                 continue
@@ -333,7 +333,7 @@ def _themes(issues: list[GitHubIssue], limit: int) -> Themes:
     closed_counts: dict[str, int] = defaultdict(int)
 
     for issue in issues:
-        if is_excluded_login(issue.author_login):
+        if is_excluded_github_actor(issue.author_login):
             continue
         for label in issue.labels:
             if _SP_LABEL_RE.match(label):

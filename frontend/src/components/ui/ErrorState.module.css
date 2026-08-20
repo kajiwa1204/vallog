@@ -1,0 +1,16 @@
+.wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: var(--red-tint);
+  border-radius: var(--radius-s);
+}
+
+/* --red は tint 上だと AA にわずかに届かない（globals.css 参照） */
+.message {
+  font-size: 12.5px;
+  color: var(--red-strong);
+}
