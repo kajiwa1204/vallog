@@ -76,6 +76,14 @@ export function ScorePanel({
   disclosureLapsed,
   hasFinalized,
 }: Props) {
+  // 全員が0のカテゴリ。棒がどれも空になるので、理由を言わないと読めない
+  const emptyCategories =
+    state.kind === "ready"
+      ? CATEGORIES.filter((c) =>
+          state.scores.members.every((m) => m.categories[c.key] === 0),
+        ).map((c) => c.label)
+      : [];
+
   return (
     <Card title="スコア">
       {state.kind === "loading" && <Spinner label="スコアを読み込んでいます…" />}
@@ -115,8 +123,9 @@ export function ScorePanel({
           {/* 「案を作ったときの値」ではない。GitHubのキャッシュから都度計算する
               ライブの値なので、案を作ってから活動が進めば変わる */}
           <p className={styles.lead}>
-            選択中の案の重み（活動量 {state.scores.weights.activity}% ・ スピード{" "}
-            {state.scores.weights.speed}% ・ 品質 {state.scores.weights.quality}%）で計算した現在のスコアです。
+            カテゴリごとの棒は、そのカテゴリでのチーム内シェアです（各カテゴリで全員の合計が100%）。
+            右上の総合は、選択中の案の重み（活動量 {state.scores.weights.activity}% ・ スピード{" "}
+            {state.scores.weights.speed}% ・ 品質 {state.scores.weights.quality}%）で合成した値。
             分配額はここから自動では決まりません。
           </p>
 
@@ -133,34 +142,47 @@ export function ScorePanel({
                     </span>
                   </div>
 
-                  <div
-                    className={styles.bar}
-                    role="img"
-                    aria-label={CATEGORIES.map(
-                      (c) => `${c.label} ${percent(member.categories[c.key])}`,
-                    ).join("、")}
-                  >
-                    {CATEGORIES.map((c) => (
-                      <span
-                        key={c.key}
-                        className={styles.segment}
-                        style={{
-                          // 重みを掛ける。カテゴリの相対値そのままだと、バーの
-                          // 内訳を足しても隣の総合スコアにならない
-                          flexGrow:
-                            state.scores.weights[c.key] * member.categories[c.key],
-                          background: c.color,
-                        }}
-                      />
-                    ))}
-                    {/* 全カテゴリ0のメンバーで幅が潰れないように余白を持たせる */}
-                    <span className={styles.segmentRest} />
+                  {/* カテゴリごとに独立したバーを、**全メンバーで同じ左端**から引く。
+                      1本の積み上げバーだと、幅が flexGrow で必ず全幅を埋めるうえ
+                      （長さが何も意味しない）、セグメントの開始位置が人ごとに違って
+                      「この指標で誰が多いか」を横に読めなかった */}
+                  <div className={styles.categories}>
+                    {CATEGORIES.map((c) => {
+                      const share = member.categories[c.key];
+                      return (
+                        <div key={c.key} className={styles.category}>
+                          <span className={styles.categoryLabel}>{c.short}</span>
+                          <span
+                            className={styles.track}
+                            role="img"
+                            aria-label={`${c.label} ${percent(share)}`}
+                          >
+                            <span
+                              className={styles.fill}
+                              style={{ width: `${share * 100}%`, background: c.color }}
+                            />
+                          </span>
+                          <span className={`num ${styles.categoryValue}`}>
+                            {percent(share)}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <Facts member={member} />
                 </li>
               ))}
             </ul>
+          )}
+
+          {/* 全員0のカテゴリは重みが他へ再配分される（services/scoring.py）。
+              棒が全部空なのを「誰も活躍していない」と読まれないように言っておく */}
+          {emptyCategories.length > 0 && (
+            <p className={styles.factsNote}>
+              {emptyCategories.join("・")}
+              は元になるデータがないため、その重みは他のカテゴリに配分されています。
+            </p>
           )}
 
           {/* 生事実と総合スコアは順位が逆転しうる（SPが最多でも総合は3位、など）。

@@ -63,23 +63,47 @@
   color: var(--ink-2);
 }
 
-.bar {
+/* カテゴリ3本を縦に並べる。1本の積み上げバーだと flexGrow で必ず全幅が埋まって
+   長さが何も意味せず、セグメントの開始位置も人ごとに違って横に読めなかった */
+.categories {
   display: flex;
-  height: 5px;
-  margin-top: 5px;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+/* **列幅を固定するのが要点。** 中身に合わせて可変にすると、メンバーごとにトラックの
+   左端がずれて「このカテゴリで誰が多いか」を縦に読めなくなる */
+.category {
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr) 46px;
+  align-items: center;
+  gap: 8px;
+}
+
+.categoryLabel {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.track {
+  height: 6px;
   border-radius: 999px;
-  overflow: hidden;
-  gap: 1px;
   background: var(--line);
+  overflow: hidden;
 }
 
-.segment {
-  min-width: 0;
-  transition: flex-grow 0.2s ease;
+.fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease;
 }
 
-.segmentRest {
-  flex-grow: 0.0001;
+.categoryValue {
+  font-size: 11px;
+  color: var(--ink-2);
+  text-align: right;
 }
 
 /* ラベルは母集合を言い切るぶん長い（「担当した完了IssueのSP」など。types の
@@ -88,7 +112,7 @@
    変わり、段が揃ったまま最小の高さに収まる */
 .facts {
   list-style: none;
-  margin: 7px 0 0;
+  margin: 9px 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
