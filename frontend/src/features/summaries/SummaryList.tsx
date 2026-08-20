@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import type { Member, Summary, SummaryJob } from "@/types";
+import { SummaryJobFailure } from "./SummaryJobFailure";
 import { SummaryText } from "./SummaryText";
 import styles from "./SummaryList.module.css";
 
@@ -15,6 +16,9 @@ type Props = {
   summariesByLogin: Map<string, Summary>;
   jobsByLogin: Map<string, SummaryJob>;
   startingLogins: string[];
+  generatingAll: boolean;
+  unchangedLogins: string[];
+  generationDisabled: boolean;
   onGenerate: (login: string) => void;
 };
 
@@ -26,7 +30,6 @@ function jobLabel(job: SummaryJob | undefined): string | null {
       ? `PRを要約中 ${job.done_prs}/${job.total_prs}`
       : "活動データを要約しています";
   }
-  if (job.status === "failed") return "前回の生成に失敗しました";
   return null;
 }
 
@@ -38,11 +41,14 @@ export function SummaryList({
   summariesByLogin,
   jobsByLogin,
   startingLogins,
+  generatingAll,
+  unchangedLogins,
+  generationDisabled,
   onGenerate,
 }: Props) {
   if (members.length === 0) {
     return (
-      <div className={styles.empty} role="status">
+      <div className={styles.empty}>
         <p>サマリーを作成できる貢献者がまだいません。</p>
         <p>GitHubでPRやIssueが記録されると、ここにメンバーが並びます。</p>
       </div>
@@ -77,7 +83,8 @@ export function SummaryList({
               <Button
                 variant="secondary"
                 size="s"
-                loading={starting || active}
+                loading={generatingAll || starting || active}
+                disabled={generationDisabled}
                 onClick={() => onGenerate(member.github_login)}
               >
                 {summary ? "更新する" : "生成する"}
@@ -85,11 +92,14 @@ export function SummaryList({
             </header>
 
             {status && (
-              <p
-                className={job?.status === "failed" ? styles.failed : styles.status}
-                role={job?.status === "failed" ? "alert" : "status"}
-              >
-                {status}
+              <p className={styles.status}>{status}</p>
+            )}
+            {job?.status === "failed" && (
+              <SummaryJobFailure job={job} className={styles.failed} />
+            )}
+            {unchangedLogins.includes(member.github_login) && (
+              <p className={styles.unchanged} role="status">
+                要約対象の内容に変更はありませんでした。サマリーは最新です。
               </p>
             )}
 

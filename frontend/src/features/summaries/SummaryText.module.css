@@ -3,6 +3,7 @@
   line-height: 1.85;
   color: var(--ink-2);
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .reference {

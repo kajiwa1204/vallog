@@ -4,6 +4,13 @@
   color: var(--ink-3);
 }
 
+.unavailable,
+.unchanged {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
 .status,
 .failed {
   margin-bottom: 12px;

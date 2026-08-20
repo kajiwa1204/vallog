@@ -1,4 +1,5 @@
 import styles from "./SummaryText.module.css";
+import { splitSummaryText } from "./summaryTextParser";
 
 type Props = {
   content: string;
@@ -6,27 +7,26 @@ type Props = {
   repoName?: string;
 };
 
-const REFERENCE = /(#\d+)/g;
-
 /** AI本文中の #番号をGitHubの一次情報へ結び、主張をその場で検証できる形にする。 */
 export function SummaryText({ content, repoOwner, repoName }: Props) {
   const canLink = repoOwner !== undefined && repoName !== undefined;
 
   return (
     <p className={styles.content}>
-      {content.split(REFERENCE).map((part, index) => {
-        const number = /^#(\d+)$/.exec(part)?.[1];
-        if (!number || !canLink) return <span key={`${index}:${part}`}>{part}</span>;
+      {splitSummaryText(content).map((part, index) => {
+        if (part.type === "text" || !canLink) {
+          return <span key={index}>{part.value}</span>;
+        }
         return (
           <a
-            key={`${index}:${part}`}
+            key={index}
             className={styles.reference}
-            href={`https://github.com/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}/issues/${number}`}
+            href={`https://github.com/${encodeURIComponent(repoOwner)}/${encodeURIComponent(repoName)}/issues/${part.number}`}
             target="_blank"
             rel="noreferrer"
-            aria-label={`${part}をGitHubで確認（新しいタブ）`}
+            aria-label={`${part.value}をGitHubで確認（新しいタブ）`}
           >
-            {part}
+            {part.value}
           </a>
         );
       })}

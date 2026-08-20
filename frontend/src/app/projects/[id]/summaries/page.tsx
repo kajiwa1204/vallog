@@ -24,6 +24,8 @@ export default function SummariesPage() {
     loading,
     error,
     startingLogins,
+    generatingAll,
+    unchangedLogins,
     generate,
     generateAll,
     reload,
@@ -32,9 +34,6 @@ export default function SummariesPage() {
   const activeJobs = [...jobsByLogin.values()].filter(
     (job) => job.status === "pending" || job.status === "running",
   ).length;
-  const generatingAll =
-    startingLogins.length > 0 && startingLogins.length === members.length;
-
   return (
     <AppShell projectId={id} projectName={project?.name}>
       <header className={styles.header}>
@@ -47,7 +46,12 @@ export default function SummariesPage() {
         <Button
           onClick={generateAll}
           loading={generatingAll}
-          disabled={loading || members.length === 0 || activeJobs > 0}
+          disabled={
+            loading ||
+            members.length === 0 ||
+            activeJobs > 0 ||
+            startingLogins.length > 0
+          }
         >
           全員分を生成
         </Button>
@@ -70,6 +74,9 @@ export default function SummariesPage() {
             summariesByLogin={summariesByLogin}
             jobsByLogin={jobsByLogin}
             startingLogins={startingLogins}
+            generatingAll={generatingAll}
+            unchangedLogins={unchangedLogins}
+            generationDisabled={loading}
             onGenerate={generate}
           />
         )}

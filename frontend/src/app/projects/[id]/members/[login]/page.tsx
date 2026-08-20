@@ -59,6 +59,11 @@ export default function MemberDetailPage() {
   // 取得に失敗したときも出さない。一覧が消えている横に数字だけ残ると、数えて
   // 確かめられない数字を主張することになる（この画面が成り立たなくなる）
   const hasRecords = changelog.error === null && changelog.entries.length > 0;
+  const canGenerateSummary = knownMember === true || hasRecords;
+  const generationDisabledMessage =
+    knownMember === false
+      ? `このプロジェクトに ${login} は見つからないため、サマリーを生成できません。`
+      : "プロジェクトのメンバーであることを確認できるまで、サマリーは生成できません。";
 
   return (
     <AppShell projectId={id} projectName={project?.name}>
@@ -122,6 +127,9 @@ export default function MemberDetailPage() {
           error={summaryState.error}
           startingMember={summaryState.startingMember}
           startingPrs={summaryState.startingPrs}
+          memberUnchanged={summaryState.memberUnchanged}
+          canGenerate={canGenerateSummary}
+          generationDisabledMessage={generationDisabledMessage}
           onGenerateMember={summaryState.generateMember}
           onGeneratePr={summaryState.generatePr}
           onRetry={summaryState.reload}

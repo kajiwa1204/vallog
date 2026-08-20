@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Spinner } from "@/components/ui/Spinner";
+import { SummaryJobFailure } from "@/features/summaries/SummaryJobFailure";
 import { SummaryText } from "@/features/summaries/SummaryText";
 import type { PRSummaryItem, Summary, SummaryJob } from "@/types";
 import styles from "./ContributionSummary.module.css";
@@ -18,6 +19,9 @@ type Props = {
   error: string | null;
   startingMember: boolean;
   startingPrs: number[];
+  memberUnchanged: boolean;
+  canGenerate: boolean;
+  generationDisabledMessage: string;
   onGenerateMember: () => void;
   onGeneratePr: (prNumber: number) => void;
   onRetry: () => void;
@@ -34,7 +38,7 @@ function progress(job: SummaryJob): string {
       ? `PRを要約中 ${job.done_prs}/${job.total_prs}`
       : "活動データを要約しています";
   }
-  return job.status === "failed" ? "前回の生成に失敗しました" : "生成済み";
+  return "生成済み";
 }
 
 export function ContributionSummary({
@@ -47,6 +51,9 @@ export function ContributionSummary({
   error,
   startingMember,
   startingPrs,
+  memberUnchanged,
+  canGenerate,
+  generationDisabledMessage,
   onGenerateMember,
   onGeneratePr,
   onRetry,
@@ -62,9 +69,13 @@ export function ContributionSummary({
           variant="secondary"
           size="s"
           loading={startingMember || memberActive}
-          disabled={loading || anyPrActive}
+          disabled={!canGenerate || loading || anyPrActive}
           title={
-            anyPrActive ? "PR単位の生成が完了してから更新できます" : undefined
+            !canGenerate
+              ? generationDisabledMessage
+              : anyPrActive
+                ? "PR単位の生成が完了してから更新できます"
+                : undefined
           }
           onClick={onGenerateMember}
         >
@@ -75,16 +86,23 @@ export function ContributionSummary({
       <p className={styles.lead}>
         AIによる説明です。本文の #番号と各PRへのリンクから、GitHubの一次情報を確認できます。
       </p>
+      {!canGenerate && (
+        <p className={styles.unavailable}>{generationDisabledMessage}</p>
+      )}
 
       {error && <ErrorState message={error} onRetry={onRetry} retrying={loading} />}
       {!error && loading && <Spinner label="貢献サマリーを読み込んでいます…" />}
 
       {!loading && memberJob && memberJob.status !== "succeeded" && (
-        <p
-          className={memberJob.status === "failed" ? styles.failed : styles.status}
-          role={memberJob.status === "failed" ? "alert" : "status"}
-        >
-          {progress(memberJob)}
+        memberJob.status === "failed" ? (
+          <SummaryJobFailure job={memberJob} className={styles.failed} />
+        ) : (
+          <p className={styles.status}>{progress(memberJob)}</p>
+        )
+      )}
+      {!loading && memberUnchanged && (
+        <p className={styles.unchanged} role="status">
+          要約対象の内容に変更はありませんでした。サマリーは最新です。
         </p>
       )}
 
@@ -130,11 +148,13 @@ export function ContributionSummary({
                       variant="ghost"
                       size="s"
                       loading={starting || prActive}
-                      disabled={memberActive}
+                      disabled={!canGenerate || loading || memberActive}
                       title={
-                        memberActive
-                          ? "全体サマリーの生成が完了してから再生成できます"
-                          : undefined
+                        !canGenerate
+                          ? generationDisabledMessage
+                          : memberActive
+                            ? "全体サマリーの生成が完了してから再生成できます"
+                            : undefined
                       }
                       onClick={() => onGeneratePr(pr.pr_number)}
                     >
@@ -142,13 +162,15 @@ export function ContributionSummary({
                     </Button>
                   </div>
                   {pr.job?.status === "failed" && (
-                    <p className={styles.failed} role="alert">
-                      前回の生成に失敗しました。再生成できます。
-                    </p>
+                    <SummaryJobFailure job={pr.job} className={styles.failed} />
                   )}
                   {pr.content ? (
                     <div className={styles.prContent}>
-                      <SummaryText content={pr.content} />
+                      <SummaryText
+                        content={pr.content}
+                        repoOwner={repoOwner}
+                        repoName={repoName}
+                      />
                     </div>
                   ) : (
                     !prActive && (

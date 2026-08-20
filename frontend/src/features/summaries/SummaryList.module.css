@@ -45,15 +45,18 @@
   font-size: 13px;
   font-weight: 600;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .status,
-.failed {
+.failed,
+.unchanged {
   margin-top: 10px;
   font-size: 12px;
 }
 
-.status {
+.status,
+.unchanged {
   color: var(--ink-3);
 }
 
