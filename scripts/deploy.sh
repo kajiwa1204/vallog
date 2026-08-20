@@ -70,6 +70,12 @@ log "イメージをビルドしてコンテナを差し替え"
 # 依存関係を作り直したい場合のみ make build ENV=prod（--no-cache）を使う
 "${DC[@]}" up -d --build
 
+log "nginx の接続先を更新"
+# nginx は起動時に解決した Compose サービスの IP を保持するため、
+# frontend/backend の差し替え後に graceful reload して新しい IP を解決させる。
+"${DC[@]}" exec -T nginx nginx -t
+"${DC[@]}" exec -T nginx nginx -s reload
+
 if [ "${SKIP_MIGRATE:-0}" != "1" ]; then
   log "マイグレーション適用"
   # heads（複数形）を使う。単一headでも動き、head が分岐していても止まらない。
