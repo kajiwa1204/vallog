@@ -25,24 +25,87 @@
 
 ## ローカル開発環境
 
-> **注意**: インフラ構成確定後に追記する。
-
 ### 前提条件
 
 - Docker / Docker Compose
-- Node.js 20+
-- Python 3.11+
+- Python 3（`.env` 生成スクリプト用。標準ライブラリのみ使用）
 
-### セットアップ
+Node.js のローカルインストールは不要。フロントエンドの実行もビルドもコンテナ内で行う。
+
+### 1. 環境変数を用意する
 
 ```bash
-# 準備中
+make setup
 ```
 
-### 開発サーバー起動
+`.env.dev.example` から `.env` を生成し、`ENCRYPTION_KEY`（GitHubアクセストークンの暗号化キー）を自動生成する。あわせて `frontend/node_modules` の生成と Docker イメージのビルドまで行うため、初回は数分かかる。
+
+`node_modules` をローカルに置くのは IDE の型補完のためで、アプリの実行には使わない。
+
+### 2. GitHub OAuth App を登録する
+
+[GitHub Developer settings](https://github.com/settings/developers) で **New OAuth App** を作成する。
+
+| 項目 | 値 |
+|---|---|
+| Application name | 任意 |
+| Homepage URL | `http://localhost:3000` |
+| Authorization callback URL | `http://localhost:3000/api/auth/github/callback` |
+
+callback URL の `/api` は Next.js の rewrites（`/api/:path*` → バックエンド）を通すためのもので、省略すると認証が一周しない。
+
+発行された値を `.env` に書く。
 
 ```bash
-# 準備中
+GITHUB_CLIENT_ID=Ov23...
+GITHUB_CLIENT_SECRET=...
+```
+
+`JWT_SECRET` は dev の既定値のままでも起動する。実運用に近づけるなら `openssl rand -hex 32` の出力に差し替える。
+
+### 3. 起動する
+
+```bash
+make dev
+```
+
+フォアグラウンドで起動し、http://localhost:3000 で開く。
+
+### 4. マイグレーションを適用する
+
+**別のターミナル**で実行する。
+
+```bash
+make migrate
+```
+
+初回は必須。テーブルが無い状態ではログイン後の画面がすべて失敗する。
+
+### よく使うコマンド
+
+| コマンド | 内容 |
+|---|---|
+| `make dev` | 開発環境を起動（フォアグラウンド） |
+| `make dev-down` | 開発環境を停止 |
+| `make migrate` | マイグレーションを適用 |
+| `make migrate-create msg="..."` | マイグレーションを自動生成 |
+| `make logs` | ログを追う |
+| `make shell-backend` | バックエンドコンテナに入る |
+| `make shell-db` | psql を開く |
+| `make clean` | コンテナ・ボリューム・イメージを削除（DBの中身も消える） |
+
+`make` 系はすべて `ENV=prod` を付けると本番構成（`docker-compose.yml` + Cloudflare Tunnel）を対象にする。既定は `ENV=dev`。
+
+### テスト
+
+```bash
+# バックエンド
+make shell-backend
+pytest -q
+
+# フロントエンド
+cd frontend
+pnpm typecheck && pnpm lint && pnpm test
 ```
 
 ---
