@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     # (`/api/:path*` → backend `/:path*`) を通した後の値を指定する
     auth_cookie_path: str = "/api/auth"
 
+    # APIドキュメント（Swagger UI / ReDoc / OpenAPI JSON）を公開するか。
+    # 認証が無く全エンドポイントの仕様が読めるため、未指定なら FRONTEND_URL の
+    # スキームから推定して https（公開環境）では閉じる。デモや審査で開けたい
+    # ときだけ明示的に true を指定する
+    expose_api_docs: bool | None = None
+
     # LLM provider selection
     summary_provider: Literal["claude", "openai", "ollama"] = "claude"
     # PR diffの1リクエストあたりの最大文字数（Tier1サマリーの入力上限 = コスト上限）
