@@ -70,23 +70,15 @@ clean:
 	$(DC) down -v --rmi local
 
 # ---------- マイグレーション ----------
-ifeq ($(ENV), prod)
+# dev / prod ともコンテナ内で実行する。DATABASE_URL のホスト名 `db` は Compose
+# ネットワーク内でしか解決できないため、ホストで alembic を叩くと必ず接続に失敗する。
+# 先に make dev（または make up）でコンテナを起動しておくこと
 migrate:
 	$(DC) exec backend alembic upgrade head
 
 migrate-create:
 	@if [ -z "$(msg)" ]; then echo "Usage: make migrate-create msg=\"migration name\""; exit 1; fi
 	$(DC) exec backend alembic revision --autogenerate -m "$(msg)"
-else
-migrate:
-	@if [ ! -f .env ]; then echo "Error: .env が見つかりません。まず make setup を実行してください。"; exit 1; fi
-	set -a && . .env && set +a && cd backend && alembic upgrade head
-
-migrate-create:
-	@if [ ! -f .env ]; then echo "Error: .env が見つかりません。まず make setup を実行してください。"; exit 1; fi
-	@if [ -z "$(msg)" ]; then echo "Usage: make migrate-create msg=\"migration name\""; exit 1; fi
-	set -a && . .env && set +a && cd backend && alembic revision --autogenerate -m "$(msg)"
-endif
 
 # ---------- シェル ----------
 shell-db:
