@@ -33,3 +33,11 @@ postgres_data/
 
 # macosX
 .DS_Store
+
+# AIエージェントのローカル設定（APIトークンを含むため絶対にコミットしない）
+.codex/
+.agents/
+.claude/settings.local.json
+
+# 提出用zipの出力先
+dist/

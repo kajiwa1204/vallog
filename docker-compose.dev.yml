@@ -28,6 +28,8 @@ services:
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       # localhost は http なので Secure Cookie はブラウザに送信されない
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # 開発では Swagger UI を使えた方が早いので開ける
+      EXPOSE_API_DOCS: ${EXPOSE_API_DOCS:-true}
 
   db:
     ports:

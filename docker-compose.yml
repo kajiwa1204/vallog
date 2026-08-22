@@ -36,6 +36,9 @@ services:
       # 本番は FRONTEND_URL の設定ミスで平文Cookieになるのを防ぐため true に倒す
       - COOKIE_SECURE=${COOKIE_SECURE:-true}
       - AUTH_COOKIE_PATH=${AUTH_COOKIE_PATH:-/api/auth}
+      # APIドキュメントは認証が無く全エンドポイントの仕様が読めるため、公開環境では閉じる。
+      # 審査・デモで開けたいときだけ .env に EXPOSE_API_DOCS=true を置く
+      - EXPOSE_API_DOCS=${EXPOSE_API_DOCS:-false}
       - GITHUB_CACHE_TTL_SECONDS=${GITHUB_CACHE_TTL_SECONDS:-300}
       - SUMMARY_PROVIDER=${SUMMARY_PROVIDER:-claude}
       - PR_DIFF_CHAR_LIMIT=${PR_DIFF_CHAR_LIMIT:-30000}

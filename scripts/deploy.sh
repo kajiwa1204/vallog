@@ -93,7 +93,8 @@ for i in $(seq 30); do
 done
 [ "$failed" = 0 ] && echo "  フロントエンド (/)      OK" || echo "  フロントエンド (/)      NG"
 
-if curl -fsS -o /dev/null --max-time 5 http://localhost/api/docs 2>/dev/null; then
+# /api/docs は公開環境では閉じている（EXPOSE_API_DOCS）。常に開いている /api/health を見る
+if curl -fsS -o /dev/null --max-time 5 http://localhost/api/health 2>/dev/null; then
   echo "  バックエンド (/api)     OK"
 else
   echo "  バックエンド (/api)     NG"
