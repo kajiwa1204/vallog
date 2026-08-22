@@ -16,6 +16,9 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 OUT="${OUT:-dist/vallog-submission.zip}"
+# zip 内のルートディレクトリ名。これが無いと解凍時にカレントへ直接展開され、
+# 受け取った側のディレクトリが散らかる
+ROOT_NAME="${ROOT_NAME:-vallog}"
 
 # 提出物から落とすパス（git ls-files の出力に対する拡張正規表現）
 EXCLUDE=(
@@ -81,8 +84,18 @@ done <<< "$excluded_files"
 log "zip を作成"
 mkdir -p "$(dirname "$OUT")"
 rm -f "$OUT"
+# zip の作成は staging へ cd してから行うため、書き先を絶対パスにしておく
+OUT_ABS="$(cd "$(dirname "$OUT")" && pwd)/$(basename "$OUT")"
+
+# ルートディレクトリを1つかぶせてから固める。tar を経由するのは、
+# ディレクトリ階層を保ったまま選んだファイルだけを複製するため
+staging="$(mktemp -d)"
+trap 'rm -rf "$staging"' EXIT
+mkdir -p "$staging/$ROOT_NAME"
+printf '%s\n' "$files" | tar -cf - -T - | tar -xf - -C "$staging/$ROOT_NAME"
+
 # -X: macOS の拡張属性を含めない（提出物に __MACOSX を作らない）
-printf '%s\n' "$files" | zip -q -X "$OUT" -@
+(cd "$staging" && zip -qr -X "$OUT_ABS" "$ROOT_NAME")
 
 # ---------- 事後検証 ----------
 # 対象リストの検査だけでは、追跡ファイルの「中身」に書かれたトークンを拾えない
